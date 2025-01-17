@@ -4,11 +4,14 @@ interface TuningState {
     cents: number;
 }
 
+export type SynthMode = 'tunable' | 'birdsong' | 'drums';
+
 export interface KeyboardState {
     activeNotes: number[];
     tunings: Record<number, TuningState>;
     baseOctave: number;
     isInitialized: boolean;
+    mode: SynthMode;
 }
 
 export type KeyboardActionTypes =
@@ -18,13 +21,15 @@ export type KeyboardActionTypes =
     | 'keyboard/setTuning'
     | 'keyboard/clearTuning'
     | 'keyboard/resetTunings'
+    | 'keyboard/setMode'
     | 'keyboard/cleanup';
 
 const initialState: KeyboardState = {
     activeNotes: [],
     tunings: {},
     baseOctave: 4,  // Middle C octave
-    isInitialized: false
+    isInitialized: false,
+    mode: 'tunable'
 };
 
 const keyboardSlice = createSlice({
@@ -61,6 +66,12 @@ const keyboardSlice = createSlice({
             state.tunings = {};
         },
 
+        setMode: (state, action: PayloadAction<SynthMode>) => {
+            state.mode = action.payload;
+            // Reset active notes when changing modes
+            state.activeNotes = [];
+        },
+
         cleanup: (state) => {
             state.activeNotes = [];
             state.isInitialized = false;
@@ -75,6 +86,7 @@ export const {
     setTuning,
     clearTuning,
     resetTunings,
+    setMode,
     cleanup
 } = keyboardSlice.actions;
 
@@ -90,5 +102,8 @@ export const selectIsInitialized = (state: { keyboard: KeyboardState }) =>
 
 export const selectBaseOctave = (state: { keyboard: KeyboardState }) =>
     state.keyboard.baseOctave;
+
+export const selectMode = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.mode;
 
 export default keyboardSlice.reducer;
