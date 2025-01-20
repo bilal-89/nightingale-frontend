@@ -42,7 +42,7 @@ const COLORS = {
     },
     accent: {
         primary: '#4a90e2',
-        recording: '#e53e3e',
+        recording: '#c5f102',
         selected: '#63b3ed'
     }
 } as const;
@@ -417,7 +417,7 @@ const ArrangementView: React.FC = () => {
                 >
                     <button
                         className={`w-3 h-3 rounded-full transition-all duration-300
-                            ${currentTrack === i ? 'bg-red-500' : 'bg-gray-300'}`}
+                            ${currentTrack === i ? 'bg-green-500' : 'bg-gray-300'}`}
                         onClick={() => dispatch(setCurrentTrack(i))}
                     />
                     <span className="text-sm">Track {i + 1}</span>
