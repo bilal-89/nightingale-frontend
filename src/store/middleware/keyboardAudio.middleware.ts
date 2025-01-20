@@ -1,4 +1,4 @@
-import { Middleware } from '@reduxjs/toolkit';
+import { Middleware, AnyAction } from '@reduxjs/toolkit';
 import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
 import { drumSoundManager } from '../../audio/context/drums/drumSoundManager';
 import { KeyboardState, KeyboardActionTypes } from '../slices/keyboard/keyboard.slice';
@@ -18,7 +18,14 @@ export const initializeAudioContext = () => ({
     type: 'keyboard/initializeAudio' as const
 });
 
+// Add type guard
+const isKeyboardAction = (action: unknown): action is AnyAction & { payload?: any } => {
+    return typeof action === 'object' && action !== null && 'type' in action;
+};
+
 export const keyboardAudioMiddleware: Middleware = store => next => action => {
+    if (!isKeyboardAction(action)) return next(action);
+    
     const prevState = store.getState().keyboard;
     debug.log('Action received:', action);
     debug.state('Previous state', prevState);
@@ -81,9 +88,7 @@ export const keyboardAudioMiddleware: Middleware = store => next => action => {
             debug.log(`Setting tuning: note ${tuningNote} to ${cents} cents, Mode: ${mode}`);
 
             try {
-                if (mode === 'drums') {
-                    drumSoundManager.setTuning(tuningNote, cents);
-                } else {
+                if (mode !== 'drums') {
                     keyboardAudioManager.setNoteTuning(tuningNote, cents);
                 }
             } catch (error) {

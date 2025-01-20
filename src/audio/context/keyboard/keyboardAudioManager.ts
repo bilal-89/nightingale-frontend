@@ -9,7 +9,6 @@ class KeyboardAudioManager {
     // Core audio system configuration - these control the overall sound characteristics
     private readonly MASTER_VOLUME = 0.3;
     private readonly DEFAULT_GAIN = 0.3;
-    private readonly MIN_GAIN = 0.0001;
     private readonly DEFAULT_VELOCITY = 100;
 
     // Envelope timing parameters for natural sound shaping

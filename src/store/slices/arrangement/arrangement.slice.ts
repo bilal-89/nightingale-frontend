@@ -1,8 +1,6 @@
 // src/store/slices/arrangement/arrangement.slice.ts
-
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
-import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
 import { SynthesisParameters } from '../../../audio/types/audioTypes';
 
 interface NoteEvent {
@@ -214,7 +212,7 @@ export const selectIsRecording = (state: RootState) => state.arrangement.isRecor
 export const selectCurrentTrack = (state: RootState) => state.arrangement.currentTrack;
 export const selectClips = (state: RootState) => state.arrangement.clips;
 export const selectSelectedClips = (state: RootState) =>
-    state.arrangement.clips.filter(clip => clip.isSelected);
+    state.arrangement.clips.filter((clip: { isSelected: never; }) => clip.isSelected);
 export const selectTempo = (state: RootState) => state.arrangement.tempo;
 export const selectIsPlaying = (state: RootState) => state.arrangement.playback.isPlaying;
 export const selectCurrentTime = (state: RootState) => state.arrangement.playback.currentTime;

@@ -1,11 +1,15 @@
-import { Middleware } from '@reduxjs/toolkit';
+import { Middleware, AnyAction } from '@reduxjs/toolkit';
 import { drumSoundManager } from '../../audio/context/drums/drumSoundManager';
 import { RootState } from '../index';
+
+const isKeyboardAction = (action: unknown): action is AnyAction & { payload: number } => {
+    return typeof action === 'object' && action !== null && 'type' in action && 'payload' in action;
+};
 
 export const drumAudioMiddleware: Middleware<{}, RootState> = store => next => action => {
     const result = next(action);
 
-    if (action.type === 'keyboard/noteOn' && store.getState().keyboard.mode === 'drums') {
+    if (isKeyboardAction(action) && action.type === 'keyboard/noteOn' && store.getState().keyboard.mode === 'drums') {
         drumSoundManager.playDrumSound(action.payload);
     }
 

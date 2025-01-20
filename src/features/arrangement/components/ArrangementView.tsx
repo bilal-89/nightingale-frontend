@@ -1,5 +1,4 @@
 // src/features/arrangement/components/ArrangementView.tsx
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { Card } from '../../../components/ui/card';
@@ -11,7 +10,6 @@ import {
     selectIsRecording,
     selectCurrentTrack,
     selectClips,
-    // Add these new imports right here
     startPlayback,
     stopPlayback,
     setPlaybackPosition,

@@ -1,6 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { KeyProps } from './keyboard.types';
-import { drumSounds } from '../../../audio/context/drums/drumSoundManager';
+import { drumSounds } from '../../../audio/constants/drumSounds'
 
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
     mode: 'tunable' | 'drums';  // Removed birdsong mode

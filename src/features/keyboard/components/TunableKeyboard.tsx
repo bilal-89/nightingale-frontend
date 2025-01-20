@@ -15,6 +15,7 @@ import {
     SynthMode
 } from '../../../store/slices/keyboard/keyboard.slice';
 import { initializeAudioContext } from '../../../store/middleware/keyboardAudio.middleware';
+import { RootState } from '../../../store';
 
 // Display labels for each synthesis mode - these are the names shown in the UI
 const modeLabels: Record<SynthMode, string> = {
@@ -177,7 +178,7 @@ const TunableKeyboard: React.FC = () => {
                                 <TunableKey
                                     note={note}
                                     isPressed={activeNotes.includes(note)}
-                                    tuning={useSelector(state => selectTuning(state, note))}
+                                    tuning={useSelector((state: RootState) => selectTuning(state, note))}
                                     onNoteOn={handleNoteOn}
                                     onNoteOff={handleNoteOff}
                                     onTuningChange={handleTuningChange}
@@ -194,7 +195,7 @@ const TunableKeyboard: React.FC = () => {
                                 <TunableKey
                                     note={note}
                                     isPressed={activeNotes.includes(note)}
-                                    tuning={useSelector(state => selectTuning(state, note))}
+                                    tuning={useSelector((state: RootState) => selectTuning(state, note))}
                                     onNoteOn={handleNoteOn}
                                     onNoteOff={handleNoteOff}
                                     onTuningChange={handleTuningChange}
