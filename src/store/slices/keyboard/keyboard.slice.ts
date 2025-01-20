@@ -4,7 +4,7 @@ interface TuningState {
     cents: number;
 }
 
-export type SynthMode = 'tunable' | 'birdsong' | 'drums';
+export type SynthMode = 'tunable' | 'drums';
 
 export interface KeyboardState {
     activeNotes: number[];

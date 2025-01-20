@@ -3,7 +3,7 @@ import { KeyProps } from './keyboard.types';
 import { drumSounds } from '../../../audio/context/drums/drumSoundManager';
 
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
-    mode: 'tunable' | 'birdsong' | 'drums';
+    mode: 'tunable' | 'drums';  // Removed birdsong mode
 }
 
 const TunableKey: React.FC<ExtendedKeyProps> = ({
@@ -23,27 +23,16 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
         onTuningChange(note, newTuning);
     }, [note, onTuningChange]);
 
+    // Updated mode-specific styles
     const modeStyles = {
         tunable: {
-            bg: '#e8e4dc',
-            bgPressed: '#e0ddd4',
-            shadow1: '#d1cdc4',
-            shadow2: '#ffffff',
-            keySize: 'w-20 h-20',
-            borderRadius: 'rounded-3xl', // Increased roundness to make transition smoother
-            translation: 'translate-y-[1px]',
-            sliderHeight: 'h-1.5',
-            thumbSize: 'w-3 h-3',
-            sliderBg: 'linear-gradient(to right, #d4d1c7, #e8e6e1)',
-            shadowSize: '5px'
-        },
-        birdsong: {
+            // Given birdsong's taller, more rounded look to the flute
             bg: '#e5e9ec',
             bgPressed: '#dde1e4',
             shadow1: '#c8ccd0',
             shadow2: '#ffffff',
-            keySize: 'w-16 h-24',
-            borderRadius: 'rounded-3xl',
+            keySize: 'w-16 h-24',  // Taller keys
+            borderRadius: 'rounded-3xl', // More rounded
             translation: 'translate-y-[2px]',
             sliderHeight: 'h-2',
             thumbSize: 'w-4 h-4',
@@ -51,41 +40,31 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
             shadowSize: '4px'
         },
         drums: {
-            bg: '#ece4e4',
+            // Given original flute (tunable) look to drums
+            bg: '#ece4e4',  // Keeping the unified drum color
             bgPressed: '#e4dcdc',
-            shadow1: '#d4cccc',
+            shadow1: '#d1cdc4',
             shadow2: '#ffffff',
-            keySize: 'w-[5.25rem] h-[5.25rem]',
-            borderRadius: 'rounded-[2rem]', // More gradual rounding
-            translation: 'translate-y-[3px]',
-            sliderHeight: 'h-2',
-            thumbSize: 'w-4 h-4',
-            sliderBg: 'linear-gradient(to right, #e0d8d8, #ece4e4)',
-            shadowSize: '6px'
+            keySize: 'w-20 h-20',  // Square shape from original flute
+            borderRadius: 'rounded-2xl',
+            translation: 'translate-y-[1px]',
+            sliderHeight: 'h-1.5',
+            thumbSize: 'w-3 h-3',
+            sliderBg: 'linear-gradient(to right, #d4d1c7, #e8e6e1)',
+            shadowSize: '5px'
         }
     };
 
     const currentStyle = modeStyles[mode];
 
-    function adjustColor(color: string, amount: number): string {
-        const hex = color.replace('#', '');
-        const num = parseInt(hex, 16);
-        const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-        const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
-        const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
-        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-    }
-
-    const sliderContainerClass = `
-        relative mb-2 w-20
-        transition-all duration-500 ease-in-out
-        opacity-100
-    `;
-
     return (
         <div className="relative flex flex-col items-center">
-            {/* Tuning control with consistent presence */}
-            <div className={sliderContainerClass}>
+            {/* Tuning control */}
+            <div
+                className="mb-2 w-20"
+                onMouseDown={() => isTuningRef.current = true}
+                onMouseUp={() => isTuningRef.current = false}
+            >
                 <input
                     type="range"
                     min="-100"
@@ -114,12 +93,10 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                         background: currentStyle.sliderBg,
                         WebkitAppearance: 'none',
                     }}
-                    onMouseDown={() => isTuningRef.current = true}
-                    onMouseUp={() => isTuningRef.current = false}
                 />
             </div>
 
-            {/* Morphing key with smoother transitions */}
+            {/* Morphing key */}
             <div
                 className={`
                     select-none cursor-pointer

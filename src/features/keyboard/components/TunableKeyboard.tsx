@@ -19,7 +19,6 @@ import { initializeAudioContext } from '../../../store/middleware/keyboardAudio.
 // Display labels for each synthesis mode - these are the names shown in the UI
 const modeLabels: Record<SynthMode, string> = {
     tunable: "Flute",
-    birdsong: "Birdsong",
     drums: "Drums"
 };
 
@@ -39,14 +38,6 @@ const modeStyles: Record<SynthMode, {
         textColor: 'text-[#4a4543]',
         shadow: '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff',
         innerShadow: 'inset 3px 3px 6px #d1cdc4, inset -3px -3px 6px #ffffff'
-    },
-    birdsong: {
-        background: 'from-[#f2f5f7] to-[#e5e9ec]',
-        containerBg: 'bg-[#edf0f3]',
-        buttonBg: 'bg-[#e5e9ec]',
-        textColor: 'text-[#4a5568]',
-        shadow: '3px 3px 6px #c8ccd0, -3px -3px 6px #ffffff',
-        innerShadow: 'inset 3px 3px 6px #c8ccd0, inset -3px -3px 6px #ffffff'
     },
     drums: {
         background: 'from-[#f7f2f2] to-[#ece4e4]',
@@ -146,7 +137,7 @@ const TunableKeyboard: React.FC = () => {
             <div className="flex flex-col gap-6">
                 {/* Mode Toggle Buttons */}
                 <div className="flex justify-center gap-4">
-                    {(['tunable', 'birdsong', 'drums'] as const).map((m) => (
+                    {(['tunable', 'drums'] as const).map((m) => (
                         <button
                             key={m}
                             onClick={() => handleModeChange(m)}
