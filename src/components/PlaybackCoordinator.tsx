@@ -90,27 +90,39 @@ const PlaybackCoordinator: React.FC = () => {
                     notes: clip.notes.length
                 });
 
+                // Calculate when this clip starts in seconds
                 const clipStartTime = getTimeInSeconds(clip.startCell);
+
+                // Process each note in the clip
                 clip.notes.forEach(noteEvent => {
-                    const absoluteNoteTime = playbackStartTimeRef.current +
+                    // Calculate the absolute time when this note should play
+                    const absoluteStartTime = playbackStartTimeRef.current +
                         clipStartTime + (noteEvent.timestamp / 1000);
 
-                    if (absoluteNoteTime >= lastScheduleTimeRef.current &&
-                        absoluteNoteTime < scheduleEnd) {
+                    // Schedule notes that fall within our window
+                    if (absoluteStartTime >= lastScheduleTimeRef.current &&
+                        absoluteStartTime < scheduleEnd) {
                         try {
+                            // Ensure we pass the complete note information including duration
+                            const completeNoteEvent: CompleteNoteEvent = {
+                                ...noteEvent,
+                                timestamp: absoluteStartTime,
+                                // Use the recorded duration or default to 0.1 seconds
+                                duration: typeof noteEvent.duration === 'number' ?
+                                    noteEvent.duration : 0.1
+                            };
+
+                            // Schedule the note with its full duration
                             keyboardAudioManager.playExactNote(
-                                {
-                                    ...noteEvent,
-                                    timestamp: absoluteNoteTime,
-                                    duration: noteEvent.duration || 0.1
-                                },
-                                absoluteNoteTime
+                                completeNoteEvent,
+                                absoluteStartTime
                             );
 
                             debugLog('Scheduled note:', {
                                 note: noteEvent.note,
-                                time: absoluteNoteTime.toFixed(3),
-                                relativeTime: (absoluteNoteTime - playbackStartTimeRef.current).toFixed(3)
+                                time: absoluteStartTime.toFixed(3),
+                                duration: completeNoteEvent.duration.toFixed(3),
+                                relativeTime: (absoluteStartTime - playbackStartTimeRef.current).toFixed(3)
                             });
                         } catch (error) {
                             debugLog('Failed to schedule note:', { error, noteEvent });

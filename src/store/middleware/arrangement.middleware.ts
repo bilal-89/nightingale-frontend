@@ -4,6 +4,7 @@ import { Middleware } from '@reduxjs/toolkit';
 import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
 import {
     addNoteEvent,
+    updateNoteEvent,
     stopRecording,
     addClip,
     startPlayback,
@@ -11,6 +12,7 @@ import {
     updatePlaybackPosition
 } from '../slices/arrangement/arrangement.slice';
 
+// Debug logging helper for tracking the recording and playback process
 const debug = (message: string, data?: any) => {
     console.log(`[Arrangement Middleware] ${message}`, data || '');
 };
@@ -18,54 +20,64 @@ const debug = (message: string, data?: any) => {
 export const arrangementMiddleware: Middleware = store => next => action => {
     const result = next(action);
 
-    // When a note is played while recording, capture it
+    // Handle note start events during recording
     if (action.type === 'keyboard/noteOn' && store.getState().arrangement.isRecording) {
         const state = store.getState();
         const timestamp = Date.now() - state.arrangement.recordingStartTime!;
 
-        debug('Recording note:', {
+        debug('Recording note start:', {
             note: action.payload,
             timestamp,
             mode: keyboardAudioManager.getCurrentMode()
         });
 
-        // Get current synthesis settings
+        // Capture the current synthesis settings at the start of the note
         const synthesis = keyboardAudioManager.getCurrentSynthesis(action.payload);
 
+        // Add the note to the recording buffer without a duration
+        // Duration will be calculated and added when the note is released
         store.dispatch(addNoteEvent({
             note: action.payload,
             timestamp,
             velocity: 100,
-            duration: 0.1,
             synthesis
         }));
     }
 
-    // When a note is released while recording, update its duration
+    // Handle note end events during recording
     if (action.type === 'keyboard/noteOff' && store.getState().arrangement.isRecording) {
         const state = store.getState();
         const timestamp = Date.now() - state.arrangement.recordingStartTime!;
 
-        // Find the corresponding note in the buffer and update its duration
-        const buffer = [...state.arrangement.recordingBuffer];
-        const lastNoteIndex = buffer.findIndex(note =>
-            note.note === action.payload && !note.duration
-        );
+        // Find the matching note start event in the buffer
+        // We look for the most recent note of the same pitch that doesn't have a duration yet
+        const noteEvent = [...state.arrangement.recordingBuffer]
+            .reverse()
+            .find(event =>
+                event.note === action.payload &&
+                event.duration === undefined
+            );
 
-        if (lastNoteIndex !== -1) {
-            const duration = (timestamp - buffer[lastNoteIndex].timestamp) / 1000;
-            buffer[lastNoteIndex] = {
-                ...buffer[lastNoteIndex],
-                duration
-            };
-            debug('Updated note duration:', {
+        if (noteEvent) {
+            // Calculate the exact duration in seconds from the timestamps
+            const duration = (timestamp - noteEvent.timestamp) / 1000;
+
+            debug('Recording note end:', {
                 note: action.payload,
-                duration
+                duration,
+                timestamp
             });
+
+            // Update the note in the buffer with its actual duration
+            store.dispatch(updateNoteEvent({
+                note: action.payload,
+                timestamp: noteEvent.timestamp,
+                duration
+            }));
         }
     }
 
-    // When recording stops, create a clip from the buffer
+    // Handle the end of recording and create a clip from the recorded notes
     if (action.type === 'arrangement/stopRecording') {
         const state = store.getState();
         const { recordingBuffer, currentTrack } = state.arrangement;
@@ -73,20 +85,27 @@ export const arrangementMiddleware: Middleware = store => next => action => {
         debug('Recording stopped, buffer:', recordingBuffer);
 
         if (recordingBuffer.length > 0) {
-            // Calculate clip length based on last note timestamp plus its duration
-            const lastNoteTime = Math.max(
-                ...recordingBuffer.map(n => n.timestamp + ((n.duration || 0.1) * 1000))
+            // Calculate the length of the clip based on the last note's end time
+            const lastNoteEndTime = Math.max(
+                ...recordingBuffer.map(note =>
+                    note.timestamp + ((note.duration || 0) * 1000)
+                )
             );
+
+            // Convert the duration from milliseconds to musical cells
+            // Each cell represents a sixteenth note at the current tempo
             const clipLengthInCells = Math.ceil(
-                lastNoteTime / (60000 / state.arrangement.tempo / 4)
+                lastNoteEndTime / (60000 / state.arrangement.tempo / 4)
             );
 
             debug('Creating clip:', {
                 notesCount: recordingBuffer.length,
                 length: clipLengthInCells,
-                track: currentTrack
+                track: currentTrack,
+                lastNoteEndTime
             });
 
+            // Create a new clip containing all the recorded notes
             store.dispatch(addClip({
                 id: Date.now().toString(),
                 startCell: 0,
@@ -103,7 +122,7 @@ export const arrangementMiddleware: Middleware = store => next => action => {
         }
     }
 
-    // Add debugging for clip-related actions
+    // Debug logging for clip operations
     if (action.type === 'arrangement/addClip') {
         debug('Clip added:', action.payload);
     }
@@ -118,3 +137,5 @@ export const arrangementMiddleware: Middleware = store => next => action => {
 
     return result;
 };
+
+export default arrangementMiddleware;

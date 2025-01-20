@@ -130,6 +130,27 @@ const arrangementSlice = createSlice({
             }
         },
 
+        // Add this to your reducers in arrangement.slice.ts
+        updateNoteEvent: (state, action: PayloadAction<{
+            note: number;
+            timestamp: number;
+            duration: number;
+        }>) => {
+            // Find the exact note event in the buffer
+            const eventIndex = state.recordingBuffer.findIndex(event =>
+                event.note === action.payload.note &&
+                event.timestamp === action.payload.timestamp
+            );
+
+            if (eventIndex !== -1) {
+                // Update its duration with the exact measured duration
+                state.recordingBuffer[eventIndex] = {
+                    ...state.recordingBuffer[eventIndex],
+                    duration: action.payload.duration
+                };
+            }
+        },
+
         startPlayback: (state) => {
             state.playback.isPlaying = true;
             if (state.playback.currentTime >= getArrangementEndTime(state)) {
@@ -167,6 +188,8 @@ const getArrangementEndTime = (state: ArrangementState): number => {
     return Math.max(...state.clips.map(clip => clip.startCell + clip.length)) * (60 / state.tempo);
 };
 
+
+
 // Export actions
 export const {
     startRecording,
@@ -180,6 +203,7 @@ export const {
     updateClipParameters,
     startPlayback,
     stopPlayback,
+    updateNoteEvent,
     updatePlaybackPosition,
     setPlaybackPosition,
     setLoopRegion
