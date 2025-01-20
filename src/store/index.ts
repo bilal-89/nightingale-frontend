@@ -2,32 +2,49 @@
 
 import { configureStore } from '@reduxjs/toolkit';
 import keyboardReducer from './slices/keyboard/keyboard.slice';
-import birdsongReducer from './slices/birdsong/birdsong.slice';
+import arrangementReducer from './slices/arrangement/arrangement.slice';
 import { keyboardAudioMiddleware } from './middleware/keyboardAudio.middleware';
-import { birdsongAudioMiddleware } from './middleware/birdsongAudio.middleware';
+import { drumAudioMiddleware } from './middleware/drumAudio.middleware';
+import { arrangementMiddleware } from './middleware/arrangement.middleware';
+import { playbackMiddleware } from './middleware/playback.middleware';
 
 export const store = configureStore({
     reducer: {
         keyboard: keyboardReducer,
-        birdsong: birdsongReducer
+        arrangement: arrangementReducer
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({
             serializableCheck: {
-                // Ignore keyboard and birdsong actions that might contain non-serializable data
                 ignoredActions: [
+                    // Keyboard actions
                     'keyboard/initializeAudio',
                     'keyboard/noteOn',
                     'keyboard/noteOff',
                     'keyboard/cleanup',
-                    'birdsong/initialize',
-                    'birdsong/noteOn',
-                    'birdsong/noteOff',
-                    'birdsong/updateParameters'
+                    'keyboard/setMode',
+                    // Arrangement actions
+                    'arrangement/startRecording',
+                    'arrangement/stopRecording',
+                    // Playback actions
+                    'arrangement/startPlayback',
+                    'arrangement/stopPlayback',
+                    'arrangement/updatePlaybackPosition',
+                    'arrangement/setPlaybackPosition'
+                ],
+                // Add paths that might contain non-serializable values
+                ignoredPaths: [
+                    'keyboard.audioContext',
+                    'arrangement.playback.scheduler'
                 ]
             }
-        }).concat(keyboardAudioMiddleware)
-            .concat(birdsongAudioMiddleware)
+        })
+            // Keep existing middleware order
+            .concat(keyboardAudioMiddleware)
+            .concat(drumAudioMiddleware)
+            .concat(arrangementMiddleware)
+            // Add playback middleware at the end
+            .concat(playbackMiddleware)
 });
 
 export type RootState = ReturnType<typeof store.getState>;

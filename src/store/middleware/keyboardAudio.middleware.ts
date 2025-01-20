@@ -1,81 +1,128 @@
-import { Middleware, Action, Dispatch, ThunkAction } from '@reduxjs/toolkit';
-import KeyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
-import {
-    initializeAudio,
-    KeyboardState,
-} from '../slices/keyboard/keyboard.slice';
+import { Middleware } from '@reduxjs/toolkit';
+import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
+import { drumSoundManager } from '../../audio/context/drums/drumSoundManager';
+import { KeyboardState, KeyboardActionTypes } from '../slices/keyboard/keyboard.slice';
 
-interface RootState {
-    keyboard: KeyboardState;
-}
+const debug = {
+    log: (...args: any[]) => console.log('[Audio Middleware]', ...args),
+    state: (label: string, state: Partial<KeyboardState>) => {
+        debug.log(`${label}:`, {
+            mode: state.mode,
+            activeNotes: state.activeNotes?.length,
+            tunings: Object.keys(state.tunings || {}).length
+        });
+    }
+};
 
-// Define the type for our keyboard actions
-type KeyboardAction = 
-  | Action<'keyboard/initializeAudio' | 'keyboard/cleanup'>
-  | Action<'keyboard/noteOn' | 'keyboard/noteOff'> & { payload: number }
-  | Action<'keyboard/setTuning'> & { payload: { note: number; cents: number } }
+export const initializeAudioContext = () => ({
+    type: 'keyboard/initializeAudio' as const
+});
 
-// Update the middleware type to explicitly handle KeyboardAction
-export const keyboardAudioMiddleware: Middleware<unknown, RootState> = store => next => async (action: unknown) => {
-    if (typeof action !== 'object' || !action || !('type' in action)) return next(action);
-    const keyboardAction = action as KeyboardAction;
-    try {
-        switch (keyboardAction.type) {  // No need to cast now since we've typed the action
-            case 'keyboard/initializeAudio': {
-                await KeyboardAudioManager.initialize();
-                break;
+export const keyboardAudioMiddleware: Middleware = store => next => action => {
+    const prevState = store.getState().keyboard;
+    debug.log('Action received:', action);
+    debug.state('Previous state', prevState);
+
+    const result = next(action);
+
+    const currentState = store.getState().keyboard;
+    debug.state('Current state', currentState);
+
+    switch (action.type as KeyboardActionTypes) {
+        case 'keyboard/initializeAudio':
+            debug.log('Initializing audio context');
+            try {
+                keyboardAudioManager.initialize();
+                drumSoundManager.initialize();
+                debug.log('Audio context initialized successfully');
+            } catch (error) {
+                debug.log('Audio context initialization failed:', error);
             }
+            break;
 
-            case 'keyboard/noteOn': {
-                const state = store.getState();
-                const note = keyboardAction.payload as number;
-                const tuning = state.keyboard.tunings[note]?.cents || 0;
-                console.log(`Playing note ${note} with tuning ${tuning}¢`);
-                await KeyboardAudioManager.playNote(note, tuning);
-                break;
-            }
+        case 'keyboard/noteOn': {
+            const note = action.payload;
+            const mode = currentState.mode;
+            debug.log(`Note on: ${note}, Mode: ${mode}`);
 
-            case 'keyboard/noteOff': {
-                const note = keyboardAction.payload as number;
-                console.log(`Stopping note ${note}`);
-                KeyboardAudioManager.stopNote(note);
-                break;
+            try {
+                if (mode === 'drums') {
+                    debug.log('Playing drum sound');
+                    drumSoundManager.playDrumSound(note);
+                } else {
+                    // Important: Don't pass tuning to playNote, let the manager handle it
+                    debug.log('Playing tunable note');
+                    keyboardAudioManager.playNote(note);
+                }
+            } catch (error) {
+                debug.log('Error playing note:', error);
             }
-
-            case 'keyboard/setTuning': {
-                const { note, cents } = keyboardAction.payload as { note: number; cents: number };
-                console.log(`Setting tuning for note ${note} to ${cents}¢`);
-                KeyboardAudioManager.setNoteTuning(note, cents);
-                break;
-            }
-
-            case 'keyboard/cleanup': {
-                console.log('Cleaning up audio system');
-                KeyboardAudioManager.cleanup();
-                break;
-            }
+            break;
         }
-    } catch (error) {
-        console.error('Error in keyboard audio middleware:', error);
+
+        case 'keyboard/noteOff': {
+            const note = action.payload;
+            const mode = currentState.mode;
+            debug.log(`Note off: ${note}, Mode: ${mode}`);
+
+            try {
+                if (mode !== 'drums') {
+                    keyboardAudioManager.stopNote(note);
+                }
+            } catch (error) {
+                debug.log('Error stopping note:', error);
+            }
+            break;
+        }
+
+        case 'keyboard/setTuning': {
+            const { note: tuningNote, cents } = action.payload;
+            const mode = currentState.mode;
+            debug.log(`Setting tuning: note ${tuningNote} to ${cents} cents, Mode: ${mode}`);
+
+            try {
+                if (mode === 'drums') {
+                    drumSoundManager.setTuning(tuningNote, cents);
+                } else {
+                    keyboardAudioManager.setNoteTuning(tuningNote, cents);
+                }
+            } catch (error) {
+                debug.log('Error setting tuning:', error);
+            }
+            break;
+        }
+
+        case 'keyboard/setMode': {
+            const newMode = action.payload;
+            debug.log(`Setting mode to: ${newMode}`);
+
+            try {
+                // Clean up active notes before mode switch
+                currentState.activeNotes.forEach(note => {
+                    if (prevState.mode !== 'drums') {
+                        keyboardAudioManager.stopNote(note);
+                    }
+                });
+
+                keyboardAudioManager.setMode(newMode);
+            } catch (error) {
+                debug.log('Error setting mode:', error);
+            }
+            break;
+        }
+
+        case 'keyboard/cleanup':
+            debug.log('Cleaning up audio system');
+            try {
+                keyboardAudioManager.cleanup();
+                drumSoundManager.cleanup();
+            } catch (error) {
+                debug.log('Error during cleanup:', error);
+            }
+            break;
     }
 
-    // Always pass the action through
-    return next(keyboardAction);
+    return result;
 };
 
-// Add AppThunk type
-export type AppThunk<ReturnType = void> = ThunkAction<
-  Promise<ReturnType>,
-  RootState,
-  unknown,
-  Action<string>
->;
-
-// Update the action creator to return AppThunk
-export const initializeAudioContext = (): AppThunk => async (dispatch: Dispatch) => {
-    try {
-        dispatch(initializeAudio());
-    } catch (error) {
-        console.error('Failed to initialize audio context:', error);
-    }
-};
+export default keyboardAudioMiddleware;

@@ -1,166 +1,206 @@
-import './types';
+import { SynthesisParameters, CompleteNoteEvent } from '../../types/audioTypes';
 
 class KeyboardAudioManager {
-    private static instance: AudioContext | null = null;
-    private static activeNotes: Map<number, {
-        oscillator: OscillatorNode;
-        gainNode: GainNode;
-        tuning: number;
-    }> = new Map();
-    private static mainGain: GainNode | null = null;
-    private static isInitialized = false;
+    // Core audio system configuration
+    private readonly MASTER_VOLUME = 0.3;
+    private readonly DEFAULT_GAIN = 0.3;      // Consistent base volume
+    private readonly MIN_GAIN = 0.0001;       // Prevent true zero
+    private readonly DEFAULT_VELOCITY = 100;
+    private readonly RELEASE_TIME = 0.005;    // Quick release to prevent clicks
 
-    /**
-     * Initialize the audio context and main gain node
-     */
-    static async initialize() {
-        if (!this.isInitialized) {
-            try {
-                if (!this.instance) {
-                    this.instance = new (window.AudioContext || window.webkitAudioContext)();
-                    this.mainGain = this.instance.createGain();
-                    this.mainGain.gain.value = 0.5; // Set initial volume
-                    this.mainGain.connect(this.instance.destination);
-                }
+    // Audio context and main output
+    private audioContext: AudioContext | null = null;
+    private mainGain: GainNode | null = null;
+    private isInitialized = false;
 
-                if (this.instance.state === 'suspended') {
-                    await this.instance.resume();
-                }
+    // Synthesis state with separate gain and frequency tracking
+    private activeVoices = new Map<number, {
+        oscillator: OscillatorNode,
+        gainNode: GainNode,
+        baseFrequency: number,     // Store original frequency
+        currentTuning: number      // Store current tuning in cents
+    }>();
 
-                this.isInitialized = true;
-                console.log('Keyboard audio system initialized');
-            } catch (error) {
-                console.error('Failed to initialize audio system:', error);
-                throw error;
+    private tunings = new Map<number, number>();
+    private currentMode: 'tunable' | 'drums' = 'tunable';
+
+    async initialize() {
+        if (this.isInitialized) return;
+
+        try {
+            this.audioContext = new AudioContext();
+            this.mainGain = this.audioContext.createGain();
+            this.mainGain.gain.setValueAtTime(this.MASTER_VOLUME, this.audioContext.currentTime);
+            this.mainGain.connect(this.audioContext.destination);
+
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
             }
+
+            this.isInitialized = true;
+        } catch (error) {
+            console.error('Failed to initialize audio system:', error);
+            throw error;
         }
     }
 
-    /**
-     * Calculate frequency for a given note and tuning
-     */
-    private static calculateFrequency(note: number, cents: number = 0): number {
-        // Base frequency for A4 (MIDI note 69) = 440Hz
-        return 440 * Math.pow(2, (note - 69) / 12 + cents / 1200);
+    getCurrentMode(): 'tunable' | 'drums' {
+        return this.currentMode;
     }
 
-    /**
-     * Get the audio context, initializing if necessary
-     */
-    private static getContext(): AudioContext {
-        if (!this.instance || !this.isInitialized) {
-            throw new Error('Audio system not initialized');
+    setMode(mode: 'tunable' | 'drums'): void {
+        if (this.currentMode !== mode) {
+            Array.from(this.activeVoices.keys()).forEach(note => this.stopNote(note));
+            this.currentMode = mode;
         }
-        return this.instance;
     }
 
-    /**
-     * Start playing a note
-     */
-    static async playNote(note: number, cents: number = 0) {
-        if (!this.isInitialized) {
-            await this.initialize();
-        }
+    // Improved frequency calculation
+    private getFrequency(note: number): number {
+        const baseMidiNote = note - 69;  // A4 = 69 is reference
+        return 440 * Math.pow(2, baseMidiNote / 12);
+    }
 
-        // Stop note if already playing
-        if (this.activeNotes.has(note)) {
-            this.stopNote(note);
-        }
+    // Separate tuning calculation
+    private getTuningMultiplier(cents: number): number {
+        return Math.pow(2, cents / 1200);
+    }
 
-        const ctx = this.getContext();
-        const frequency = this.calculateFrequency(note, cents);
+    // Improved velocity to gain conversion
+    private velocityToGain(velocity: number): number {
+        const normalizedVelocity = Math.min(Math.max(velocity, 1), 127) / 127;
+        return Math.max(this.DEFAULT_GAIN * normalizedVelocity, this.MIN_GAIN);
+    }
+
+    setNoteTuning(note: number, cents: number): void {
+        this.tunings.set(note, cents);
+
+        const voice = this.activeVoices.get(note);
+        if (voice && this.audioContext) {
+            const baseFreq = voice.baseFrequency;
+            const tuningMultiplier = this.getTuningMultiplier(cents);
+            const newFrequency = baseFreq * tuningMultiplier;
+
+            // Update frequency without touching gain
+            voice.oscillator.frequency.setValueAtTime(
+                newFrequency,
+                this.audioContext.currentTime
+            );
+            voice.currentTuning = cents;
+        }
+    }
+
+    async playNote(note: number, velocity: number = this.DEFAULT_VELOCITY): Promise<CompleteNoteEvent> {
+        if (!this.isInitialized) await this.initialize();
+        if (!this.audioContext) throw new Error('Audio system not initialized');
+
+        // Clean up existing note
+        this.stopNote(note);
+
+        const baseFrequency = this.getFrequency(note);
+        const tuningCents = this.tunings.get(note) || 0;
+        const tuningMultiplier = this.getTuningMultiplier(tuningCents);
+        const finalFrequency = baseFrequency * tuningMultiplier;
 
         // Create and configure oscillator
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-
+        const oscillator = this.audioContext.createOscillator();
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
+        oscillator.frequency.setValueAtTime(finalFrequency, this.audioContext.currentTime);
 
-        // Connect audio chain
+        // Create and configure gain stage
+        const gainNode = this.audioContext.createGain();
+        const noteGain = this.velocityToGain(velocity);
+
+        // Apply gain with anti-click ramp
+        const now = this.audioContext.currentTime;
+        gainNode.gain.setValueAtTime(this.MIN_GAIN, now);
+        gainNode.gain.linearRampToValueAtTime(noteGain, now + 0.005);
+
+        // Set up audio routing
         oscillator.connect(gainNode);
         gainNode.connect(this.mainGain!);
 
-        // Store note information
-        this.activeNotes.set(note, {
+        // Start oscillator and store voice
+        oscillator.start();
+        this.activeVoices.set(note, {
             oscillator,
             gainNode,
-            tuning: cents
+            baseFrequency,
+            currentTuning: tuningCents
         });
 
-        // Smooth attack
-        gainNode.gain.setValueAtTime(0, ctx.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.02);
-
-        oscillator.start();
-        console.log(`Playing note ${note} at ${frequency}Hz (${cents}¢)`);
+        // Return complete note event
+        return {
+            note,
+            timestamp: now,
+            velocity,
+            duration: 0,
+            synthesis: {
+                mode: this.currentMode,
+                waveform: 'sine',
+                envelope: {
+                    attack: 0.005,
+                    decay: 0,
+                    sustain: noteGain,
+                    release: this.RELEASE_TIME
+                },
+                gain: noteGain,
+                effects: {}
+            }
+        };
     }
 
-    /**
-     * Update the tuning of a playing note
-     */
-    static setNoteTuning(note: number, cents: number) {
-        const noteData = this.activeNotes.get(note);
-        if (noteData && this.instance) {
-            const frequency = this.calculateFrequency(note, cents);
-            const currentTime = this.instance.currentTime;
+    stopNote(note: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
 
-            // Smoothly transition to new frequency
-            noteData.oscillator.frequency.setValueAtTime(
-                noteData.oscillator.frequency.value,
-                currentTime
-            );
-            noteData.oscillator.frequency.exponentialRampToValueAtTime(
-                Math.max(frequency, 0.01), // Prevent 0Hz
-                currentTime + 0.02
-            );
+        try {
+            const now = this.audioContext.currentTime;
 
-            noteData.tuning = cents;
-            console.log(`Updated note ${note} to ${frequency}Hz (${cents}¢)`);
-        }
-    }
+            // Apply release ramp to prevent clicks
+            voice.gainNode.gain.linearRampToValueAtTime(this.MIN_GAIN, now + this.RELEASE_TIME);
 
-    /**
-     * Stop playing a note
-     */
-    static stopNote(note: number) {
-        const noteData = this.activeNotes.get(note);
-        if (noteData && this.instance) {
-            const currentTime = this.instance.currentTime;
-
-            // Smooth release
-            noteData.gainNode.gain.setValueAtTime(
-                noteData.gainNode.gain.value,
-                currentTime
-            );
-            noteData.gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.02);
-
-            // Clean up after release
+            // Schedule cleanup after release
             setTimeout(() => {
-                noteData.oscillator.stop();
-                noteData.oscillator.disconnect();
-                noteData.gainNode.disconnect();
-                this.activeNotes.delete(note);
-            }, 50);
+                try {
+                    voice.oscillator.stop();
+                    voice.oscillator.disconnect();
+                    voice.gainNode.disconnect();
+                } catch (error) {
+                    console.error('Error cleaning up note:', error);
+                }
+            }, this.RELEASE_TIME * 1000 + 10);
+
+            this.activeVoices.delete(note);
+        } catch (error) {
+            console.error('Error stopping note:', error);
+            this.forceCleanupVoice(voice);
+            this.activeVoices.delete(note);
         }
     }
 
-    /**
-     * Clean up audio resources
-     */
-    static cleanup() {
-        Array.from(this.activeNotes.keys()).forEach(note => this.stopNote(note));
-        this.activeNotes.clear();
-
-        if (this.instance) {
-            this.instance.close();
-            this.instance = null;
-            this.mainGain = null;
+    private forceCleanupVoice(voice: { oscillator: OscillatorNode; gainNode: GainNode }) {
+        try {
+            voice.oscillator.disconnect();
+            voice.gainNode.disconnect();
+        } catch (error) {
+            console.error('Error in force cleanup:', error);
         }
+    }
 
-        this.isInitialized = false;
-        console.log('Keyboard audio system cleaned up');
+    cleanup(): void {
+        Array.from(this.activeVoices.keys()).forEach(note => this.stopNote(note));
+        this.activeVoices.clear();
+        this.tunings.clear();
+
+        if (this.audioContext) {
+            this.audioContext.close();
+            this.audioContext = null;
+            this.mainGain = null;
+            this.isInitialized = false;
+        }
     }
 }
 
-export default KeyboardAudioManager;
+const keyboardAudioManager = new KeyboardAudioManager();
+export default keyboardAudioManager;
