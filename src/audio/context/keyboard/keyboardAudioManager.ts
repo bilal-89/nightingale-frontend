@@ -3,33 +3,31 @@
 import { SynthesisParameters, CompleteNoteEvent } from '../../types/audioTypes';
 import { drumSoundManager } from '../drums/drumSoundManager';
 
-// The KeyboardAudioManager handles both tunable synthesis (flute-like sounds)
-// and delegation to the drum sound manager for percussion sounds
 class KeyboardAudioManager {
-    // Core audio system configuration - these control the overall sound characteristics
     private readonly MASTER_VOLUME = 0.3;
     private readonly DEFAULT_GAIN = 0.3;
     private readonly DEFAULT_VELOCITY = 100;
+    private readonly ATTACK_TIME = 0.05;
+    private readonly RELEASE_TIME = 0.15;
+    private readonly SUSTAIN_LEVEL = 0.7;
 
-    // Envelope timing parameters for natural sound shaping
-    private readonly ATTACK_TIME = 0.05;    // 50ms smooth fade-in
-    private readonly RELEASE_TIME = 0.15;   // 150ms natural fade-out
-    private readonly SUSTAIN_LEVEL = 0.7;   // 70% of full volume while held
-
-    // Audio system state
     private audioContext: AudioContext | null = null;
     private mainGain: GainNode | null = null;
     private isInitialized = false;
     private currentMode: 'tunable' | 'drums' = 'tunable';
 
-    // Active sound management - tracks currently playing notes with their timing information
+    // Add velocity map alongside tunings
+    private tunings = new Map<number, number>();
+    private velocities = new Map<number, number>();
+
     private activeVoices = new Map<number, {
         oscillator: OscillatorNode;
         gainNode: GainNode;
         baseFrequency: number;
         currentTuning: number;
-        startTime: number;        // When the note began playing
-        noteStartTime: number;    // The musical timing of the note
+        currentVelocity: number;
+        startTime: number;
+        noteStartTime: number;
         envelope: {
             attack: number;
             release: number;
@@ -37,10 +35,13 @@ class KeyboardAudioManager {
         };
     }>();
 
-    // Tuning system for microtonal adjustments
-    private tunings = new Map<number, number>();
+    // Convert MIDI velocity (0-127) to gain value (0-1)
+    private velocityToGain(velocity: number): number {
+        const normalizedVelocity = velocity / 127;
+        // Use a power curve for more natural velocity response
+        return Math.pow(normalizedVelocity, 1.5) * this.SUSTAIN_LEVEL;
+    }
 
-    // Public interface methods
     getContext(): AudioContext | null {
         return this.audioContext;
     }
@@ -72,14 +73,14 @@ class KeyboardAudioManager {
 
     setMode(mode: 'tunable' | 'drums'): void {
         if (this.currentMode !== mode) {
-            // Clean up any playing notes before switching modes
             Array.from(this.activeVoices.keys()).forEach(note => this.stopNote(note));
             this.currentMode = mode;
         }
     }
 
     getCurrentSynthesis(note: number): SynthesisParameters {
-        // Provide synthesis parameters based on the current mode
+        const velocity = this.velocities.get(note) ?? this.DEFAULT_VELOCITY;
+
         if (this.currentMode === 'drums') {
             return {
                 mode: 'drums',
@@ -90,7 +91,7 @@ class KeyboardAudioManager {
                     sustain: 0,
                     release: 0.1
                 },
-                gain: this.DEFAULT_GAIN,
+                gain: this.velocityToGain(velocity),
                 effects: {
                     filter: {
                         type: 'lowpass',
@@ -109,38 +110,35 @@ class KeyboardAudioManager {
                     sustain: this.SUSTAIN_LEVEL,
                     release: this.RELEASE_TIME
                 },
-                gain: this.DEFAULT_GAIN,
+                gain: this.velocityToGain(velocity),
                 effects: {}
             };
         }
     }
 
-    // Real-time playback system for immediate note triggering
     async playNote(note: number): Promise<CompleteNoteEvent> {
         if (!this.isInitialized) await this.initialize();
         if (!this.audioContext) throw new Error('Audio system not initialized');
 
         const tuning = this.tunings.get(note) || 0;
+        const velocity = this.velocities.get(note) ?? this.DEFAULT_VELOCITY;
 
         if (this.currentMode === 'drums') {
-            // Delegate drum sounds to the drum manager
             drumSoundManager.initialize();
             drumSoundManager.playDrumSound(note, tuning);
 
             return {
                 note,
                 timestamp: this.audioContext.currentTime,
-                velocity: this.DEFAULT_VELOCITY,
+                velocity,
                 duration: 0.15,
                 synthesis: this.getCurrentSynthesis(note)
             };
         } else {
-            // Use tunable synthesis for flute-like sounds
-            return this.playTunableNoteRT(note);
+            return this.playTunableNoteRT(note, velocity);
         }
     }
 
-    // Scheduled playback system for precise timing during playback
     playExactNote(noteEvent: CompleteNoteEvent, time: number) {
         if (!this.audioContext) return;
 
@@ -149,12 +147,10 @@ class KeyboardAudioManager {
 
         try {
             if (this.currentMode === 'drums') {
-                // Schedule drum sounds
                 drumSoundManager.initialize();
                 const tuning = this.tunings.get(noteEvent.note) || 0;
                 drumSoundManager.playDrumSoundAt(noteEvent.note, time, tuning);
             } else {
-                // Schedule tunable sounds
                 this.playTunableSound(noteEvent, time);
             }
         } finally {
@@ -163,9 +159,7 @@ class KeyboardAudioManager {
     }
 
     stopNote(note: number): void {
-        if (this.currentMode === 'drums') {
-            return; // Drums handle their own cleanup
-        }
+        if (this.currentMode === 'drums') return;
 
         const voice = this.activeVoices.get(note);
         if (!voice || !this.audioContext) return;
@@ -174,12 +168,13 @@ class KeyboardAudioManager {
             const now = this.audioContext.currentTime;
             const noteDuration = now - voice.startTime;
 
-            // Apply release envelope
             voice.gainNode.gain.cancelScheduledValues(now);
-            voice.gainNode.gain.setValueAtTime(voice.envelope.sustainLevel, now);
+            voice.gainNode.gain.setValueAtTime(
+                this.velocityToGain(voice.currentVelocity) * voice.envelope.sustainLevel,
+                now
+            );
             voice.gainNode.gain.linearRampToValueAtTime(0, now + voice.envelope.release);
 
-            // Schedule cleanup after release
             setTimeout(() => {
                 try {
                     voice.oscillator.stop(now + voice.envelope.release + 0.1);
@@ -191,8 +186,6 @@ class KeyboardAudioManager {
             }, voice.envelope.release * 1000 + 200);
 
             this.activeVoices.delete(note);
-
-            // Log the duration for debugging
             console.log(`Note ${note} played for ${noteDuration.toFixed(3)} seconds`);
         } catch (error) {
             console.error('Error stopping note:', error);
@@ -202,12 +195,21 @@ class KeyboardAudioManager {
         }
     }
 
+    setNoteParameter(note: number, parameter: string, value: number): void {
+        if (this.currentMode === 'drums') return;
+
+        switch (parameter) {
+            case 'tuning':
+                this.setNoteTuning(note, value);
+                break;
+            case 'velocity':
+                this.setNoteVelocity(note, value);
+                break;
+        }
+    }
+
     setNoteTuning(note: number, cents: number): void {
         this.tunings.set(note, cents);
-
-        if (this.currentMode === 'drums') {
-            return; // Drums handle their own tuning
-        }
 
         const voice = this.activeVoices.get(note);
         if (voice && this.audioContext) {
@@ -219,8 +221,22 @@ class KeyboardAudioManager {
         }
     }
 
+    setNoteVelocity(note: number, velocity: number): void {
+        this.velocities.set(note, velocity);
+
+        const voice = this.activeVoices.get(note);
+        if (voice && this.audioContext) {
+            const gain = this.velocityToGain(velocity);
+            voice.currentVelocity = velocity;
+            voice.gainNode.gain.linearRampToValueAtTime(
+                gain * voice.envelope.sustainLevel,
+                this.audioContext.currentTime + 0.02
+            );
+        }
+    }
+
     private getFrequency(note: number): number {
-        const baseMidiNote = note - 69; // A4 = 69 is our reference note
+        const baseMidiNote = note - 69;
         const baseFrequency = 440 * Math.pow(2, baseMidiNote / 12);
         const tuning = this.tunings.get(note) || 0;
         if (tuning === 0) return baseFrequency;
@@ -233,15 +249,13 @@ class KeyboardAudioManager {
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
 
-        // Configure oscillator
         oscillator.type = noteEvent.synthesis.waveform;
         const frequency = this.getFrequency(noteEvent.note);
         oscillator.frequency.setValueAtTime(frequency, time);
 
-        // Apply envelope
         const attack = this.ATTACK_TIME;
         const release = this.RELEASE_TIME;
-        const gain = this.SUSTAIN_LEVEL * (noteEvent.velocity / 127);
+        const gain = this.velocityToGain(noteEvent.velocity);
         const duration = noteEvent.duration || 0.1;
 
         gainNode.gain.setValueAtTime(0, time);
@@ -249,20 +263,18 @@ class KeyboardAudioManager {
         gainNode.gain.setValueAtTime(gain, time + duration - release);
         gainNode.gain.linearRampToValueAtTime(0, time + duration);
 
-        // Connect and schedule playback
         oscillator.connect(gainNode);
         gainNode.connect(this.mainGain!);
         oscillator.start(time);
         oscillator.stop(time + duration + release + 0.1);
 
-        // Schedule cleanup
         setTimeout(() => {
             oscillator.disconnect();
             gainNode.disconnect();
         }, (time + duration + release + 0.2 - this.audioContext.currentTime) * 1000);
     }
 
-    private async playTunableNoteRT(note: number): Promise<CompleteNoteEvent> {
+    private async playTunableNoteRT(note: number, velocity: number): Promise<CompleteNoteEvent> {
         if (!this.audioContext) throw new Error('Audio context not initialized');
 
         const now = this.audioContext.currentTime;
@@ -270,32 +282,29 @@ class KeyboardAudioManager {
         const gainNode = this.audioContext.createGain();
         const baseFrequency = this.getFrequency(note);
 
-        // Create envelope configuration
         const envelope = {
             attack: this.ATTACK_TIME,
             release: this.RELEASE_TIME,
             sustainLevel: this.SUSTAIN_LEVEL
         };
 
-        // Configure oscillator
         oscillator.type = 'sine';
         oscillator.frequency.setValueAtTime(baseFrequency, now);
 
-        // Apply attack envelope
+        const gain = this.velocityToGain(velocity);
         gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(envelope.sustainLevel, now + envelope.attack);
+        gainNode.gain.linearRampToValueAtTime(gain, now + envelope.attack);
 
-        // Connect and start
         oscillator.connect(gainNode);
         gainNode.connect(this.mainGain!);
         oscillator.start(now);
 
-        // Store voice with timing information
         this.activeVoices.set(note, {
             oscillator,
             gainNode,
             baseFrequency,
             currentTuning: this.tunings.get(note) || 0,
+            currentVelocity: velocity,
             startTime: now,
             noteStartTime: now,
             envelope
@@ -304,8 +313,8 @@ class KeyboardAudioManager {
         return {
             note,
             timestamp: now,
-            velocity: this.DEFAULT_VELOCITY,
-            duration: 0, // Will be calculated when the note stops
+            velocity,
+            duration: 0,
             synthesis: this.getCurrentSynthesis(note)
         };
     }
@@ -314,6 +323,7 @@ class KeyboardAudioManager {
         Array.from(this.activeVoices.keys()).forEach(note => this.stopNote(note));
         this.activeVoices.clear();
         this.tunings.clear();
+        this.velocities.clear();
 
         if (this.audioContext) {
             this.audioContext.close();

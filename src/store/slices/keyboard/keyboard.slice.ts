@@ -1,33 +1,44 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-interface TuningState {
-    cents: number;
+// Define the structure for a single parameter
+export interface Parameter {
+    value: number;
+    defaultValue: number;
+}
+
+// Define the structure for all parameters of a key
+export interface KeyParameters {
+    tuning: Parameter;
+    velocity: Parameter;
+    warbleRate: Parameter;
+    warbleDepth: Parameter;
 }
 
 export type SynthMode = 'tunable' | 'drums';
 
 export interface KeyboardState {
     activeNotes: number[];
-    tunings: Record<number, TuningState>;
+    selectedKey: number | null;  // New field to track selected key
+    keyParameters: Record<number, Partial<KeyParameters>>;  // New flexible parameter storage
     baseOctave: number;
     isInitialized: boolean;
     mode: SynthMode;
+    // We'll keep the old tunings field for TypeScript but won't use it directly
+    tunings: Record<number, { cents: number }>;
 }
 
-export type KeyboardActionTypes =
-    | 'keyboard/initializeAudio'
-    | 'keyboard/noteOn'
-    | 'keyboard/noteOff'
-    | 'keyboard/setTuning'
-    | 'keyboard/clearTuning'
-    | 'keyboard/resetTunings'
-    | 'keyboard/setMode'
-    | 'keyboard/cleanup';
+const defaultParameters: KeyParameters = {
+    tuning: { value: 0, defaultValue: 0 },
+    velocity: { value: 100, defaultValue: 100 },
+    warbleRate: { value: 5, defaultValue: 5 },
+    warbleDepth: { value: 30, defaultValue: 30 }
+};
 
 const initialState: KeyboardState = {
     activeNotes: [],
-    tunings: {},
-    baseOctave: 4,  // Middle C octave
+    selectedKey: null,
+    keyParameters: {},
+    baseOctave: 4,
     isInitialized: false,
     mode: 'tunable'
 };
@@ -52,29 +63,65 @@ const keyboardSlice = createSlice({
             state.activeNotes = state.activeNotes.filter(n => n !== note);
         },
 
+        selectKey: (state, action: PayloadAction<number | null>) => {
+            state.selectedKey = action.payload;
+        },
+
+        // New action for setting any parameter
+        setKeyParameter: (state, action: PayloadAction<{
+            keyNumber: number;
+            parameter: keyof KeyParameters;
+            value: number;
+        }>) => {
+            const { keyNumber, parameter, value } = action.payload;
+
+            // Initialize parameters for this key if they don't exist
+            if (!state.keyParameters[keyNumber]) {
+                state.keyParameters[keyNumber] = {};
+            }
+
+            // Initialize this parameter if it doesn't exist
+            if (!state.keyParameters[keyNumber][parameter]) {
+                state.keyParameters[keyNumber][parameter] = {
+                    value: defaultParameters[parameter].defaultValue,
+                    defaultValue: defaultParameters[parameter].defaultValue
+                };
+            }
+
+            // Update the value
+            state.keyParameters[keyNumber][parameter]!.value = value;
+        },
+
+        // For backward compatibility with existing tuning system
         setTuning: (state, action: PayloadAction<{ note: number; cents: number }>) => {
             const { note, cents } = action.payload;
-            state.tunings[note] = { cents };
+            if (!state.keyParameters[note]) {
+                state.keyParameters[note] = {};
+            }
+            state.keyParameters[note].tuning = {
+                value: cents,
+                defaultValue: 0
+            };
         },
 
-        clearTuning: (state, action: PayloadAction<number>) => {
-            const note = action.payload;
-            delete state.tunings[note];
+        resetKeyParameters: (state, action: PayloadAction<number>) => {
+            const keyNumber = action.payload;
+            delete state.keyParameters[keyNumber];
         },
 
-        resetTunings: (state) => {
-            state.tunings = {};
+        resetAllParameters: (state) => {
+            state.keyParameters = {};
         },
 
         setMode: (state, action: PayloadAction<SynthMode>) => {
             state.mode = action.payload;
-            // Reset active notes when changing modes
             state.activeNotes = [];
         },
 
         cleanup: (state) => {
             state.activeNotes = [];
             state.isInitialized = false;
+            state.selectedKey = null;
         }
     }
 });
@@ -83,19 +130,30 @@ export const {
     initializeAudio,
     noteOn,
     noteOff,
+    selectKey,
+    setKeyParameter,
     setTuning,
-    clearTuning,
-    resetTunings,
+    resetKeyParameters,
+    resetAllParameters,
     setMode,
     cleanup
 } = keyboardSlice.actions;
 
-// Selectors
+// Updated selectors
 export const selectActiveNotes = (state: { keyboard: KeyboardState }) =>
     state.keyboard.activeNotes;
 
-export const selectTuning = (state: { keyboard: KeyboardState }, note: number) =>
-    state.keyboard.tunings[note]?.cents ?? 0;
+export const selectSelectedKey = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.selectedKey;
+
+export const selectKeyParameters = (state: { keyboard: KeyboardState }, keyNumber: number) =>
+    state.keyboard.keyParameters[keyNumber] ?? {};
+
+export const selectParameter = (
+    state: { keyboard: KeyboardState },
+    keyNumber: number,
+    parameter: keyof KeyParameters
+) => state.keyboard.keyParameters[keyNumber]?.[parameter]?.value ?? defaultParameters[parameter].defaultValue;
 
 export const selectIsInitialized = (state: { keyboard: KeyboardState }) =>
     state.keyboard.isInitialized;
@@ -105,5 +163,9 @@ export const selectBaseOctave = (state: { keyboard: KeyboardState }) =>
 
 export const selectMode = (state: { keyboard: KeyboardState }) =>
     state.keyboard.mode;
+
+// Add back the selectTuning selector for compatibility
+export const selectTuning = (state: { keyboard: KeyboardState }, note: number) =>
+    state.keyboard.keyParameters[note]?.tuning?.value ?? 0;
 
 export default keyboardSlice.reducer;

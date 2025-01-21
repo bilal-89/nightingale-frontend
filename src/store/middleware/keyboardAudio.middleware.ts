@@ -3,29 +3,38 @@ import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioMana
 import { drumSoundManager } from '../../audio/context/drums/drumSoundManager';
 import { KeyboardState, KeyboardActionTypes } from '../slices/keyboard/keyboard.slice';
 
+// Enhanced debug utilities to include parameter information
 const debug = {
     log: (...args: any[]) => console.log('[Audio Middleware]', ...args),
+
     state: (label: string, state: Partial<KeyboardState>) => {
         debug.log(`${label}:`, {
             mode: state.mode,
             activeNotes: state.activeNotes?.length,
-            tunings: Object.keys(state.tunings || {}).length
+            parameters: state.keyParameters ? Object.keys(state.keyParameters).length : 0
         });
+    },
+
+    // New helper to log parameter changes
+    parameter: (note: number, parameter: string, value: number) => {
+        debug.log(`Parameter Change - Note: ${note}, ${parameter}: ${value}`);
     }
 };
 
+// Action creator for initializing audio context
 export const initializeAudioContext = () => ({
     type: 'keyboard/initializeAudio' as const
 });
 
-// Add type guard
+// Type guard for keyboard actions
 const isKeyboardAction = (action: unknown): action is AnyAction & { payload?: any } => {
     return typeof action === 'object' && action !== null && 'type' in action;
 };
 
+// The main middleware implementation with enhanced parameter handling
 export const keyboardAudioMiddleware: Middleware = store => next => action => {
     if (!isKeyboardAction(action)) return next(action);
-    
+
     const prevState = store.getState().keyboard;
     debug.log('Action received:', action);
     debug.state('Previous state', prevState);
@@ -57,8 +66,11 @@ export const keyboardAudioMiddleware: Middleware = store => next => action => {
                     debug.log('Playing drum sound');
                     drumSoundManager.playDrumSound(note);
                 } else {
-                    // Important: Don't pass tuning to playNote, let the manager handle it
-                    debug.log('Playing tunable note');
+                    // Get current parameter values for the note
+                    const parameters = currentState.keyParameters[note] || {};
+                    const velocity = parameters.velocity?.value ?? 100;
+
+                    debug.log('Playing tunable note', { velocity });
                     keyboardAudioManager.playNote(note);
                 }
             } catch (error) {
@@ -82,14 +94,31 @@ export const keyboardAudioMiddleware: Middleware = store => next => action => {
             break;
         }
 
-        case 'keyboard/setTuning': {
-            const { note: tuningNote, cents } = action.payload;
+        case 'keyboard/setKeyParameter': {
+            const { keyNumber, parameter, value } = action.payload;
             const mode = currentState.mode;
-            debug.log(`Setting tuning: note ${tuningNote} to ${cents} cents, Mode: ${mode}`);
+            debug.parameter(keyNumber, parameter, value);
 
             try {
                 if (mode !== 'drums') {
-                    keyboardAudioManager.setNoteTuning(tuningNote, cents);
+                    // Use the unified parameter setting method
+                    keyboardAudioManager.setNoteParameter(keyNumber, parameter, value);
+                }
+            } catch (error) {
+                debug.log('Error setting parameter:', error);
+            }
+            break;
+        }
+
+        case 'keyboard/setTuning': {
+            // Handle legacy tuning actions for backward compatibility
+            const { note: tuningNote, cents } = action.payload;
+            const mode = currentState.mode;
+            debug.parameter(tuningNote, 'tuning', cents);
+
+            try {
+                if (mode !== 'drums') {
+                    keyboardAudioManager.setNoteParameter(tuningNote, 'tuning', cents);
                 }
             } catch (error) {
                 debug.log('Error setting tuning:', error);

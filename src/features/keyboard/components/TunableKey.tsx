@@ -1,9 +1,11 @@
 import React, { useCallback, useRef } from 'react';
 import { KeyProps } from './keyboard.types';
-import { drumSounds } from '../../../audio/constants/drumSounds'
+import { drumSounds } from '../../../audio/constants/drumSounds';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { selectKey } from '../../../store/slices/keyboard/keyboard.slice';
 
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
-    mode: 'tunable' | 'drums';  // Removed birdsong mode
+    mode: 'tunable' | 'drums';
 }
 
 const TunableKey: React.FC<ExtendedKeyProps> = ({
@@ -15,24 +17,49 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                                                     onTuningChange,
                                                     mode
                                                 }) => {
+    const dispatch = useAppDispatch();
     const isTuningRef = useRef(false);
     const drumSound = mode === 'drums' ? drumSounds[note] : null;
+
+    // Get selected state from Redux
+    const selectedKey = useAppSelector(state => state.keyboard.selectedKey);
+    const isSelected = selectedKey === note;
 
     const handleTuningChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const newTuning = Number(e.target.value);
         onTuningChange(note, newTuning);
     }, [note, onTuningChange]);
 
-    // Updated mode-specific styles
+    // Handle mouse events for both playing and selection
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (isTuningRef.current) return;
+
+        // Handle selection on shift-click
+        if (e.shiftKey) {
+            e.preventDefault();
+            dispatch(selectKey(isSelected ? null : note));
+        } else {
+            // Regular click plays the note
+            onNoteOn(note);
+        }
+    };
+
+    const handleMouseUp = () => {
+        if (!isTuningRef.current) {
+            onNoteOff(note);
+        }
+    };
+
+    // Updated mode-specific styles with selection states
     const modeStyles = {
         tunable: {
-            // Given birdsong's taller, more rounded look to the flute
             bg: '#e5e9ec',
             bgPressed: '#dde1e4',
+            bgSelected: '#d1e3f9', // New selected state color
             shadow1: '#c8ccd0',
             shadow2: '#ffffff',
-            keySize: 'w-16 h-24',  // Taller keys
-            borderRadius: 'rounded-3xl', // More rounded
+            keySize: 'w-16 h-24',
+            borderRadius: 'rounded-3xl',
             translation: 'translate-y-[2px]',
             sliderHeight: 'h-2',
             thumbSize: 'w-4 h-4',
@@ -40,12 +67,12 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
             shadowSize: '4px'
         },
         drums: {
-            // Given original flute (tunable) look to drums
-            bg: '#ece4e4',  // Keeping the unified drum color
+            bg: '#ece4e4',
             bgPressed: '#e4dcdc',
+            bgSelected: '#f0d9d9', // New selected state color
             shadow1: '#d1cdc4',
             shadow2: '#ffffff',
-            keySize: 'w-20 h-20',  // Square shape from original flute
+            keySize: 'w-20 h-20',
             borderRadius: 'rounded-2xl',
             translation: 'translate-y-[1px]',
             sliderHeight: 'h-1.5',
@@ -105,12 +132,21 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                     ${currentStyle.borderRadius}
                     ${isPressed ? currentStyle.translation : ''}
                     ${mode === 'drums' ? 'flex items-center justify-center' : ''}
+                    ${isSelected ? 'ring-2 ring-blue-400' : ''}
                 `}
-                onMouseDown={() => !isTuningRef.current && onNoteOn(note)}
-                onMouseUp={() => !isTuningRef.current && onNoteOff(note)}
-                onMouseLeave={() => !isTuningRef.current && onNoteOff(note)}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    dispatch(selectKey(isSelected ? null : note));
+                }}
                 style={{
-                    background: isPressed ? currentStyle.bgPressed : currentStyle.bg,
+                    background: isSelected
+                        ? currentStyle.bgSelected
+                        : isPressed
+                            ? currentStyle.bgPressed
+                            : currentStyle.bg,
                     boxShadow: isPressed
                         ? `inset ${currentStyle.shadowSize} ${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow1}, 
                            inset -${currentStyle.shadowSize} -${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow2}`
