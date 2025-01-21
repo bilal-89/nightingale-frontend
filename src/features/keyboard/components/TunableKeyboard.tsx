@@ -19,7 +19,7 @@ import { RootState } from '../../../store';
 
 // Display labels for each synthesis mode - these are the names shown in the UI
 const modeLabels: Record<SynthMode, string> = {
-    tunable: "Flute",
+    tunable: "Tones",
     drums: "Drums"
 };
 
