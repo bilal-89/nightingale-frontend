@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import {
     selectIsPanelVisible,
@@ -8,6 +8,7 @@ import {
 } from '../../../store/slices/keyboard/keyboard.slice';
 import { createSelector } from '@reduxjs/toolkit';
 
+// Define our parameters with their ranges and default values
 const parameters = [
     {
         id: 'tuning',
@@ -64,12 +65,12 @@ const parameters = [
     }
 ];
 
+// Selector to efficiently get parameter values
 const selectParameterValues = createSelector(
     [(state: any) => state.keyboard.keyParameters,
         (state: any) => state.keyboard.selectedKey],
     (keyParameters, selectedKey) => {
         if (selectedKey === null) return {};
-
         return parameters.reduce((values, param) => {
             const currentValue = keyParameters[selectedKey]?.[param.id]?.value;
             values[param.id] = currentValue ?? param.defaultValue;
@@ -78,6 +79,7 @@ const selectParameterValues = createSelector(
     }
 );
 
+// Individual parameter control component
 const ParameterControl: React.FC<{
     parameter: typeof parameters[0];
     value: number;
@@ -121,15 +123,22 @@ const ParameterControl: React.FC<{
     );
 };
 
+// Main parameter panel component
 const ParameterPanel: React.FC = () => {
     const dispatch = useAppDispatch();
     const selectedKey = useAppSelector(state => state.keyboard.selectedKey);
     const parameterValues = useAppSelector(selectParameterValues);
     const isPanelVisible = useAppSelector(selectIsPanelVisible);
+    const [isPressed, setIsPressed] = useState(false);
 
     const handlePanelClick = () => {
         dispatch(togglePanel());
     };
+
+    // Handle press interactions
+    const handleMouseDown = () => setIsPressed(true);
+    const handleMouseUp = () => setIsPressed(false);
+    const handleMouseLeave = () => setIsPressed(false);
 
     const handleParameterChange = useMemo(() => (
         (parameterId: string, value: number) => {
@@ -143,32 +152,71 @@ const ParameterPanel: React.FC = () => {
         }
     ), [dispatch, selectedKey]);
 
+    // Calculate consistent height based on number of parameters
+    const totalParameterHeight = parameters.length * 96;
+
+    // Get dynamic shadow styles based on press state
+    const getContainerStyle = () => {
+        const baseStyle = {
+            height: `${totalParameterHeight + 48}px`,
+            transition: 'all 100ms ease-in-out',
+        };
+
+        if (isPressed) {
+            return {
+                ...baseStyle,
+                boxShadow: 'inset 2px 2px 5px #c8ccd0, inset -2px -2px 5px #ffffff',
+                transform: 'translateY(1px)',
+                border: '1px solid rgba(255, 255, 255, 0.9)',
+            };
+        }
+
+        return {
+            ...baseStyle,
+            boxShadow: '4px 4px 10px #c8ccd0, -4px -4px 10px #ffffff',
+            transform: 'translateY(0)',
+            border: '1px solid rgba(255, 255, 255, 0.7)',
+        };
+    };
+
     return (
         <div
             onClick={handlePanelClick}
-            className="w-full max-w-md p-6 bg-[#e5e9ec] dark:bg-gray-800 rounded-3xl cursor-pointer hover:bg-[#e0e4e7] transition-colors"
-            style={{
-                boxShadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff'
-            }}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            className="w-full max-w-md p-6 bg-[#e5e9ec] rounded-3xl cursor-pointer relative"
+            style={getContainerStyle()}
         >
-            {isPanelVisible ? (
-                // Stop event propagation when clicking inside the parameters div
-                <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
-                    {parameters.map(param => (
-                        <ParameterControl
-                            key={param.id}
-                            parameter={param}
-                            value={parameterValues[param.id] ?? param.defaultValue}
-                            onChange={(value) => handleParameterChange(param.id, value)}
-                        />
-                    ))}
-                </div>
-            ) : (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="space-y-4"
+                 style={{
+                     opacity: isPanelVisible ? 1 : 0,
+                     transition: 'opacity 150ms ease-in-out',
+                     pointerEvents: isPanelVisible ? 'auto' : 'none'
+                 }}
+                 onClick={(e) => e.stopPropagation()}>
+                {parameters.map(param => (
+                    <ParameterControl
+                        key={param.id}
+                        parameter={param}
+                        value={parameterValues[param.id] ?? param.defaultValue}
+                        onChange={(value) => handleParameterChange(param.id, value)}
+                    />
+                ))}
+            </div>
+
+            <div className="absolute inset-0 flex items-center justify-center"
+                 style={{
+                     opacity: isPanelVisible ? 0 : 1,
+                     transition: 'opacity 150ms ease-in-out',
+                     pointerEvents: isPanelVisible ? 'none' : 'auto'
+                 }}>
+                <div className="text-gray-500 dark:text-gray-400">
                     Click to show parameters
                 </div>
-            )}
+            </div>
         </div>
     );
 };
+
 export default ParameterPanel;
