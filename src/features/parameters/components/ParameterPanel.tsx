@@ -1,106 +1,122 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { selectParameter, setKeyParameter } from '../../../store/slices/keyboard/keyboard.slice';
+import {
+    selectIsPanelVisible,
+    selectParameter,
+    setKeyParameter,
+    togglePanel
+} from '../../../store/slices/keyboard/keyboard.slice';
+import { createSelector } from '@reduxjs/toolkit';
 
-const parameterGroups = [
+const parameters = [
     {
-        parameters: [
-            {
-                id: 'tuning',
-                name: 'Tune',
-                min: -100,
-                max: 100,
-                step: 1,
-                unit: 'cents',
-                defaultValue: 0,
-            },
-            {
-                id: 'velocity',
-                name: 'Vel',
-                min: 0,
-                max: 127,
-                step: 1,
-                defaultValue: 100,
-            }
-        ]
+        id: 'tuning',
+        name: 'Tuning',
+        min: -100,
+        max: 100,
+        step: 1,
+        unit: 'cents',
+        defaultValue: 0
+    },
+    {
+        id: 'velocity',
+        name: 'Velocity',
+        min: 0,
+        max: 127,
+        step: 1,
+        defaultValue: 100
+    },
+    {
+        id: 'attack',
+        name: 'Attack',
+        min: 0,
+        max: 1000,
+        step: 1,
+        unit: 'ms',
+        defaultValue: 50
+    },
+    {
+        id: 'decay',
+        name: 'Decay',
+        min: 0,
+        max: 1000,
+        step: 1,
+        unit: 'ms',
+        defaultValue: 100
+    },
+    {
+        id: 'sustain',
+        name: 'Sustain',
+        min: 0,
+        max: 100,
+        step: 1,
+        unit: '%',
+        defaultValue: 70
+    },
+    {
+        id: 'release',
+        name: 'Release',
+        min: 0,
+        max: 1000,
+        step: 1,
+        unit: 'ms',
+        defaultValue: 150
     }
 ];
 
-const VerticalSlider = ({
-                            param,
-                            value,
-                            onChange
-                        }: {
-    param: { id: string; min: number; max: number; step: number; name: string; unit?: string; defaultValue: number; };
+const selectParameterValues = createSelector(
+    [(state: any) => state.keyboard.keyParameters,
+        (state: any) => state.keyboard.selectedKey],
+    (keyParameters, selectedKey) => {
+        if (selectedKey === null) return {};
+
+        return parameters.reduce((values, param) => {
+            const currentValue = keyParameters[selectedKey]?.[param.id]?.value;
+            values[param.id] = currentValue ?? param.defaultValue;
+            return values;
+        }, {} as Record<string, number>);
+    }
+);
+
+const ParameterControl: React.FC<{
+    parameter: typeof parameters[0];
     value: number;
     onChange: (value: number) => void;
-}) => {
-    const sliderRef = useRef<HTMLDivElement>(null);
-    const [isDragging, setIsDragging] = useState(false);
-    const percentage = ((value - param.min) / (param.max - param.min) * 100);
-
-    const handleMove = useCallback((clientY: number) => {
-        if (!sliderRef.current) return;
-
-        const rect = sliderRef.current.getBoundingClientRect();
-        const height = rect.height;
-        const y = clientY - rect.top;
-        const percentage = 1 - (Math.min(Math.max(y, 0), height) / height);
-        const newValue = param.min + percentage * (param.max - param.min);
-        const steppedValue = Math.round(newValue / param.step) * param.step;
-
-        onChange(Math.min(Math.max(steppedValue, param.min), param.max));
-    }, [param, onChange]);
-
-    const handleMouseDown = (e: React.MouseEvent) => {
-        e.preventDefault();
-        setIsDragging(true);
-        handleMove(e.clientY);
-
-        const handleMouseMove = (e: MouseEvent) => {
-            handleMove(e.clientY);
-        };
-
-        const handleMouseUp = () => {
-            setIsDragging(false);
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    };
-
+}> = ({ parameter, value, onChange }) => {
     return (
-        <div
-            ref={sliderRef}
-            className="relative w-4 h-[200px] bg-[#e5e9ec] rounded-full cursor-pointer"
-            style={{
-                boxShadow: 'inset 2px 2px 4px #c8ccd0, inset -2px -2px 4px #ffffff'
-            }}
-            onClick={(e) => handleMove(e.clientY)}
-        >
-            {/* Fill track */}
-            <div
-                className="absolute bottom-0 left-0 w-full rounded-full bg-blue-500 transition-all duration-100"
-                style={{
-                    height: `${percentage}%`,
-                    boxShadow: '2px 2px 4px rgba(0,0,0,0.1)'
-                }}
-            />
+        <div className="p-4 rounded-2xl bg-[#e5e9ec]"
+             style={{
+                 boxShadow: 'inset 4px 4px 8px #c8ccd0, inset -4px -4px 8px #ffffff'
+             }}>
+            <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-medium text-gray-700">
+                    {parameter.name}
+                </label>
+                <span className="text-sm text-gray-600 tabular-nums">
+                    {value}{parameter.unit}
+                </span>
+            </div>
 
-            {/* Draggable thumb */}
-            <div
-                className={`absolute left-1/2 w-6 h-6 -ml-3 bg-white rounded-full cursor-grab
-                           ${isDragging ? 'cursor-grabbing' : ''}`}
-                style={{
-                    bottom: `calc(${percentage}% - 12px)`,
-                    boxShadow: '2px 2px 4px #c8ccd0, -2px -2px 4px #ffffff',
-                    transition: isDragging ? 'none' : 'bottom 0.1s ease-out',
-                    transform: 'translateX(-1px)'
-                }}
-                onMouseDown={handleMouseDown}
-            />
+            <div className="relative h-2 bg-[#e5e9ec] rounded-full mb-2"
+                 style={{
+                     boxShadow: 'inset 2px 2px 4px #c8ccd0, inset -2px -2px 4px #ffffff'
+                 }}>
+                <input
+                    type="range"
+                    min={parameter.min}
+                    max={parameter.max}
+                    step={parameter.step}
+                    value={value}
+                    onChange={(e) => onChange(Number(e.target.value))}
+                    className="absolute w-full h-full opacity-0 cursor-pointer"
+                />
+                <div className="absolute h-full bg-blue-500 rounded-full"
+                     style={{
+                         width: `${((value - parameter.min) / (parameter.max - parameter.min)) * 100}%`,
+                         boxShadow: '2px 2px 4px rgba(0,0,0,0.1)'
+                     }}
+                />
+            </div>
         </div>
     );
 };
@@ -108,64 +124,51 @@ const VerticalSlider = ({
 const ParameterPanel: React.FC = () => {
     const dispatch = useAppDispatch();
     const selectedKey = useAppSelector(state => state.keyboard.selectedKey);
-    const parameterValues = useAppSelector(state => {
-        if (selectedKey === null) return {};
-        return parameterGroups.reduce((values, group) => {
-            group.parameters.forEach(param => {
-                values[param.id] = selectParameter(state, selectedKey, param.id as any);
-            });
-            return values;
-        }, {} as Record<string, number>);
-    });
+    const parameterValues = useAppSelector(selectParameterValues);
+    const isPanelVisible = useAppSelector(selectIsPanelVisible);
 
-    const formatValue = (value: number, unit?: string, step?: number) => {
-        const formatted = step && step < 1
-            ? value.toFixed(1)
-            : Math.round(value).toString();
-        return unit ? `${formatted}${unit}` : formatted;
+    const handlePanelClick = () => {
+        dispatch(togglePanel());
     };
 
-    const handleParameterChange = (parameterId: string, value: number) => {
-        if (selectedKey !== null) {
-            dispatch(setKeyParameter({
-                keyNumber: selectedKey,
-                parameter: parameterId as any,
-                value
-            }));
+    const handleParameterChange = useMemo(() => (
+        (parameterId: string, value: number) => {
+            if (selectedKey !== null) {
+                dispatch(setKeyParameter({
+                    keyNumber: selectedKey,
+                    parameter: parameterId as any,
+                    value
+                }));
+            }
         }
-    };
-
-    if (selectedKey === null) return null;
+    ), [dispatch, selectedKey]);
 
     return (
-        <div className="h-[300px] px-2 py-4 bg-[#e5e9ec] rounded-3xl flex flex-row gap-3"
-             style={{
-                 boxShadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff'
-             }}>
-            {parameterGroups[0].parameters.map(param => (
-                <div key={param.id}
-                     className="flex flex-col items-center gap-2">
-                    <div className="text-xs font-medium text-gray-600 min-w-[20px] text-center">
-                        {param.name}
-                    </div>
-
-                    <div className="text-xs text-gray-500 tabular-nums mb-1 min-h-[16px]">
-                        {formatValue(
-                            parameterValues[param.id] ?? param.defaultValue,
-                            param.unit,
-                            param.step
-                        )}
-                    </div>
-
-                    <VerticalSlider
-                        param={param}
-                        value={parameterValues[param.id] ?? param.defaultValue}
-                        onChange={(value) => handleParameterChange(param.id, value)}
-                    />
+        <div
+            onClick={handlePanelClick}
+            className="w-full max-w-md p-6 bg-[#e5e9ec] dark:bg-gray-800 rounded-3xl cursor-pointer hover:bg-[#e0e4e7] transition-colors"
+            style={{
+                boxShadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff'
+            }}
+        >
+            {isPanelVisible ? (
+                // Stop event propagation when clicking inside the parameters div
+                <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
+                    {parameters.map(param => (
+                        <ParameterControl
+                            key={param.id}
+                            parameter={param}
+                            value={parameterValues[param.id] ?? param.defaultValue}
+                            onChange={(value) => handleParameterChange(param.id, value)}
+                        />
+                    ))}
                 </div>
-            ))}
+            ) : (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    Click to show parameters
+                </div>
+            )}
         </div>
     );
 };
-
 export default ParameterPanel;

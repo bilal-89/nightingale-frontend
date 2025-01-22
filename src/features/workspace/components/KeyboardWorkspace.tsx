@@ -4,15 +4,21 @@ import ParameterPanel from '../../../features/parameters/components/ParameterPan
 
 const KeyboardWorkspace: React.FC = () => {
     return (
-        // Using a flex container to create a side-by-side layout
-        <div className="flex flex-col lg:flex-row gap-8 p-8 min-h-screen bg-gray-50 dark:bg-gray-900">
-            {/* Keyboard section takes up more space */}
-            <div className="flex-1">
+        // Use the same soft background color as in ParameterPanel
+        <div className="flex flex-col lg:flex-row gap-6 p-6 min-h-screen bg-[#e5e9ec]">
+            {/* Keyboard section with neumorphic styling */}
+            <div className="flex-1 rounded-3xl p-6"
+                 style={{
+                     boxShadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff'
+                 }}>
                 <TunableKeyboard />
             </div>
 
-            {/* Parameter panel has a fixed width */}
-            <div className="w-full lg:w-96 flex-shrink-0">
+            {/* Parameter panel container with matching neumorphic styling */}
+            <div className="w-full lg:w-64 flex-shrink-0 rounded-3xl p-3" // Reduced from w-96 to w-64
+                 style={{
+                     boxShadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff'
+                 }}>
                 <ParameterPanel />
             </div>
         </div>
