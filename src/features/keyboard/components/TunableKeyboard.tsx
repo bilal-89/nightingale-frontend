@@ -8,13 +8,16 @@ import {
     noteOff,
     setKeyParameter,
     setMode,
+    setGlobalWaveform,
     togglePanel,
     selectActiveNotes,
     selectParameter,
     selectIsInitialized,
     selectMode,
     selectIsPanelVisible,
-    SynthMode
+    selectGlobalWaveform,
+    SynthMode,
+    Waveform
 } from '../../../store/slices/keyboard/keyboard.slice';
 import { initializeAudioContext } from '../../../store/middleware/keyboardAudio.middleware';
 import { RootState } from '../../../store';
@@ -23,6 +26,13 @@ import { RootState } from '../../../store';
 const modeLabels: Record<SynthMode, string> = {
     tunable: "Tones",
     drums: "Drums"
+};
+
+const waveformLabels: Record<Waveform, string> = {
+    sine: "Sine",
+    square: "Square",
+    sawtooth: "Saw",
+    triangle: "Triangle"
 };
 
 const modeStyles: Record<SynthMode, {
@@ -56,6 +66,7 @@ const TunableKeyboard: React.FC = () => {
     const activeNotes = useSelector(selectActiveNotes);
     const isInitialized = useSelector(selectIsInitialized);
     const currentMode = useSelector(selectMode);
+    const currentWaveform = useSelector(selectGlobalWaveform);
     const isPanelVisible = useSelector(selectIsPanelVisible);
 
     const initializeAudio = useCallback(() => {
@@ -83,6 +94,10 @@ const TunableKeyboard: React.FC = () => {
 
     const handleModeChange = useCallback((newMode: SynthMode) => {
         dispatch(setMode(newMode));
+    }, [dispatch]);
+
+    const handleWaveformChange = useCallback((newWaveform: Waveform) => {
+        dispatch(setGlobalWaveform(newWaveform));
     }, [dispatch]);
 
     const handlePanelClick = useCallback(() => {
@@ -139,6 +154,7 @@ const TunableKeyboard: React.FC = () => {
     return (
         <Card className={`p-8 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background}`}>
             <div className="flex flex-col gap-6">
+                {/* Mode Selection */}
                 <div className="flex justify-center gap-4">
                     {(['tunable', 'drums'] as const).map((mode) => (
                         <button
@@ -159,6 +175,7 @@ const TunableKeyboard: React.FC = () => {
                         </button>
                     ))}
                 </div>
+
 
                 <div
                     className={`
@@ -191,6 +208,8 @@ const TunableKeyboard: React.FC = () => {
                         ))}
                     </div>
 
+
+
                     <div className="contents transition-all duration-300 ease-in-out">
                         {notes.slice(6, 12).map(({note}) => (
                             <div key={note} className="flex justify-center transition-all duration-300 ease-in-out">
@@ -209,6 +228,36 @@ const TunableKeyboard: React.FC = () => {
                             </div>
                         ))}
                     </div>
+
+                    {/* Waveform Selection - Only show for tunable mode */}
+                    {currentMode === 'tunable' && (
+                        <div className="col-span-6 flex justify-center gap-3 mt-4">
+                            {(['sine', 'square', 'sawtooth', 'triangle'] as const).map((waveform) => (
+                                <button
+                                    key={waveform}
+                                    onClick={() => handleWaveformChange(waveform)}
+                                    className={`
+                                        px-4 py-2 rounded-lg text-sm
+                                        transition-all duration-300 ease-in-out
+                                        ${currentWaveform === waveform
+                                        ? 'bg-[#e8e4dc] shadow-lg scale-105'
+                                        : 'bg-[#f0ece6] opacity-70 scale-100'
+                                    }
+                                        text-[#4a4543]
+                                        hover:opacity-90
+                                    `}
+                                    style={{
+                                        boxShadow: currentWaveform === waveform
+                                            ? '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff'
+                                            : 'none'
+                                    }}
+                                >
+                                    {waveformLabels[waveform]}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                 </div>
             </div>
         </Card>

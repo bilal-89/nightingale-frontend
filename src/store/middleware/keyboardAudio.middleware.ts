@@ -1,7 +1,12 @@
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
 import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
 import { drumSoundManager } from '../../audio/context/drums/drumSoundManager';
-import { KeyboardState, KeyboardActionTypes } from '../slices/keyboard/keyboard.slice';
+import {
+    KeyboardState,
+    KeyboardActionTypes,
+    selectKeyWaveform,
+    selectGlobalWaveform
+} from '../slices/keyboard/keyboard.slice';
 
 // Enhanced debug utilities to include parameter information
 const debug = {
@@ -16,7 +21,7 @@ const debug = {
     },
 
     // New helper to log parameter changes
-    parameter: (note: number, parameter: string, value: number) => {
+    parameter: (note: number, parameter: string, value: any) => {
         debug.log(`Parameter Change - Note: ${note}, ${parameter}: ${value}`);
     }
 };
@@ -59,7 +64,8 @@ export const keyboardAudioMiddleware: Middleware = store => next => action => {
         case 'keyboard/noteOn': {
             const note = action.payload;
             const mode = currentState.mode;
-            debug.log(`Note on: ${note}, Mode: ${mode}`);
+            const waveform = selectKeyWaveform(store.getState(), note); // Get effective waveform
+            debug.log(`Note on: ${note}, Mode: ${mode}, Waveform: ${waveform}`);
 
             try {
                 if (mode === 'drums') {
@@ -70,7 +76,7 @@ export const keyboardAudioMiddleware: Middleware = store => next => action => {
                     const parameters = currentState.keyParameters[note] || {};
                     const velocity = parameters.velocity?.value ?? 100;
 
-                    debug.log('Playing tunable note', { velocity });
+                    debug.log('Playing tunable note', { velocity, waveform });
                     keyboardAudioManager.playNote(note);
                 }
             } catch (error) {
@@ -101,11 +107,34 @@ export const keyboardAudioMiddleware: Middleware = store => next => action => {
 
             try {
                 if (mode !== 'drums') {
-                    // Use the unified parameter setting method
                     keyboardAudioManager.setNoteParameter(keyNumber, parameter, value);
                 }
             } catch (error) {
                 debug.log('Error setting parameter:', error);
+            }
+            break;
+        }
+
+        case 'keyboard/setGlobalWaveform': {
+            const waveform = action.payload;
+            debug.log(`Setting global waveform: ${waveform}`);
+
+            try {
+                keyboardAudioManager.setGlobalWaveform(waveform);
+            } catch (error) {
+                debug.log('Error setting global waveform:', error);
+            }
+            break;
+        }
+
+        case 'keyboard/setKeyWaveform': {
+            const { keyNumber, waveform } = action.payload;
+            debug.log(`Setting waveform for key ${keyNumber}: ${waveform}`);
+
+            try {
+                keyboardAudioManager.setNoteWaveform(keyNumber, waveform);
+            } catch (error) {
+                debug.log('Error setting key waveform:', error);
             }
             break;
         }

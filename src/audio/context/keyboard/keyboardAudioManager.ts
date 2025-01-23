@@ -1,5 +1,8 @@
 import { SynthesisParameters, CompleteNoteEvent } from '../../types/audioTypes';
 import { drumSoundManager } from '../drums/drumSoundManager';
+import { Waveform } from '../../store/slices/keyboard/keyboard.slice';
+
+
 
 class KeyboardAudioManager {
     // Core audio settings
@@ -29,6 +32,9 @@ class KeyboardAudioManager {
         release: number;
     }>();
 
+    private waveforms = new Map<number, Waveform>();
+    private globalWaveform: Waveform = 'sine';
+
     // Active voice tracking
     private activeVoices = new Map<number, {
         oscillator: OscillatorNode;
@@ -44,6 +50,9 @@ class KeyboardAudioManager {
             sustain: number;
             release: number;
         };
+
+        waveform: Waveform;
+
     }>();
 
     // Required context getter for playback system
@@ -84,6 +93,29 @@ class KeyboardAudioManager {
         const baseFrequency = 440 * Math.pow(2, baseMidiNote / 12);
         const tuning = this.tunings.get(note) || 0;
         return tuning === 0 ? baseFrequency : baseFrequency * Math.pow(2, tuning / 1200);
+    }
+
+    private getWaveformForNote(note: number): Waveform {
+        return this.waveforms.get(note) ?? this.globalWaveform;
+    }
+
+    setGlobalWaveform(waveform: Waveform): void {
+        this.globalWaveform = waveform;
+        // Update all active voices that use global waveform
+        this.activeVoices.forEach((voice, note) => {
+            if (!this.waveforms.has(note)) {
+                voice.oscillator.type = waveform;
+            }
+        });
+    }
+
+    setNoteWaveform(note: number, waveform: Waveform): void {
+        this.waveforms.set(note, waveform);
+        // Update voice if active
+        const voice = this.activeVoices.get(note);
+        if (voice) {
+            voice.oscillator.type = waveform;
+        }
     }
 
     // Initialize audio context
@@ -141,30 +173,21 @@ class KeyboardAudioManager {
 
         try {
             if (this.currentMode === 'drums') {
-                // Initialize drum system for playback
                 drumSoundManager.initialize();
-
-                // Get the tuning for this drum note
                 const tuning = this.tunings.get(noteEvent.note) || 0;
-
-                // Schedule the drum sound to play at the exact time
                 drumSoundManager.playDrumSoundAt(
                     noteEvent.note,
-                    time, // Use the scheduled time from the playback system
+                    time,
                     tuning
                 );
-
-                // We don't need to store voice info for drums since DrumSoundManager
-                // handles its own cleanup
             } else {
-                // Your existing synth code for non-drum sounds
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
                 const envelope = noteEvent.synthesis.envelope;
                 const maxGain = this.velocityToGain(noteEvent.velocity);
 
-                // Set up the oscillator
-                oscillator.type = 'sine';
+                // Configure oscillator with waveform
+                oscillator.type = noteEvent.synthesis.waveform;
                 oscillator.frequency.setValueAtTime(
                     this.getFrequency(noteEvent.note),
                     time
@@ -181,10 +204,8 @@ class KeyboardAudioManager {
 
                 // Handle attack phase differently based on attack time
                 if (envelope.attack <= 0.001) {
-                    // For immediate attack, directly set the value
                     gainNode.gain.setValueAtTime(maxGain, time);
                 } else {
-                    // For normal attack, use the curve
                     gainNode.gain.setValueCurveAtTime(
                         this.createAttackCurve(noteEvent.velocity),
                         time,
@@ -192,7 +213,7 @@ class KeyboardAudioManager {
                     );
                 }
 
-                // Rest of envelope remains the same
+                // Decay and sustain
                 const sustainLevel = maxGain * envelope.sustain;
                 gainNode.gain.setTargetAtTime(
                     sustainLevel,
@@ -200,6 +221,7 @@ class KeyboardAudioManager {
                     envelope.decay / 4
                 );
 
+                // Release phase
                 gainNode.gain.setTargetAtTime(
                     0,
                     releaseStartTime,
@@ -263,9 +285,10 @@ class KeyboardAudioManager {
         const baseFrequency = this.getFrequency(note);
         const envelope = this.getEnvelopeParams(note);
         const synthesis = this.getCurrentSynthesis(note);
+        const waveform = this.getWaveformForNote(note);
 
-        // Configure oscillator
-        oscillator.type = 'sine';
+        // Configure oscillator with waveform
+        oscillator.type = waveform;
         oscillator.frequency.setValueAtTime(baseFrequency, now);
 
         // Configure envelope
@@ -291,7 +314,8 @@ class KeyboardAudioManager {
             currentVelocity: velocity,
             startTime: now,
             noteStartTime: now,
-            envelope
+            envelope,
+            waveform
         });
 
         return {
@@ -425,7 +449,7 @@ class KeyboardAudioManager {
         } else {
             return {
                 mode: 'tunable',
-                waveform: 'sine',
+                waveform: this.getWaveformForNote(note),
                 envelope: {
                     attack: envelope.attack,
                     decay: envelope.decay,
@@ -457,6 +481,9 @@ class KeyboardAudioManager {
         this.tunings.clear();
         this.velocities.clear();
         this.envelopeParams.clear();
+        // NEW - Add these lines
+        this.waveforms.clear();
+        this.globalWaveform = 'sine';
 
         if (this.audioContext) {
             this.audioContext.close();
