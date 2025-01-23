@@ -1,73 +1,169 @@
 // src/store/middleware/arrangement.middleware.ts
 
 import { Middleware } from '@reduxjs/toolkit';
-import { addNoteEvent, stopRecording, addClip } from '../slices/arrangement/arrangement.slice';
-import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
+import { RootState } from '../index';
+import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager'
+import {
+    addNoteEvent,
+    updateNoteEvent,
+    addClip,
+} from '../slices/arrangement/arrangement.slice';
+import { NoteEvent, Clip } from '../../types/arrangement';
 
-const debug = (message: string, data?: any) => {
-    console.log(`[Arrangement Middleware] ${message}`, data || '');
+// Constants
+const MILLISECONDS_PER_MINUTE = 60000;
+const SIXTEENTH_NOTE_DIVISION = 4;
+
+interface DebugData {
+    note?: number;
+    timestamp?: number;
+    mode?: string;
+    duration?: number;
+    notesCount?: number;
+    length?: number;
+    track?: number;
+    lastNoteEndTime?: number;
+}
+
+// Utilities
+const debug = (message: string, data?: DebugData): void => {
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`[Arrangement Middleware] ${message}`, data || '');
+    }
 };
+
+const findMatchingNoteStart = (
+    recordingBuffer: NoteEvent[],
+    note: number
+): NoteEvent | undefined => {
+    return [...recordingBuffer]
+        .reverse()
+        .find(event => event.note === note && event.duration === undefined);
+};
+
+const calculateClipLength = (
+    recordingBuffer: NoteEvent[],
+    tempo: number
+): number => {
+    const lastNoteEndTime = Math.max(
+        ...recordingBuffer.map(note =>
+            note.timestamp + ((note.duration || 0) * 1000)
+        )
+    );
+
+    return Math.ceil(
+        lastNoteEndTime / (MILLISECONDS_PER_MINUTE / tempo / SIXTEENTH_NOTE_DIVISION)
+    );
+};
+
+const createClip = (
+    recordingBuffer: NoteEvent[],
+    currentTrack: number,
+    clipLength: number
+): Clip => ({
+    id: Date.now().toString(),
+    startCell: 0,
+    length: clipLength,
+    track: currentTrack,
+    isSelected: false,
+    notes: recordingBuffer,
+    parameters: {
+        velocity: 100,
+        pitch: 60,
+        tuning: 0
+    }
+});
 
 export const arrangementMiddleware: Middleware = store => next => action => {
     const result = next(action);
+    const state = store.getState() as RootState;
 
-    // When a note is played while recording, capture it
-    if (action.type === 'keyboard/noteOn' && store.getState().arrangement.isRecording) {
-        const state = store.getState();
-        const timestamp = Date.now() - state.arrangement.recordingStartTime!;
+    switch (action.type) {
+        case 'keyboard/noteOn': {
+            if (!state.arrangement.isRecording) break;
 
-        debug('Recording note:', { note: action.payload, timestamp });
+            const timestamp = Date.now() - state.arrangement.recordingStartTime!;
+            const synthesis = keyboardAudioManager.getCurrentSynthesis(action.payload);
 
-        // Get current synthesis settings from the keyboard manager
-        const synthesis = keyboardAudioManager.getCurrentSynthesis(action.payload);
-
-        store.dispatch(addNoteEvent({
-            note: action.payload,
-            timestamp,
-            velocity: 100,
-            duration: 0.1, // We'll make this dynamic later
-            synthesis
-        }));
-    }
-
-    // When recording stops, create a clip from the buffer
-    if (action.type === 'arrangement/stopRecording') {
-        const state = store.getState();
-        const { recordingBuffer, currentTrack } = state.arrangement;
-
-        debug('Recording stopped, buffer:', recordingBuffer);
-
-        if (recordingBuffer.length > 0) {
-            // Calculate clip length based on last note timestamp
-            const lastNoteTime = Math.max(...recordingBuffer.map(n => n.timestamp));
-            const clipLengthInCells = Math.ceil(lastNoteTime / (60000 / state.arrangement.tempo / 4));
-
-            debug('Creating clip:', {
-                notesCount: recordingBuffer.length,
-                length: clipLengthInCells,
-                track: currentTrack
+            debug('Recording note start:', {
+                note: action.payload,
+                timestamp,
+                mode: keyboardAudioManager.getCurrentMode()
             });
 
-            store.dispatch(addClip({
-                id: Date.now().toString(),
-                startCell: 0,
-                length: clipLengthInCells,
-                track: currentTrack,
-                isSelected: false,
-                notes: recordingBuffer,
-                parameters: {
-                    velocity: 100,
-                    pitch: 60,
-                    tuning: 0
-                }
+            store.dispatch(addNoteEvent({
+                note: action.payload,
+                timestamp,
+                velocity: 100,
+                synthesis
             }));
+            break;
         }
-    }
 
-    // Add debugging for clip-related actions
-    if (action.type === 'arrangement/addClip') {
-        debug('Clip added:', action.payload);
+        case 'keyboard/noteOff': {
+            if (!state.arrangement.isRecording) break;
+
+            const timestamp = Date.now() - state.arrangement.recordingStartTime!;
+            const noteEvent = findMatchingNoteStart(
+                state.arrangement.recordingBuffer,
+                action.payload
+            );
+
+            if (noteEvent) {
+                const duration = (timestamp - noteEvent.timestamp) / 1000;
+
+                debug('Recording note end:', {
+                    note: action.payload,
+                    duration,
+                    timestamp
+                });
+
+                store.dispatch(updateNoteEvent({
+                    note: action.payload,
+                    timestamp: noteEvent.timestamp,
+                    duration
+                }));
+            }
+            break;
+        }
+
+        case 'arrangement/stopRecording': {
+            const { recordingBuffer, currentTrack, tempo } = state.arrangement;
+
+            debug('Recording stopped, buffer:', { notesCount: recordingBuffer.length });
+
+            if (recordingBuffer.length > 0) {
+                const clipLength = calculateClipLength(recordingBuffer, tempo);
+                const newClip = createClip(recordingBuffer, currentTrack, clipLength);
+
+                debug('Creating clip:', {
+                    notesCount: recordingBuffer.length,
+                    length: clipLength,
+                    track: currentTrack
+                });
+
+                store.dispatch(addClip(newClip));
+            }
+            break;
+        }
+
+        case 'arrangement/addClip': {
+            debug('Clip added:', action.payload);
+            break;
+        }
+
+        case 'arrangement/moveClip': {
+            debug('Clip moved:', action.payload);
+            break;
+        }
+
+        case 'arrangement/updateClipLength': {
+            debug('Clip length updated:', action.payload);
+            break;
+        }
     }
 
     return result;
 };
+
+export default arrangementMiddleware;

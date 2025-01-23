@@ -2,6 +2,8 @@ import { Provider } from 'react-redux';
 import { store } from './store';
 import { TunableKeyboard } from './features/keyboard';
 import { ArrangementView } from "./features/arrangement";
+import ParameterPanel from "./features/parameters/components/ParameterPanel.tsx";
+import KeyboardWorkspace from "./features/workspace/components/KeyboardWorkspace.tsx";
 // import BirdsongSynth from './features/keyboard/components/BirdsongSynth';
 
 // Add console logs to help debug
@@ -15,7 +17,9 @@ const App = () => {
                     <div className="space-y-8">
                         <ArrangementView />
 
-                        <TunableKeyboard />
+                        {/*<TunableKeyboard />*/}
+                        <KeyboardWorkspace />
+
                         {/*<BirdsongSynth />*/}
                     </div>
                 </div>

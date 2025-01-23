@@ -1,5 +1,4 @@
 // src/features/arrangement/components/ArrangementView.tsx
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { Card } from '../../../components/ui/card';
@@ -11,7 +10,6 @@ import {
     selectIsRecording,
     selectCurrentTrack,
     selectClips,
-    // Add these new imports right here
     startPlayback,
     stopPlayback,
     setPlaybackPosition,
@@ -21,9 +19,15 @@ import {
     type NoteEvent
 } from '../../../store/slices/arrangement/arrangement.slice';
 
-// Add these new imports right after the slice import
 import { Play, Square, SkipBack } from 'lucide-react';
 import PlaybackCoordinator from '../../../components/PlaybackCoordinator';
+
+import {
+    selectNote,
+    selectSelectedNote,
+    updateSelectedNoteParameters,
+} from '../../../store/slices/arrangement/arrangement.slice';
+import NoteInspector from '../../../components/NoteInspector';
 
 // Constants for layout and visualization
 const TRACKS = 4;
@@ -42,7 +46,7 @@ const COLORS = {
     },
     accent: {
         primary: '#4a90e2',
-        recording: '#e53e3e',
+        recording: '#c5f102',
         selected: '#63b3ed'
     }
 } as const;
@@ -67,15 +71,15 @@ const ArrangementView: React.FC = () => {
     const isRecording = useAppSelector(selectIsRecording);
     const currentTrack = useAppSelector(selectCurrentTrack);
     const clips = useAppSelector(selectClips);
-
-// Add these new selectors right here
+    const selectedNote = useAppSelector(selectSelectedNote);
     const isPlaying = useAppSelector(selectIsPlaying);
     const currentTime = useAppSelector(selectCurrentTime);
 
     // Local state
     const [dragState, setDragState] = useState<DragState | null>(null);
+    const [inspectorPosition, setInspectorPosition] = useState<{x: number; y: number} | null>(null);
 
-    // Memoize note calculations for all clips
+    // Memoized values - Move this before any code that uses it
     const notesMemoByClip = useMemo(() => {
         return clips.map(clip => {
             const grouped = new Map<number, NoteEvent[]>();
@@ -244,13 +248,34 @@ const ArrangementView: React.FC = () => {
 
     // Rendering functions
     const renderNoteContent = useCallback((clip: Clip) => {
+        // Debug the incoming clip
+        console.log('Rendering clip:', {
+            id: clip.id,
+            noteCount: clip.notes.length,
+            notes: clip.notes,
+            length: clip.length
+        });
+
         const clipNotes = notesMemoByClip.find(n => n.clipId === clip.id);
-        if (!clipNotes || clipNotes.pitches.length === 0) return null;
+        if (!clipNotes || clipNotes.pitches.length === 0) {
+            console.log('No renderable notes found for clip:', clip.id);
+            return null;
+        }
 
         const visualizationHeight = TRACK_HEIGHT - 16;
 
+        // Debug our note grouping
+        console.log('Note grouping:', {
+            clipId: clip.id,
+            pitches: clipNotes.pitches,
+            pitchRange: clipNotes.pitchRange,
+            notesByPitch: Array.from(clipNotes.notesByPitch.entries())
+        });
+
         return (
-            <div className="absolute inset-2 overflow-hidden">
+            <div
+                className="absolute inset-2 overflow-hidden bg-blue-100/20" // Added bg for debugging
+            >
                 {Array.from(clipNotes.notesByPitch.entries()).map(([pitch, events]) => (
                     <React.Fragment key={pitch}>
                         {events.map((event, index) => {
@@ -262,16 +287,38 @@ const ArrangementView: React.FC = () => {
                                     (clipNotes.pitchRange)) *
                                 (visualizationHeight - NOTE_HEIGHT);
 
+                            // Debug each note's positioning
+                            console.log('Note position:', {
+                                pitch,
+                                index,
+                                startPosition,
+                                width,
+                                verticalPosition,
+                                timestamp: event.timestamp,
+                                duration,
+                                clipLength: clip.length
+                            });
+
+                            const isSelected = selectedNote?.clipId === clip.id &&
+                                selectedNote?.noteIndex === index;
+
                             return (
                                 <div
                                     key={`${pitch}-${index}`}
-                                    className="absolute bg-blue-400 rounded-sm opacity-75"
+                                    className={`absolute rounded-sm cursor-pointer transition-all
+                                    ${isSelected ? 'ring-2 ring-blue-400 z-10' : ''}
+                                    bg-blue-400 hover:brightness-110`}
                                     style={{
                                         left: `${startPosition}%`,
-                                        width: `${width}%`,
+                                        width: `${Math.max(1, width)}%`, // Ensure minimum width
                                         height: `${NOTE_HEIGHT}px`,
-                                        top: verticalPosition,
-                                        transition: 'all 0.15s ease-out'
+                                        top: `${verticalPosition}px`,
+                                        opacity: isSelected ? 0.9 : 0.75,
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        dispatch(selectNote({ clipId: clip.id, noteIndex: index }));
+                                        setInspectorPosition({ x: e.clientX, y: e.clientY });
                                     }}
                                 />
                             );
@@ -280,7 +327,7 @@ const ArrangementView: React.FC = () => {
                 ))}
             </div>
         );
-    }, [notesMemoByClip]);
+    }, [notesMemoByClip, selectedNote, dispatch]);
 
     const renderClip = useCallback((clip: Clip) => {
         const isDragging = dragState?.type === 'MOVE' && dragState.clipId === clip.id;
@@ -417,7 +464,7 @@ const ArrangementView: React.FC = () => {
                 >
                     <button
                         className={`w-3 h-3 rounded-full transition-all duration-300
-                            ${currentTrack === i ? 'bg-red-500' : 'bg-gray-300'}`}
+                            ${currentTrack === i ? 'bg-green-500' : 'bg-gray-300'}`}
                         onClick={() => dispatch(setCurrentTrack(i))}
                     />
                     <span className="text-sm">Track {i + 1}</span>
@@ -491,6 +538,27 @@ const ArrangementView: React.FC = () => {
 
             {renderTransportControls()}
             {renderTimeGrid()}
+            {/* Add this */}
+            {selectedNote && inspectorPosition && (
+                <div
+                    className="absolute z-50"
+                    style={{
+                        left: inspectorPosition.x,
+                        top: inspectorPosition.y,
+                    }}
+                >
+                    <NoteInspector
+                        noteEvent={selectedNote}
+                        onClose={() => {
+                            dispatch(selectNote(null));
+                            setInspectorPosition(null);
+                        }}
+                        onUpdate={(updates) => {
+                            dispatch(updateSelectedNoteParameters(updates));
+                        }}
+                    />
+                </div>
+            )}
         </Card>
     );
 };

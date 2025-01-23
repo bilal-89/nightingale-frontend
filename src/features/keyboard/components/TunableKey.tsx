@@ -1,9 +1,18 @@
 import React, { useCallback, useRef } from 'react';
 import { KeyProps } from './keyboard.types';
-import { drumSounds } from '../../../audio/context/drums/drumSoundManager';
+import { drumSounds } from '../../../audio/constants/drumSounds';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { togglePanel, selectIsPanelVisible } from '../../../store/slices/keyboard/keyboard.slice';
 
+// Extending the key props to include necessary properties while omitting 'isBirdsong'
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
-    mode: 'tunable' | 'drums';  // Removed birdsong mode
+    mode: 'tunable' | 'drums';
+    note: number;
+    isPressed: boolean;
+    tuning: number;
+    onNoteOn: (note: number) => void;
+    onNoteOff: (note: number) => void;
+    onTuningChange: (note: number, tuning: number) => void;
 }
 
 const TunableKey: React.FC<ExtendedKeyProps> = ({
@@ -15,24 +24,39 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                                                     onTuningChange,
                                                     mode
                                                 }) => {
+    // Setting up Redux dispatch and selector for panel visibility
+    const dispatch = useAppDispatch();
     const isTuningRef = useRef(false);
     const drumSound = mode === 'drums' ? drumSounds[note] : null;
 
+    // Handle tuning changes with the slider
     const handleTuningChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const newTuning = Number(e.target.value);
         onTuningChange(note, newTuning);
     }, [note, onTuningChange]);
 
-    // Updated mode-specific styles
+    // Handle playing notes with mouse interactions
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (isTuningRef.current) return;
+        onNoteOn(note);
+    };
+
+    const handleMouseUp = () => {
+        if (!isTuningRef.current) {
+            onNoteOff(note);
+        }
+    };
+
+    // Define visual styles for different modes (tunable and drums)
     const modeStyles = {
         tunable: {
-            // Given birdsong's taller, more rounded look to the flute
             bg: '#e5e9ec',
             bgPressed: '#dde1e4',
+            bgSelected: '#d1e3f9',
             shadow1: '#c8ccd0',
             shadow2: '#ffffff',
-            keySize: 'w-16 h-24',  // Taller keys
-            borderRadius: 'rounded-3xl', // More rounded
+            keySize: 'w-16 h-24',
+            borderRadius: 'rounded-3xl',
             translation: 'translate-y-[2px]',
             sliderHeight: 'h-2',
             thumbSize: 'w-4 h-4',
@@ -40,12 +64,12 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
             shadowSize: '4px'
         },
         drums: {
-            // Given original flute (tunable) look to drums
-            bg: '#ece4e4',  // Keeping the unified drum color
+            bg: '#ece4e4',
             bgPressed: '#e4dcdc',
+            bgSelected: '#f0d9d9',
             shadow1: '#d1cdc4',
             shadow2: '#ffffff',
-            keySize: 'w-20 h-20',  // Square shape from original flute
+            keySize: 'w-20 h-20',
             borderRadius: 'rounded-2xl',
             translation: 'translate-y-[1px]',
             sliderHeight: 'h-1.5',
@@ -59,44 +83,49 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
 
     return (
         <div className="relative flex flex-col items-center">
-            {/* Tuning control */}
-            <div
-                className="mb-2 w-20"
-                onMouseDown={() => isTuningRef.current = true}
-                onMouseUp={() => isTuningRef.current = false}
-            >
-                <input
-                    type="range"
-                    min="-100"
-                    max="100"
-                    value={tuning}
-                    onChange={handleTuningChange}
-                    className={`
-                        w-full rounded-lg appearance-none cursor-pointer
-                        transition-all duration-500 ease-in-out
-                        focus:outline-none
-                        [&::-webkit-slider-thumb]:appearance-none
-                        [&::-webkit-slider-thumb]:rounded-full
-                        [&::-webkit-slider-thumb]:cursor-pointer
-                        [&::-webkit-slider-thumb]:transition-all
-                        [&::-webkit-slider-thumb]:duration-500
-                        [&::-moz-range-thumb]:appearance-none
-                        [&::-moz-range-thumb]:rounded-full
-                        [&::-moz-range-thumb]:cursor-pointer
-                        [&::-moz-range-thumb]:transition-all
-                        [&::-moz-range-thumb]:duration-500
-                        ${currentStyle.sliderHeight}
-                        [&::-webkit-slider-thumb]:${currentStyle.thumbSize}
-                        [&::-moz-range-thumb]:${currentStyle.thumbSize}
-                    `}
-                    style={{
-                        background: currentStyle.sliderBg,
-                        WebkitAppearance: 'none',
-                    }}
-                />
-            </div>
+            {/* Tuning control slider - shows/hides based on panel visibility */}
+            {/*<div*/}
+            {/*    className={`*/}
+            {/*        mb-2 w-20*/}
+            {/*        transition-all duration-300 ease-in-out*/}
+            {/*        ${isPanelVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}*/}
+            {/*    `}*/}
+            {/*    onMouseDown={() => isTuningRef.current = true}*/}
+            {/*    onMouseUp={() => isTuningRef.current = false}*/}
+            {/*>*/}
+            {/*    <input*/}
+            {/*        type="range"*/}
+            {/*        min="-100"*/}
+            {/*        max="100"*/}
+            {/*        value={tuning}*/}
+            {/*        onChange={handleTuningChange}*/}
+            {/*        onClick={(e) => e.stopPropagation()}*/}
+            {/*        className={`*/}
+            {/*            w-full rounded-lg appearance-none cursor-pointer*/}
+            {/*            transition-all duration-500 ease-in-out*/}
+            {/*            focus:outline-none*/}
+            {/*            [&::-webkit-slider-thumb]:appearance-none*/}
+            {/*            [&::-webkit-slider-thumb]:rounded-full*/}
+            {/*            [&::-webkit-slider-thumb]:cursor-pointer*/}
+            {/*            [&::-webkit-slider-thumb]:transition-all*/}
+            {/*            [&::-webkit-slider-thumb]:duration-500*/}
+            {/*            [&::-moz-range-thumb]:appearance-none*/}
+            {/*            [&::-moz-range-thumb]:rounded-full*/}
+            {/*            [&::-moz-range-thumb]:cursor-pointer*/}
+            {/*            [&::-moz-range-thumb]:transition-all*/}
+            {/*            [&::-moz-range-thumb]:duration-500*/}
+            {/*            ${currentStyle.sliderHeight}*/}
+            {/*            [&::-webkit-slider-thumb]:${currentStyle.thumbSize}*/}
+            {/*            [&::-moz-range-thumb]:${currentStyle.thumbSize}*/}
+            {/*        `}*/}
+            {/*        style={{*/}
+            {/*            background: currentStyle.sliderBg,*/}
+            {/*            WebkitAppearance: 'none',*/}
+            {/*        }}*/}
+            {/*    />*/}
+            {/*</div>*/}
 
-            {/* Morphing key */}
+            {/* Morphing key button */}
             <div
                 className={`
                     select-none cursor-pointer
@@ -106,9 +135,9 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                     ${isPressed ? currentStyle.translation : ''}
                     ${mode === 'drums' ? 'flex items-center justify-center' : ''}
                 `}
-                onMouseDown={() => !isTuningRef.current && onNoteOn(note)}
-                onMouseUp={() => !isTuningRef.current && onNoteOff(note)}
-                onMouseLeave={() => !isTuningRef.current && onNoteOff(note)}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
                 style={{
                     background: isPressed ? currentStyle.bgPressed : currentStyle.bg,
                     boxShadow: isPressed

@@ -1,19 +1,16 @@
-// src/store/slices/arrangement/arrangement.slice.ts
-
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../../index';
-import keyboardAudioManager from "../../../audio/context/keyboard/keyboardAudioManager.ts";
-import {SynthesisParameters} from "../../../audio/types/audioTypes.ts";
+import { SynthesisParameters } from '../../../audio/types/audioTypes';
 
-interface NoteEvent {
+export interface NoteEvent {
     note: number;
     timestamp: number;
     velocity: number;
     duration?: number;
-    synthesis: SynthesisParameters;  // Add this
+    synthesis: SynthesisParameters;
 }
 
-interface Clip {
+export interface Clip {
     id: string;
     startCell: number;
     length: number;
@@ -27,7 +24,11 @@ interface Clip {
     };
 }
 
-// New interface for playback state
+interface SelectedNote {
+    clipId: string;
+    noteIndex: number;
+}
+
 interface PlaybackState {
     isPlaying: boolean;
     currentTime: number;
@@ -37,41 +38,36 @@ interface PlaybackState {
     };
 }
 
-// Updated arrangement state with playback
 interface ArrangementState {
-    // Existing state
     isRecording: boolean;
     recordingStartTime: number | null;
     currentTrack: number;
     clips: Clip[];
     recordingBuffer: NoteEvent[];
     tempo: number;
-
-    // New playback state
     playback: PlaybackState;
+    selectedNote: SelectedNote | null;
 }
 
 const initialState: ArrangementState = {
-    // Existing initial state
     isRecording: false,
     recordingStartTime: null,
     currentTrack: 0,
     clips: [],
     recordingBuffer: [],
     tempo: 120,
-
-    // New playback initial state
     playback: {
         isPlaying: false,
         currentTime: 0
-    }
+    },
+    selectedNote: null
 };
 
 const arrangementSlice = createSlice({
     name: 'arrangement',
     initialState,
     reducers: {
-        // Existing recording actions
+        // Existing reducers
         startRecording: (state) => {
             state.isRecording = true;
             state.recordingStartTime = Date.now();
@@ -85,13 +81,7 @@ const arrangementSlice = createSlice({
 
         addNoteEvent: (state, action: PayloadAction<NoteEvent>) => {
             if (state.isRecording) {
-                // Make sure we have the complete synthesis parameters
-                const completeEvent = {
-                    ...action.payload,
-                    synthesis: action.payload.synthesis ||
-                        keyboardAudioManager.getCurrentSynthesis(action.payload.note)
-                };
-                state.recordingBuffer.push(completeEvent);
+                state.recordingBuffer.push(action.payload);
             }
         },
 
@@ -101,6 +91,16 @@ const arrangementSlice = createSlice({
 
         addClip: (state, action: PayloadAction<Clip>) => {
             state.clips.push(action.payload);
+        },
+
+        updateClipLength: (state, action: PayloadAction<{
+            id: string;
+            length: number;
+        }>) => {
+            const clip = state.clips.find(c => c.id === action.payload.id);
+            if (clip) {
+                clip.length = action.payload.length;
+            }
         },
 
         toggleClipSelection: (state, action: PayloadAction<string>) => {
@@ -135,12 +135,49 @@ const arrangementSlice = createSlice({
             }
         },
 
-        // New playback actions
+        updateNoteEvent: (state, action: PayloadAction<{
+            note: number;
+            timestamp: number;
+            duration: number;
+        }>) => {
+            const eventIndex = state.recordingBuffer.findIndex(event =>
+                event.note === action.payload.note &&
+                event.timestamp === action.payload.timestamp
+            );
+
+            if (eventIndex !== -1) {
+                state.recordingBuffer[eventIndex] = {
+                    ...state.recordingBuffer[eventIndex],
+                    duration: action.payload.duration
+                };
+            }
+        },
+
+        // New note selection and editing reducers
+        selectNote: (state, action: PayloadAction<SelectedNote | null>) => {
+            state.selectedNote = action.payload;
+        },
+
+        updateSelectedNoteParameters: (state, action: PayloadAction<Partial<NoteEvent>>) => {
+            if (!state.selectedNote) return;
+
+            const clip = state.clips.find(c => c.id === state.selectedNote!.clipId);
+            if (!clip) return;
+
+            const note = clip.notes[state.selectedNote.noteIndex];
+            if (!note) return;
+
+            clip.notes[state.selectedNote.noteIndex] = {
+                ...note,
+                ...action.payload
+            };
+        },
+
+        // Enhanced playback control reducers
         startPlayback: (state) => {
             state.playback.isPlaying = true;
-            // If we're at the end, restart from beginning
             if (state.playback.currentTime >= getArrangementEndTime(state)) {
-                state.playback.currentTime = 0;
+                state.playback.currentTime = state.playback.loopRegion?.start || 0;
             }
         },
 
@@ -150,8 +187,6 @@ const arrangementSlice = createSlice({
 
         updatePlaybackPosition: (state, action: PayloadAction<number>) => {
             state.playback.currentTime = action.payload;
-
-            // Handle loop region if active
             if (state.playback.loopRegion) {
                 const { start, end } = state.playback.loopRegion;
                 if (state.playback.currentTime >= end) {
@@ -164,8 +199,21 @@ const arrangementSlice = createSlice({
             state.playback.currentTime = action.payload;
         },
 
+        // Enhanced loop region control
         setLoopRegion: (state, action: PayloadAction<{ start: number; end: number } | undefined>) => {
             state.playback.loopRegion = action.payload;
+
+            // If we're currently playing and outside the new loop region, adjust position
+            if (state.playback.isPlaying && action.payload) {
+                if (state.playback.currentTime < action.payload.start ||
+                    state.playback.currentTime >= action.payload.end) {
+                    state.playback.currentTime = action.payload.start;
+                }
+            }
+        },
+
+        clearLoopRegion: (state) => {
+            state.playback.loopRegion = undefined;
         }
     }
 });
@@ -173,41 +221,57 @@ const arrangementSlice = createSlice({
 // Helper function to get the end time of the arrangement
 const getArrangementEndTime = (state: ArrangementState): number => {
     if (state.clips.length === 0) return 0;
-
-    return Math.max(
-        ...state.clips.map(clip => clip.startCell + clip.length)
-    ) * (60 / state.tempo);
+    return Math.max(...state.clips.map(clip => clip.startCell + clip.length)) * (60 / state.tempo);
 };
 
-// Export existing actions
+// Export actions
 export const {
     startRecording,
     stopRecording,
     addNoteEvent,
     setCurrentTrack,
     addClip,
+    updateClipLength,
     toggleClipSelection,
     moveClip,
     updateClipParameters,
-    // Export new playback actions
     startPlayback,
     stopPlayback,
+    updateNoteEvent,
     updatePlaybackPosition,
     setPlaybackPosition,
-    setLoopRegion
+    setLoopRegion,
+    clearLoopRegion,
+    selectNote,
+    updateSelectedNoteParameters
 } = arrangementSlice.actions;
 
-// Existing selectors
+// Export selectors
 export const selectIsRecording = (state: RootState) => state.arrangement.isRecording;
 export const selectCurrentTrack = (state: RootState) => state.arrangement.currentTrack;
 export const selectClips = (state: RootState) => state.arrangement.clips;
 export const selectSelectedClips = (state: RootState) =>
     state.arrangement.clips.filter(clip => clip.isSelected);
 export const selectTempo = (state: RootState) => state.arrangement.tempo;
-
-// New playback selectors
 export const selectIsPlaying = (state: RootState) => state.arrangement.playback.isPlaying;
 export const selectCurrentTime = (state: RootState) => state.arrangement.playback.currentTime;
 export const selectLoopRegion = (state: RootState) => state.arrangement.playback.loopRegion;
+export const selectSelectedNote = (state: RootState) => {
+    if (!state.arrangement.selectedNote) return null;
+
+    const clip = state.arrangement.clips.find(
+        c => c.id === state.arrangement.selectedNote!.clipId
+    );
+    if (!clip) return null;
+
+    const note = clip.notes[state.arrangement.selectedNote.noteIndex];
+    if (!note) return null;
+
+    return {
+        ...note,
+        clipId: state.arrangement.selectedNote.clipId,
+        noteIndex: state.arrangement.selectedNote.noteIndex
+    };
+};
 
 export default arrangementSlice.reducer;
