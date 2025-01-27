@@ -4,11 +4,19 @@ import React, { useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
     selectIsPlaying,
-    selectClips,
     selectTempo,
     selectCurrentTime,
     updatePlaybackPosition,
     stopPlayback
+} from '../features/player/state/slices/playback.slice';
+import { useClips } from '../features/player/hooks';
+import {
+    // selectIsPlaying,
+    selectClips,
+    // selectTempo,
+    // selectCurrentTime,
+    // updatePlaybackPosition,
+    // stopPlayback
 } from '../store/slices/arrangement/arrangement.slice';
 import keyboardAudioManager from '../audio/context/keyboard/keyboardAudioManager';
 
@@ -76,53 +84,31 @@ const PlaybackCoordinator: React.FC = () => {
             const scheduleEnd = now + SCHEDULE_AHEAD_TIME;
             const playbackPosition = now - playbackStartTimeRef.current;
 
-            debugLog('Scheduling window:', {
-                playbackPosition: playbackPosition.toFixed(3),
-                start: lastScheduleTimeRef.current.toFixed(3),
-                end: scheduleEnd.toFixed(3)
-            });
-
             // Process each clip
             clips.forEach(clip => {
-                debugLog('Processing clip:', {
-                    id: clip.id,
-                    startCell: clip.startCell,
-                    notes: clip.notes.length
-                });
+                // Calculate clip start time in seconds
+                const clipStartTime = (clip.startCell * 60) / (tempo * 4); // Convert grid cells to seconds
 
-                // Calculate when this clip starts in seconds
-                const clipStartTime = getTimeInSeconds(clip.startCell);
-
-                // Process each note in the clip
                 clip.notes.forEach(noteEvent => {
-                    // Calculate the absolute time when this note should play
+                    // Calculate absolute start time including the note's timestamp within the clip
                     const absoluteStartTime = playbackStartTimeRef.current +
                         clipStartTime + (noteEvent.timestamp / 1000);
 
-                    // Schedule notes that fall within our window
+                    // Only schedule notes in our looking-ahead window
                     if (absoluteStartTime >= lastScheduleTimeRef.current &&
                         absoluteStartTime < scheduleEnd) {
                         try {
-                            // Ensure we pass the complete note information including duration
-                            const completeNoteEvent: CompleteNoteEvent = {
+                            // Use the actual recorded duration
+                            keyboardAudioManager.playExactNote({
                                 ...noteEvent,
                                 timestamp: absoluteStartTime,
-                                // Use the recorded duration or default to 0.1 seconds
-                                duration: typeof noteEvent.duration === 'number' ?
-                                    noteEvent.duration : 0.1
-                            };
+                                duration: noteEvent.duration / 1000  // Convert ms to seconds
+                            }, absoluteStartTime);
 
-                            // Schedule the note with its full duration
-                            keyboardAudioManager.playExactNote(
-                                completeNoteEvent,
-                                absoluteStartTime
-                            );
-
-                            debugLog('Scheduled note:', {
+                            debugLog('Scheduling note:', {
                                 note: noteEvent.note,
-                                time: absoluteStartTime.toFixed(3),
-                                duration: completeNoteEvent.duration.toFixed(3),
-                                relativeTime: (absoluteStartTime - playbackStartTimeRef.current).toFixed(3)
+                                start: absoluteStartTime.toFixed(3),
+                                duration: (noteEvent.duration / 1000).toFixed(3)
                             });
                         } catch (error) {
                             debugLog('Failed to schedule note:', { error, noteEvent });

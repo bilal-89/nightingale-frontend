@@ -59,27 +59,30 @@ export const playbackMiddleware: Middleware = store => next => async action => {
                         const beatsPerSecond = tempo / 60;
 
                         clips.forEach(clip => {
-                            const clipStartTime = clip.startCell / beatsPerSecond;
+                            // Convert grid position to beats
+                            const clipStartBeats = clip.startCell / 4; // Assuming 4 cells per beat
 
                             clip.notes.forEach(noteEvent => {
-                                const absoluteNoteTime = playbackState.playbackStartTime +
-                                    clipStartTime + (noteEvent.timestamp / 1000);
+                                // Convert note timestamp to beats
+                                const noteStartBeats = clipStartBeats + (noteEvent.timestamp / (60000 / tempo));
 
-                                if (absoluteNoteTime >= playbackState.lastScheduleTime &&
-                                    absoluteNoteTime < scheduleEnd) {
+                                // Convert musical time back to real time for scheduling
+                                const absoluteStartTime = playbackStartTime + (noteStartBeats * 60 / tempo);
+
+                                // Convert duration to real time based on current tempo
+                                const noteDuration = noteEvent.duration * (60 / tempo);
+
+                                if (absoluteStartTime >= playbackState.lastScheduleTime &&
+                                    absoluteStartTime < scheduleEnd) {
                                     try {
                                         keyboardAudioManager.playExactNote(
                                             {
                                                 ...noteEvent,
-                                                timestamp: absoluteNoteTime,
-                                                duration: noteEvent.duration || 0.1
+                                                timestamp: absoluteStartTime,
+                                                duration: noteDuration
                                             },
-                                            absoluteNoteTime
+                                            absoluteStartTime
                                         );
-                                        debug('Scheduled note', {
-                                            note: noteEvent.note,
-                                            time: absoluteNoteTime
-                                        });
                                     } catch (error) {
                                         debug('Failed to schedule note', { error, noteEvent });
                                     }
@@ -129,6 +132,33 @@ export const playbackMiddleware: Middleware = store => next => async action => {
             // Reset timing
             playbackState.lastScheduleTime = 0;
             playbackState.playbackStartTime = 0;
+            break;
+        }
+
+        case 'player/setTempo': {
+            debug('Updating playback tempo', action.payload);
+            const state = store.getState();
+            const isPlaying = selectIsPlaying(state);
+
+            if (isPlaying) {
+                // Store current playback position before tempo change
+                const audioContext = keyboardAudioManager.getContext();
+                const currentPosition = audioContext
+                    ? audioContext.currentTime - playbackState.playbackStartTime
+                    : 0;
+
+                // Stop and restart playback to reset scheduling with new tempo
+                store.dispatch(stopPlayback());
+
+                // Reset playback state with new timing
+                playbackState.playbackStartTime = audioContext
+                    ? audioContext.currentTime - currentPosition
+                    : 0;
+                playbackState.lastScheduleTime = audioContext?.currentTime || 0;
+
+                // Restart playback at the same musical position
+                store.dispatch({ type: 'arrangement/startPlayback' });
+            }
             break;
         }
 
