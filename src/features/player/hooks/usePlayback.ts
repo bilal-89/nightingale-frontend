@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from './useStore';
 import { PlaybackService } from '../services/playback.service';
+import { TIMING } from '../utils/time.utils';
 import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
 import {
     startPlayback,
@@ -13,158 +14,136 @@ import {
 } from '../state/slices/playback.slice';
 
 export const usePlayback = () => {
+    // Redux state
     const dispatch = useAppDispatch();
-
-    // Get all necessary state from Redux
     const isPlaying = useAppSelector(state => state.playback.isPlaying);
     const currentTime = useAppSelector(state => state.playback.currentTime);
     const tempo = useAppSelector(state => state.playback.tempo);
     const clips = useAppSelector(state => state.player.clips);
 
-    // Keep our PlaybackService instance in a ref so it persists between renders
-    // while still being accessible to all effect hooks
+    // Service refs
     const playbackServiceRef = useRef<PlaybackService | null>(null);
+    const lastPositionUpdateRef = useRef<number>(0);
 
-    // Initialize PlaybackService with all necessary configuration
+    // Cleanup utility
+    const cleanupIntervals = useCallback(() => {
+        if (playbackServiceRef.current) {
+            playbackServiceRef.current.stop();
+        }
+    }, []);
+
+    // Initialize PlaybackService
     useEffect(() => {
         if (!playbackServiceRef.current) {
-            playbackServiceRef.current = new PlaybackService({
-                // Configure audio playback system
-                audioManager: keyboardAudioManager,
-
-                // Handle position updates for visual feedback
-                onPositionChange: (position) => {
-                    dispatch(updatePlaybackPosition(position));
+            const service = new PlaybackService({
+                onPositionChange: (positionInTicks) => {
+                    const timeSinceLastUpdate = positionInTicks - lastPositionUpdateRef.current;
+                    // Update position roughly every 30fps
+                    if (timeSinceLastUpdate > TIMING.msToTicks(32, tempo)) {
+                        lastPositionUpdateRef.current = positionInTicks;
+                        dispatch(updatePlaybackPosition(positionInTicks));
+                    }
                 },
-
-                // Lifecycle event handlers for debugging and error recovery
-                onPlaybackStart: () => {
-                    console.log('Playback started');
-                    // Ensure audio manager is in the correct mode when playback starts
-                    keyboardAudioManager.initialize();
+                onPlaybackStart: async () => {
+                    await keyboardAudioManager.initialize();
+                    console.log('Playback started', {
+                        clips: clips.length,
+                        currentTimeInTicks: currentTime
+                    });
                 },
                 onPlaybackStop: () => {
                     console.log('Playback stopped');
+                    cleanupIntervals();
                 },
                 onError: (error) => {
                     console.error('Playback error:', error);
-                    // Stop playback if we encounter an error
+                    cleanupIntervals();
                     dispatch(stopPlayback());
                 }
             });
+
+            playbackServiceRef.current = service;
         }
 
-        // Clean up audio resources when component unmounts
         return () => {
+            cleanupIntervals();
             if (playbackServiceRef.current) {
                 playbackServiceRef.current.dispose();
                 playbackServiceRef.current = null;
             }
         };
-    }, [dispatch]);
+    }, [dispatch, cleanupIntervals, tempo]);
 
-    // Handle play/stop state changes and manage audio context
+    // Update clips when they change
+    useEffect(() => {
+        const service = playbackServiceRef.current;
+        if (service && clips.length > 0) {
+            console.log('Updating clips:', {
+                count: clips.length,
+                totalNotes: clips.reduce((sum, c) => sum + c.notes.length, 0)
+            });
+            service.setClips(clips);
+        }
+    }, [clips]);
+
+    // Handle playback state changes
     useEffect(() => {
         const service = playbackServiceRef.current;
         if (!service) return;
 
         if (isPlaying) {
-            // Start playback with error handling
-            service.start(currentTime).catch(error => {
-                console.error('Failed to start playback:', error);
-                dispatch(stopPlayback());
-            });
+            const timeoutId = window.setTimeout(() => {
+                service.start(currentTime).catch(error => {
+                    console.error('Failed to start playback:', error);
+                    dispatch(stopPlayback());
+                });
+            }, 50);
+            return () => window.clearTimeout(timeoutId);
         } else {
-            // Stop all playback and clean up scheduled notes
             service.stop();
+            cleanupIntervals();
         }
-    }, [isPlaying, currentTime, dispatch]);
+    }, [isPlaying, currentTime, dispatch, cleanupIntervals]);
 
-    // Keep audio service synchronized with clip data
+    // Handle tempo changes
     useEffect(() => {
-        if (playbackServiceRef.current && clips.length > 0) {
-            // Ensure clips have all synthesis parameters before setting
-            const processedClips = clips.map(clip => ({
-                ...clip,
-                notes: clip.notes.map(note => ({
-                    ...note,
-                    // Ensure each note has complete synthesis information
-                    synthesis: note.synthesis || keyboardAudioManager.getCurrentSynthesis(note.note)
-                }))
-            }));
-            playbackServiceRef.current.setClips(processedClips);
-        }
-    }, [clips]);
-
-    // Keep tempo synchronized between UI and audio engine
-    useEffect(() => {
-        if (playbackServiceRef.current) {
-            playbackServiceRef.current.setTempo(tempo);
+        const service = playbackServiceRef.current;
+        if (service) {
+            console.log('Setting tempo:', tempo);
+            service.setTempo(tempo);
         }
     }, [tempo]);
 
-    useEffect(() => {
-        if (playbackServiceRef.current && clips.length > 0) {
-            // Process clips to ensure complete synthesis information
-            const processedClips = clips.map(clip => ({
-                ...clip,
-                notes: clip.notes.map(note => ({
-                    ...note,
-                    synthesis: {
-                        ...note.synthesis,
-                        // Ensure waveform is preserved from recording
-                        waveform: note.synthesis.waveform || 'sine',
-                        mode: note.synthesis.mode || 'tunable',
-                        envelope: {
-                            attack: note.synthesis.envelope?.attack || 0.005,
-                            decay: note.synthesis.envelope?.decay || 0,
-                            sustain: note.synthesis.envelope?.sustain || 1,
-                            release: note.synthesis.envelope?.release || 0.005
-                        }
-                    }
-                }))
-            }));
-
-            playbackServiceRef.current.setClips(processedClips);
-        }
-    }, [clips]);
-
-    // Action creators with proper audio handling
+    // Public actions
     const play = useCallback(() => {
-        // Initialize audio system before starting playback
-        keyboardAudioManager.initialize().then(() => {
-            dispatch(startPlayback());
-        }).catch(error => {
-            console.error('Failed to initialize audio:', error);
-        });
+        dispatch(startPlayback());
     }, [dispatch]);
 
     const stop = useCallback(() => {
         dispatch(stopPlayback());
     }, [dispatch]);
 
-    const seek = useCallback((time: number) => {
-        dispatch(setPlaybackPosition(time));
-        // Ensure audio playback position is updated
-        playbackServiceRef.current?.seek(time);
+    const seek = useCallback((timeInTicks: number) => {
+        const service = playbackServiceRef.current;
+        if (service) {
+            dispatch(setPlaybackPosition(timeInTicks));
+            service.seek(timeInTicks);
+        }
     }, [dispatch]);
 
     const updateTempo = useCallback((newTempo: number) => {
-        dispatch(setTempo(newTempo));
+        const boundedTempo = Math.max(20, Math.min(300, newTempo));
+        dispatch(setTempo(boundedTempo));
     }, [dispatch]);
 
-    // Return state and actions with consistent interface
     return {
-        // Playback state
         isPlaying,
         currentTime,
         tempo,
-
-        // Playback controls
         play,
         stop,
         seek,
-        updatePosition: (time: number) => dispatch(updatePlaybackPosition(time)),
+        updatePosition: (timeInTicks: number) => dispatch(updatePlaybackPosition(timeInTicks)),
         setTempo: updateTempo
     };
 };

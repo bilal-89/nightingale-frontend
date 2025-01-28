@@ -1,64 +1,51 @@
 // src/features/player/components/timeline/components/TimelineGrid.tsx
 
-// Keep your current imports and add any missing ones
-import React, { useState, useCallback } from 'react';
-import { usePlayback, useClips } from '../../../hooks';
-import { useAppDispatch, useAppSelector } from '../../../hooks';
+import React, { useState, useCallback, useMemo } from 'react';
+import { usePlayback } from '../../../hooks/usePlayback';
+import { useClips } from '../../../hooks/useClips';
+import { useAppDispatch, useAppSelector } from '../../../hooks/useStore';
 import { selectCurrentTrack, setCurrentTrack } from '../../../state/slices/player.slice';
 import Clip from '../../clips/Clip';
-import { TIMING } from '../../../utils/time.utils';  // Add this import
-
+import { TIMING } from '../../../utils/time.utils';
 import { DragState, GridPosition } from '../../../types';
 
-// These constants define our grid's visual structure, just like the spacing in sheet music
+// Grid constants define our musical grid's visual structure
 const GRID_CONSTANTS = {
-    TRACKS: 4,           // Number of available tracks
-    CELLS: 64,          // Increased from 32 to show more bars
-    CELL_WIDTH: 48,     // Decreased from 96 to make cells smaller
-    TRACK_HEIGHT: 96,   // Keep this the same
-    HEADER_HEIGHT: 32,  // Keep this the same
-    NOTE_HEIGHT: 3      // Keep this the same
+    TRACKS: 4,           // Number of simultaneous tracks
+    CELLS: 64,          // Total number of 16th note divisions
+    CELL_WIDTH: 48,     // Visual width of each cell in pixels
+    TRACK_HEIGHT: 96,   // Height of each track
+    HEADER_HEIGHT: 32,  // Height of the timeline header
+    NOTE_HEIGHT: 3      // Height of note visualizations
 } as const;
 
-const TimelineGrid: React.FC = () => {
-    // Get all the state and functionality we need
+export const TimelineGrid: React.FC = () => {
     const dispatch = useAppDispatch();
     const { isPlaying, currentTime, tempo } = usePlayback();
     const { clips, moveClip } = useClips();
     const currentTrack = useAppSelector(selectCurrentTrack);
-
-    // State for handling drag and drop operations
     const [dragState, setDragState] = useState<DragState | null>(null);
 
-
-    // In TimelineGrid.tsx
-    const playbackPosition = React.useMemo(() => {
+    // Calculate playback position using musical timing
+    const playbackPosition = useMemo(() => {
         if (!clips.length) return 0;
-
-        // Find the actual duration of all clips in beats
-        const totalBeatsInClips = Math.max(...clips.map(clip =>
-            clip.startCell + clip.length
-        )) / TIMING.CELLS_PER_BEAT;
-
-        // Convert total beats to seconds
-        const totalSeconds = (totalBeatsInClips * 60) / tempo;
-
-        // Calculate pixels based on clip duration
-        const totalPixels = totalBeatsInClips * GRID_CONSTANTS.CELL_WIDTH * TIMING.CELLS_PER_BEAT;
-
-        // Scale current time to this range
-        return (currentTime / totalSeconds) * totalPixels;
+        const currentTicks = TIMING.msToTicks(currentTime * 1000, tempo);
+        const pixelsPerTick = GRID_CONSTANTS.CELL_WIDTH / TIMING.cellsToTicks(1);
+        return currentTicks * pixelsPerTick;
     }, [clips, currentTime, tempo]);
 
-    // Convert a mouse position to grid coordinates
+    // Convert mouse position to musical grid coordinates
     const getGridPosition = useCallback((e: React.MouseEvent): GridPosition => {
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top - GRID_CONSTANTS.HEADER_HEIGHT;
 
-        // Snap to grid by rounding to nearest cell
+        const ticksPerPixel = TIMING.cellsToTicks(1) / GRID_CONSTANTS.CELL_WIDTH;
+        const ticks = Math.round(x * ticksPerPixel);
+        const cell = TIMING.ticksToCells(ticks);
+
         return {
-            cell: Math.max(0, Math.round(x / GRID_CONSTANTS.CELL_WIDTH)),
+            cell: Math.max(0, cell),
             track: Math.max(0, Math.min(
                 GRID_CONSTANTS.TRACKS - 1,
                 Math.floor(y / GRID_CONSTANTS.TRACK_HEIGHT)
@@ -66,26 +53,26 @@ const TimelineGrid: React.FC = () => {
         };
     }, []);
 
-    // Handle starting a drag operation
+    // Handle drag operations with musical timing
     const handleMouseDown = useCallback((e: React.MouseEvent, clipId?: string) => {
-        e.preventDefault(); // Prevent text selection while dragging
+        e.preventDefault();
         const position = getGridPosition(e);
 
         setDragState({
             type: clipId ? 'MOVE' : 'CREATE',
             startPoint: position,
             currentPoint: position,
-            clipId
+            clipId,
+            startTicks: TIMING.cellsToTicks(position.cell)
         });
     }, [getGridPosition]);
 
-    // Handle mouse movement during drag
+    // Handle clip movement with musical timing
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
         if (!dragState) return;
 
         const position = getGridPosition(e);
 
-        // Only update if position has actually changed to a new cell
         if (dragState.currentPoint.cell !== position.cell ||
             dragState.currentPoint.track !== position.track) {
 
@@ -94,40 +81,40 @@ const TimelineGrid: React.FC = () => {
                 currentPoint: position
             } : null);
 
-            // If we're moving a clip, update its position
             if (dragState.type === 'MOVE' && dragState.clipId) {
-                const clip = clips.find(c => c.id === dragState.clipId);
-                if (clip) {
-                    moveClip(clip.id, {
-                        cell: position.cell,
-                        track: position.track
-                    });
-                }
+                moveClip(dragState.clipId, {
+                    cell: position.cell,
+                    track: position.track,
+                    startTicks: TIMING.cellsToTicks(position.cell)
+                });
             }
         }
-    }, [dragState, clips, moveClip, getGridPosition]);
+    }, [dragState, moveClip, getGridPosition]);
 
-    // Handle finishing a drag operation
     const handleMouseUp = useCallback(() => {
         setDragState(null);
     }, []);
 
-    // Handle track selection
     const handleTrackSelect = useCallback((trackIndex: number) => {
         dispatch(setCurrentTrack(trackIndex));
     }, [dispatch]);
 
+    // Format time display using musical time
+    const formatGridTime = useCallback((cellIndex: number) => {
+        const beats = Math.floor(cellIndex / TIMING.CELLS_PER_BEAT) + 1;
+        const subdivision = (cellIndex % TIMING.CELLS_PER_BEAT) + 1;
+        return `${beats}.${subdivision}`;
+    }, []);
+
     return (
         <div className="w-full bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="flex">
-                {/* Track headers section - like the clefs in sheet music */}
+                {/* Track headers section */}
                 <div className="w-32 flex-shrink-0 border-r border-[#d1cdc4]">
-                    {/* Time header */}
                     <div className="h-8 border-b border-[#d1cdc4] bg-[#e8e4dc] px-2 py-1 text-sm">
                         Time
                     </div>
 
-                    {/* Track headers with selection buttons */}
                     {Array(GRID_CONSTANTS.TRACKS).fill(null).map((_, index) => (
                         <div
                             key={`track-header-${index}`}
@@ -141,7 +128,6 @@ const TimelineGrid: React.FC = () => {
                                 title={`Select Track ${index + 1}`}
                             />
                             <span className="text-sm">Track {index + 1}</span>
-                            {currentTrack === index}
                         </div>
                     ))}
                 </div>
@@ -162,7 +148,7 @@ const TimelineGrid: React.FC = () => {
                                     className="flex-shrink-0 border-r border-[#d1cdc4] bg-[#e8e4dc] px-2 py-1 text-sm"
                                     style={{ width: GRID_CONSTANTS.CELL_WIDTH }}
                                 >
-                                    {Math.floor(i/4) + 1}.{(i % 4) + 1}
+                                    {formatGridTime(i)}
                                 </div>
                             ))}
                         </div>
@@ -183,7 +169,8 @@ const TimelineGrid: React.FC = () => {
                                             ? 'bg-blue-50'
                                             : trackIndex === currentTrack
                                                 ? 'bg-[#f5f2ed]'
-                                                : 'bg-[#f0ece6]'}`}
+                                                : 'bg-[#f0ece6]'
+                                        }`}
                                         style={{ width: GRID_CONSTANTS.CELL_WIDTH }}
                                         onMouseDown={(e) => handleMouseDown(e)}
                                     />
@@ -197,7 +184,7 @@ const TimelineGrid: React.FC = () => {
                                 className="absolute top-0 bottom-0 w-px bg-green-500 z-20 pointer-events-none"
                                 style={{
                                     left: `${playbackPosition}px`,
-                                    transition: 'left 0.1s linear'
+                                    transition: 'left 0.016s linear'
                                 }}
                             />
                         )}
@@ -207,7 +194,10 @@ const TimelineGrid: React.FC = () => {
                             {clips.map(clip => (
                                 <Clip
                                     key={clip.id}
-                                    clip={clip}
+                                    clip={{
+                                        ...clip,
+                                        startTicks: TIMING.cellsToTicks(clip.startCell)
+                                    }}
                                     isDragging={dragState?.clipId === clip.id}
                                     onMouseDown={(e) => handleMouseDown(e, clip.id)}
                                 />

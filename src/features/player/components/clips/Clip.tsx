@@ -1,17 +1,20 @@
+// src/features/player/components/clips/Clip.tsx
+
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useClips } from '../../hooks';
+import { useAppDispatch } from '../../hooks/useStore';
+import { selectNote } from '../../state/slices/player.slice';
 import { Clip as ClipType, NoteEvent } from '../../types';
 import { TIMING } from '../../utils/time.utils';
 
-
 const CONSTANTS = {
-    TRACK_HEIGHT: 96,    // Keep this the same
-    CELL_WIDTH: 48,     // Match the new CELL_WIDTH from TimelineGrid
-    NOTE_HEIGHT: 12,    // Keep this the same
-    MIN_CLIP_LENGTH: 1, // Keep this the same
-    VERTICAL_MARGIN: 8, // Keep this the same
+    TRACK_HEIGHT: 96,
+    CELL_WIDTH: 48,
+    NOTE_HEIGHT: 12,
+    MIN_CLIP_LENGTH: 1,
+    VERTICAL_MARGIN: 8,
     MS_PER_BEAT: (tempo: number) => 60000 / tempo,
-    BEATS_PER_CELL: 1/4  // This means each cell represents a 16th note
+    BEATS_PER_CELL: 1/4
 };
 
 interface ClipProps {
@@ -29,10 +32,10 @@ const Clip: React.FC<ClipProps> = ({
                                        onClick,
                                        tempo = 120
                                    }) => {
+    const dispatch = useAppDispatch();
     const { updateClip } = useClips();
 
     const clipMetrics = useMemo(() => {
-        // Even with no notes, we should establish a valid time range
         if (clip.notes.length === 0) {
             return {
                 startTicks: 0,
@@ -43,33 +46,25 @@ const Clip: React.FC<ClipProps> = ({
             };
         }
 
-        // As each note is added, these values will update
         const startTicks = Math.min(...clip.notes.map(n => n.timestamp));
         const endTicks = Math.max(...clip.notes.map(n => n.timestamp + n.duration));
         const durationTicks = endTicks - startTicks;
-
-        // Calculate the grid length needed for our musical duration
         const durationInBeats = durationTicks / TIMING.TICKS_PER_BEAT;
-        // Adjust cellsNeeded calculation to match new grid scale
-        const cellsNeeded = Math.ceil(durationInBeats * (TIMING.CELLS_PER_BEAT * 2)); // Multiply by 2 since cells are half size
+        const cellsNeeded = Math.ceil(durationInBeats * (TIMING.CELLS_PER_BEAT * 2));
 
         return {
             startTicks,
             endTicks,
             durationTicks,
-            // Increase max length to match new grid scale
-            requiredLength: Math.max(CONSTANTS.MIN_CLIP_LENGTH, Math.min(cellsNeeded, 8)), // Increased from 16 to 32
+            requiredLength: Math.max(CONSTANTS.MIN_CLIP_LENGTH, Math.min(cellsNeeded, 8)),
             durationMs: TIMING.ticksToMs(durationTicks, tempo)
         };
     }, [clip.notes, tempo]);
 
-    // Track our notes in real-time
     const layout = useMemo(() => {
-        // Create a data structure that can be efficiently updated
         const pitchMap = new Map<number, NoteEvent[]>();
         const pitchSet = new Set<number>();
 
-        // Process each note as it comes in
         clip.notes.forEach(note => {
             pitchSet.add(note.note);
             if (!pitchMap.has(note.note)) {
@@ -78,7 +73,6 @@ const Clip: React.FC<ClipProps> = ({
             pitchMap.get(note.note)!.push(note);
         });
 
-        // Sort pitches once for our layout
         const pitches = Array.from(pitchSet).sort((a, b) => b - a);
 
         return {
@@ -97,20 +91,26 @@ const Clip: React.FC<ClipProps> = ({
         };
     }, [clip.notes, clip.track, clip.startCell, clip.length]);
 
-    // Update our clip size incrementally
     useEffect(() => {
         if (clipMetrics.requiredLength !== clip.length) {
             updateClip(clip.id, { length: clipMetrics.requiredLength });
         }
     }, [clipMetrics.requiredLength, clip.length, clip.id, updateClip]);
 
-    const renderNote = useCallback((note: NoteEvent) => {
-        // Calculate positions relative to the current state of the clip
+    const handleNoteClick = useCallback((note: NoteEvent, index: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        console.log('Note clicked:', { note, index, clipId: clip.id });
+        dispatch(selectNote({
+            clipId: clip.id,
+            noteIndex: index
+        }));
+    }, [clip.id, dispatch]);
+
+    const renderNote = useCallback((note: NoteEvent, index: number) => {
         const relativeStartTicks = note.timestamp - clipMetrics.startTicks;
         const startPosition = (relativeStartTicks / clipMetrics.durationTicks) * 100;
         const width = (note.duration / clipMetrics.durationTicks) * 100;
 
-        // Calculate vertical position immediately when the note is added
         const PADDING = CONSTANTS.NOTE_HEIGHT;
         const USABLE_HEIGHT = CONSTANTS.TRACK_HEIGHT - (PADDING * 2);
 
@@ -118,27 +118,32 @@ const Clip: React.FC<ClipProps> = ({
         const normalizedPitch = (note.note - layout.noteLayout.lowestPitch) / pitchRange;
         const verticalPosition = PADDING + (USABLE_HEIGHT * (1 - normalizedPitch));
 
+        const isSelected = clip.selectedNoteIndex === index;
+
         return (
             <div
                 key={`note-${note.timestamp}-${note.note}`}
-                className="absolute rounded-md cursor-pointer transition-all
-                         hover:brightness-110 bg-blue-400 select-none"
+                className={`absolute rounded-md cursor-pointer transition-all
+                         hover:brightness-110 select-none
+                         ${isSelected ? 'bg-blue-600 ring-2 ring-blue-300' : 'bg-blue-400'}`}
                 style={{
                     left: `${startPosition}%`,
                     width: `${Math.max(2, width)}%`,
                     height: `${CONSTANTS.NOTE_HEIGHT}px`,
                     top: `${Math.min(CONSTANTS.TRACK_HEIGHT - PADDING - CONSTANTS.NOTE_HEIGHT,
                         Math.max(PADDING, verticalPosition))}px`,
-                    opacity: 0.9,
-                    transform: 'translate3d(0, 0, 0)'
+                    opacity: isSelected ? 1 : 0.9,
+                    transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                    zIndex: isSelected ? 2 : 1
                 }}
                 title={`Note ${note.note} (${TIMING.ticksToMs(note.duration, tempo).toFixed(0)}ms)`}
+                onClick={(e) => handleNoteClick(note, index, e)}
                 onMouseDown={(e) => {
                     if (e.shiftKey || e.ctrlKey || e.metaKey) e.stopPropagation();
                 }}
             />
         );
-    }, [clipMetrics, layout.noteLayout, tempo]);
+    }, [clipMetrics, layout.noteLayout, tempo, clip.selectedNoteIndex, handleNoteClick]);
 
     return (
         <div
@@ -163,7 +168,7 @@ const Clip: React.FC<ClipProps> = ({
             }}
         >
             <div className="absolute inset-2 overflow-visible">
-                {clip.notes.map(note => renderNote(note))}
+                {clip.notes.map((note, index) => renderNote(note, index))}
             </div>
 
             <div className="absolute top-1 left-2 text-xs text-gray-600 font-medium pointer-events-none">
