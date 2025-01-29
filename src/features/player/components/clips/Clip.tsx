@@ -1,70 +1,91 @@
 // src/features/player/components/clips/Clip.tsx
 
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useClips } from '../../hooks';
-import { useAppDispatch } from '../../hooks/useStore';
-import { selectNote } from '../../state/slices/player.slice';
+import { useAppDispatch, useAppSelector } from '../../hooks';
+import { selectNote, selectTimelineSettings } from '../../state/slices/player.slice';
 import { Clip as ClipType, NoteEvent } from '../../types';
-import { TIMING } from '../../utils/time.utils';
-
-const CONSTANTS = {
-    TRACK_HEIGHT: 96,
-    CELL_WIDTH: 48,
-    NOTE_HEIGHT: 12,
-    MIN_CLIP_LENGTH: 1,
-    VERTICAL_MARGIN: 8,
-    MS_PER_BEAT: (tempo: number) => 60000 / tempo,
-    BEATS_PER_CELL: 1/4
-};
+import { LAYOUT } from '../../constants';
+import { useClipDrag } from '../../hooks/useClipDrag';
 
 interface ClipProps {
     clip: ClipType;
     isDragging?: boolean;
-    onMouseDown?: (e: React.MouseEvent) => void;
-    onClick?: (e: React.MouseEvent) => void;
-    tempo: number;
+    onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-const Clip: React.FC<ClipProps> = ({
-                                       clip,
-                                       isDragging = false,
-                                       onMouseDown,
-                                       onClick,
-                                       tempo = 120
-                                   }) => {
+const Clip: React.FC<ClipProps> = ({ clip, onClick }) => {
+    // Core hooks and state management
     const dispatch = useAppDispatch();
     const { updateClip } = useClips();
+    const timelineSettings = useAppSelector(selectTimelineSettings);
+    const { handleDragStart, handleDrag, handleDragEnd, handleKeyboardMove } = useClipDrag();
 
+    // Local state to manage drag operation
+    const [isLocalDragging, setIsLocalDragging] = useState(false);
+
+    // Set up drag handling with event listeners
+    useEffect(() => {
+        // Only set up listeners when actively dragging
+        if (!isLocalDragging) return;
+
+        // Handle continuous mouse movement during drag
+        const handleMouseMove = (e: MouseEvent) => {
+            console.log('Mouse move during drag');
+            handleDrag(e, clip);
+        };
+
+        // Handle drag completion
+        const handleMouseUp = () => {
+            console.log('Ending drag operation');
+            setIsLocalDragging(false);
+            handleDragEnd();
+        };
+
+        // Add event listeners to document for drag tracking
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // Clean up listeners when drag ends or component unmounts
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isLocalDragging, clip, handleDrag, handleDragEnd]);
+
+    // Calculate clip metrics based on its notes
     const clipMetrics = useMemo(() => {
         if (clip.notes.length === 0) {
             return {
-                startTicks: 0,
-                endTicks: 0,
-                durationTicks: 0,
-                requiredLength: CONSTANTS.MIN_CLIP_LENGTH,
-                durationMs: 0
+                startTime: 0,
+                endTime: 0,
+                duration: 0,
+                durationMs: 0,
+                requiredDuration: LAYOUT.MIN_CLIP_LENGTH
             };
         }
 
-        const startTicks = Math.min(...clip.notes.map(n => n.timestamp));
-        const endTicks = Math.max(...clip.notes.map(n => n.timestamp + n.duration));
-        const durationTicks = endTicks - startTicks;
-        const durationInBeats = durationTicks / TIMING.TICKS_PER_BEAT;
-        const cellsNeeded = Math.ceil(durationInBeats * (TIMING.CELLS_PER_BEAT * 2));
+        // Find the earliest and latest points in time for the clip's notes
+        const startTime = Math.min(...clip.notes.map(n => n.timestamp));
+        const endTime = Math.max(...clip.notes.map(n => n.timestamp + n.duration));
+        const duration = endTime - startTime;
 
         return {
-            startTicks,
-            endTicks,
-            durationTicks,
-            requiredLength: Math.max(CONSTANTS.MIN_CLIP_LENGTH, Math.min(cellsNeeded, 8)),
-            durationMs: TIMING.ticksToMs(durationTicks, tempo)
+            startTime,
+            endTime,
+            duration,
+            durationMs: duration,
+            requiredDuration: Math.max(LAYOUT.MIN_CLIP_LENGTH, duration)
         };
-    }, [clip.notes, tempo]);
+    }, [clip.notes]);
 
+    // Calculate visual layout based on notes and timeline settings
     const layout = useMemo(() => {
+        // Create maps for note organization
         const pitchMap = new Map<number, NoteEvent[]>();
         const pitchSet = new Set<number>();
 
+        // Organize notes by pitch
         clip.notes.forEach(note => {
             pitchSet.add(note.note);
             if (!pitchMap.has(note.note)) {
@@ -75,12 +96,16 @@ const Clip: React.FC<ClipProps> = ({
 
         const pitches = Array.from(pitchSet).sort((a, b) => b - a);
 
+        // Convert time values to pixel positions
+        const left = clip.startTime * timelineSettings.zoom;
+        const width = clip.duration * timelineSettings.zoom;
+
         return {
             position: {
-                top: `${clip.track * CONSTANTS.TRACK_HEIGHT}px`,
-                left: `${clip.startCell * CONSTANTS.CELL_WIDTH}px`,
-                width: `${clip.length * CONSTANTS.CELL_WIDTH - 2}px`,
-                height: `${CONSTANTS.TRACK_HEIGHT - 2}px`
+                top: `${clip.track * LAYOUT.TRACK_HEIGHT}px`,
+                left: `${left}px`,
+                width: `${width}px`,
+                height: `${LAYOUT.TRACK_HEIGHT - 2}px`
             },
             noteLayout: {
                 pitchMap,
@@ -89,30 +114,54 @@ const Clip: React.FC<ClipProps> = ({
                 lowestPitch: pitches[pitches.length - 1] || 0
             }
         };
-    }, [clip.notes, clip.track, clip.startCell, clip.length]);
+    }, [clip.notes, clip.track, clip.startTime, clip.duration, timelineSettings.zoom]);
 
+    // Ensure clip duration stays in sync with note content
     useEffect(() => {
-        if (clipMetrics.requiredLength !== clip.length) {
-            updateClip(clip.id, { length: clipMetrics.requiredLength });
+        if (clipMetrics.requiredDuration !== clip.duration) {
+            updateClip(clip.id, { duration: clipMetrics.requiredDuration });
         }
-    }, [clipMetrics.requiredLength, clip.length, clip.id, updateClip]);
+    }, [clipMetrics.requiredDuration, clip.duration, clip.id, updateClip]);
 
-    const handleNoteClick = useCallback((note: NoteEvent, index: number, e: React.MouseEvent) => {
+    // Handle keyboard navigation
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!clip.isSelected) return;
+
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            const direction = e.key === 'ArrowLeft' ? 'left' : 'right';
+            handleKeyboardMove(clip, direction, e.shiftKey);
+        }
+    }, [clip, handleKeyboardMove]);
+
+    // Initialize drag operation
+    const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        console.log('Starting drag operation');
+        setIsLocalDragging(true);
+        handleDragStart(e, clip);
+    }, [clip, handleDragStart]);
+
+    // Handle note selection
+    const handleNoteClick = useCallback((
+        note: NoteEvent,
+        index: number,
+        e: React.MouseEvent<HTMLDivElement>
+    ) => {
         e.stopPropagation();
-        console.log('Note clicked:', { note, index, clipId: clip.id });
         dispatch(selectNote({
             clipId: clip.id,
             noteIndex: index
         }));
     }, [clip.id, dispatch]);
 
+    // Render individual notes within the clip
     const renderNote = useCallback((note: NoteEvent, index: number) => {
-        const relativeStartTicks = note.timestamp - clipMetrics.startTicks;
-        const startPosition = (relativeStartTicks / clipMetrics.durationTicks) * 100;
-        const width = (note.duration / clipMetrics.durationTicks) * 100;
+        const relativeStartTime = note.timestamp - clipMetrics.startTime;
+        const startPosition = (relativeStartTime / clipMetrics.duration) * 100;
+        const width = (note.duration / clipMetrics.duration) * 100;
 
-        const PADDING = CONSTANTS.NOTE_HEIGHT;
-        const USABLE_HEIGHT = CONSTANTS.TRACK_HEIGHT - (PADDING * 2);
+        const PADDING = LAYOUT.NOTE_HEIGHT;
+        const USABLE_HEIGHT = LAYOUT.TRACK_HEIGHT - (PADDING * 2);
 
         const pitchRange = layout.noteLayout.highestPitch - layout.noteLayout.lowestPitch || 1;
         const normalizedPitch = (note.note - layout.noteLayout.lowestPitch) / pitchRange;
@@ -129,41 +178,44 @@ const Clip: React.FC<ClipProps> = ({
                 style={{
                     left: `${startPosition}%`,
                     width: `${Math.max(2, width)}%`,
-                    height: `${CONSTANTS.NOTE_HEIGHT}px`,
-                    top: `${Math.min(CONSTANTS.TRACK_HEIGHT - PADDING - CONSTANTS.NOTE_HEIGHT,
+                    height: `${LAYOUT.NOTE_HEIGHT}px`,
+                    top: `${Math.min(LAYOUT.TRACK_HEIGHT - PADDING - LAYOUT.NOTE_HEIGHT,
                         Math.max(PADDING, verticalPosition))}px`,
                     opacity: isSelected ? 1 : 0.9,
                     transform: isSelected ? 'scale(1.05)' : 'scale(1)',
                     zIndex: isSelected ? 2 : 1
                 }}
-                title={`Note ${note.note} (${TIMING.ticksToMs(note.duration, tempo).toFixed(0)}ms)`}
+                title={`Note ${note.note} (${note.duration.toFixed(0)}ms)`}
                 onClick={(e) => handleNoteClick(note, index, e)}
                 onMouseDown={(e) => {
                     if (e.shiftKey || e.ctrlKey || e.metaKey) e.stopPropagation();
                 }}
             />
         );
-    }, [clipMetrics, layout.noteLayout, tempo, clip.selectedNoteIndex, handleNoteClick]);
+    }, [clipMetrics, layout.noteLayout, clip.selectedNoteIndex, handleNoteClick]);
 
+    // Render the clip container
     return (
         <div
             className={`absolute rounded-lg transition-all duration-300 
                      ${clip.isSelected ? 'ring-2 ring-blue-400' : ''}
-                     ${isDragging ? 'opacity-75 scale-[1.02]' : ''}
+                     ${isLocalDragging ? 'opacity-75 scale-[1.02]' : ''}
                      bg-[#e5e9ec] cursor-move hover:brightness-95
                      backdrop-blur-sm backdrop-filter`}
             style={{
                 ...layout.position,
-                boxShadow: isDragging
+                boxShadow: isLocalDragging
                     ? '4px 4px 8px #c8ccd0, -4px -4px 8px #ffffff'
                     : '2px 2px 4px #c8ccd0, -2px -2px 4px #ffffff',
-                zIndex: isDragging ? 10 : 1
+                zIndex: isLocalDragging ? 10 : 1
             }}
-            onMouseDown={onMouseDown}
+            tabIndex={clip.isSelected ? 0 : -1}
+            onKeyDown={handleKeyDown}
+            onMouseDown={handleMouseDown}
             onClick={(e) => {
-                if (!isDragging && e.target === e.currentTarget) {
+                if (!isLocalDragging && e.target === e.currentTarget) {
                     e.stopPropagation();
-                    onClick?.(e);
+                    if (onClick) onClick(e);
                 }
             }}
         >

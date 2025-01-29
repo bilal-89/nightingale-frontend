@@ -4,6 +4,7 @@ import { TIMING } from '../utils/time.utils';
 import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
 import type { Clip, NoteEvent } from '../types';
 
+// Interface defining the callbacks that allow the service to communicate state changes
 export interface PlaybackEvents {
     onPositionChange?: (positionInTicks: number) => void;
     onPlaybackStart?: () => void;
@@ -11,56 +12,57 @@ export interface PlaybackEvents {
     onError?: (error: Error) => void;
 }
 
+// Core state needed for audio playback timing
 interface PlaybackState {
-    audioContext: AudioContext;
-    startTime: number;
-    tempo: number;
-    lastScheduledTime: number;
+    audioContext: AudioContext;      // Web Audio context for timing and playback
+    startTime: number;              // When playback began (in audio context time)
+    tempo: number;                  // Current tempo in BPM
+    lastScheduledTime: number;      // Last time we scheduled notes
 }
 
+// Represents a note that has been scheduled for playback
 interface ScheduledNote {
-    id: string;         // Unique ID for this scheduling instance
-    note: NoteEvent;
-    clipStartTicks: number;
-    absoluteStartTime: number;
+    id: string;                    // Unique identifier for this scheduled instance
+    note: NoteEvent;               // The note to be played
+    clipStartTime: number;         // When the parent clip starts
+    absoluteStartTime: number;      // Exact playback time in audio context time
 }
 
 export class PlaybackService {
-    // Core state
+    // Core state management
     private state: PlaybackState | null = null;
     private isPlaying: boolean = false;
-    private clips: (Clip & { startTicks: number })[] = [];
+    private clips: Clip[] = [];
 
-    // Scheduling state
+    // Scheduling management
     private scheduledNotes: ScheduledNote[] = [];
     private schedulerTimer: number | null = null;
     private updateTimer: number | null = null;
 
-    // Constants
-    private readonly SCHEDULE_AHEAD_TIME = 0.1;  // Look ahead window in seconds
-    private readonly SCHEDULER_INTERVAL = 25;    // How often to check for notes to schedule (ms)
-    private readonly UPDATE_INTERVAL = 16;       // Visual update rate (60fps)
+    // Timing constants for stable audio playback
+    private readonly SCHEDULE_AHEAD_TIME = 0.1;  // Schedule 100ms ahead for stability
+    private readonly SCHEDULER_INTERVAL = 25;    // Check for notes every 25ms
+    private readonly UPDATE_INTERVAL = 16;       // Update UI at ~60fps
 
     constructor(private events: PlaybackEvents = {}) {}
 
-    public async start(startTimeInTicks: number = 0) {
+    public async start(startTimeInMs: number = 0) {
         if (this.isPlaying) return;
 
         try {
-            // Initialize audio system
+            // Initialize and ensure audio system is ready
             await keyboardAudioManager.initialize();
             const audioContext = keyboardAudioManager.getContext();
             if (!audioContext) throw new Error('No audio context');
 
-            // Ensure audio context is running
             if (audioContext.state !== 'running') {
                 await audioContext.resume();
             }
 
-            // Calculate starting time in seconds
-            const startTimeInSeconds = TIMING.ticksToMs(startTimeInTicks, TIMING.DEFAULT_TEMPO) / 1000;
+            // Convert our start time to seconds for the audio context
+            const startTimeInSeconds = startTimeInMs / 1000;
 
-            // Initialize playback state
+            // Initialize our playback state
             this.state = {
                 audioContext,
                 startTime: audioContext.currentTime - startTimeInSeconds,
@@ -68,11 +70,9 @@ export class PlaybackService {
                 lastScheduledTime: audioContext.currentTime
             };
 
-            // Start playback
+            // Start playback systems
             this.isPlaying = true;
             this.scheduledNotes = [];
-
-            // Start scheduling and UI updates
             this.scheduler();
             this.startPositionUpdates();
             this.events.onPlaybackStart?.();
@@ -86,7 +86,7 @@ export class PlaybackService {
     public stop() {
         if (!this.isPlaying) return;
 
-        // Clear all timers and state
+        // Clean up all ongoing processes
         this.isPlaying = false;
         if (this.schedulerTimer !== null) {
             window.clearTimeout(this.schedulerTimer);
@@ -97,17 +97,19 @@ export class PlaybackService {
             this.updateTimer = null;
         }
 
-        // Clean up scheduled notes
         this.scheduledNotes = [];
         this.events.onPlaybackStop?.();
     }
 
     public setClips(clips: Clip[]) {
-        // Convert grid cells to ticks for precise timing
-        this.clips = clips.map(clip => ({
-            ...clip,
-            startTicks: TIMING.cellsToTicks(clip.startCell)
-        }));
+        console.log('Setting clips:', clips.map(clip => ({
+            id: clip.id,
+            startTime: clip.startTime,
+            duration: clip.duration,
+            noteCount: clip.notes.length
+        })));
+
+        this.clips = clips;
     }
 
     private scheduler() {
@@ -116,40 +118,35 @@ export class PlaybackService {
         const currentTime = this.state.audioContext.currentTime;
         const scheduleUntil = currentTime + this.SCHEDULE_AHEAD_TIME;
 
-        // Schedule notes within our look-ahead window
+        // Schedule all notes that fall within our look-ahead window
         this.clips.forEach(clip => {
             clip.notes.forEach(note => {
-                const noteStartTicks = clip.startTicks + TIMING.msToTicks(note.timestamp, this.state.tempo);
-                const noteStartSeconds = TIMING.ticksToMs(noteStartTicks, this.state.tempo) / 1000;
-                const absoluteStartTime = this.state.startTime + noteStartSeconds;
+                // Calculate absolute time for this note based on clip position
+                const clipTimeOffset = clip.startTime / 1000; // Convert to seconds
+                const noteTimeOffset = note.timestamp / 1000;
+                const absoluteStartTime = this.state.startTime + clipTimeOffset + noteTimeOffset;
 
-                // Generate unique ID for this scheduled instance
+                // Create unique identifier for this scheduled instance
                 const scheduleId = `${clip.id}-${note.id}-${absoluteStartTime.toFixed(3)}`;
 
-                // Only schedule notes within our window that haven't been scheduled yet
+                // Only schedule if the note falls within our window and hasn't been scheduled
                 if (absoluteStartTime >= this.state.lastScheduledTime &&
                     absoluteStartTime < scheduleUntil &&
                     !this.isNoteScheduled(scheduleId)) {
 
                     try {
-                        // Store current synth mode
+                        // Handle synth mode changes
                         const previousMode = keyboardAudioManager.getCurrentMode();
 
-                        // Configure synthesis
                         if (note.synthesis.mode === 'tunable') {
                             keyboardAudioManager.setMode('tunable');
 
-                            // Set the tuning before playing the note
+                            // Apply note-specific tuning
                             if (note.tuning !== undefined) {
                                 keyboardAudioManager.setNoteTuning(note.note, note.tuning);
-                                console.log('Setting tuning for playback:', {
-                                    note: note.note,
-                                    tuning: note.tuning,
-                                    time: absoluteStartTime
-                                });
                             }
 
-                            // Set waveform if specified
+                            // Apply waveform if specified
                             if (note.synthesis.waveform) {
                                 keyboardAudioManager.setNoteWaveform(
                                     note.note,
@@ -160,11 +157,11 @@ export class PlaybackService {
                             keyboardAudioManager.setMode('drums');
                         }
 
-                        // Schedule the note with precise timing
+                        // Schedule the note
                         keyboardAudioManager.playExactNote({
                             ...note,
                             timestamp: absoluteStartTime,
-                            duration: TIMING.ticksToMs(note.duration || 0, this.state.tempo) / 1000,
+                            duration: note.duration / 1000, // Convert to seconds
                             synthesis: {
                                 ...note.synthesis,
                                 envelope: {
@@ -177,18 +174,16 @@ export class PlaybackService {
                             }
                         }, absoluteStartTime);
 
-                        // Track scheduled note
+                        // Track this scheduled note
                         this.scheduledNotes.push({
                             id: scheduleId,
                             note,
-                            clipStartTicks: clip.startTicks,
+                            clipStartTime: clip.startTime,
                             absoluteStartTime
                         });
 
-                        // Restore previous synth mode
+                        // Restore previous synth settings
                         keyboardAudioManager.setMode(previousMode);
-
-                        // Reset tuning after playing if we set it
                         if (note.synthesis.mode === 'tunable' && note.tuning !== undefined) {
                             keyboardAudioManager.setNoteTuning(note.note, 0);
                         }
@@ -231,36 +226,39 @@ export class PlaybackService {
                 return;
             }
 
-            const position = this.getCurrentTimeInTicks();
-            this.events.onPositionChange?.(position);
+            // We need to convert our time to match what the visual timeline expects
+            const currentTimeMs = this.getCurrentTimeInMs();
+            // Use updatePlaybackPosition to update the Redux state
+            this.events.onPositionChange?.(currentTimeMs);
         }, this.UPDATE_INTERVAL);
     }
 
-    public getCurrentTimeInTicks(): number {
+    public getCurrentTimeInMs(): number {
         if (!this.state || !this.isPlaying) return 0;
 
+        // Calculate elapsed time since playback started
         const currentTime = this.state.audioContext.currentTime;
         const elapsedSeconds = currentTime - this.state.startTime;
-        return TIMING.msToTicks(elapsedSeconds * 1000, this.state.tempo);
+        // Convert to milliseconds for our continuous timing system
+        return elapsedSeconds * 1000;
     }
 
     public setTempo(newTempo: number) {
         if (!this.state) return;
 
-        // Calculate current position before tempo change
-        const currentTicks = this.getCurrentTimeInTicks();
+        // Store current position
+        const currentTime = this.getCurrentTimeInMs();
 
-        // Update tempo and recalculate start time to maintain position
+        // Update tempo and maintain position
         this.state.tempo = newTempo;
-        const newStartTimeSeconds = this.state.audioContext.currentTime -
-            (TIMING.ticksToMs(currentTicks, newTempo) / 1000);
+        const newStartTimeSeconds = this.state.audioContext.currentTime - (currentTime / 1000);
 
         this.state.startTime = newStartTimeSeconds;
         this.state.lastScheduledTime = this.state.audioContext.currentTime;
         this.scheduledNotes = []; // Clear scheduled notes to prevent duplicates
     }
 
-    public seek(positionInTicks: number) {
+    public seek(timeInMs: number) {
         if (!this.state) return;
 
         const wasPlaying = this.isPlaying;
@@ -268,19 +266,18 @@ export class PlaybackService {
             this.stop();
         }
 
-        // Calculate new start time
-        const newStartTimeSeconds = this.state.audioContext.currentTime -
-            (TIMING.ticksToMs(positionInTicks, this.state.tempo) / 1000);
+        // Calculate new start time based on seek position
+        const newStartTimeSeconds = this.state.audioContext.currentTime - (timeInMs / 1000);
 
         this.state.startTime = newStartTimeSeconds;
         this.state.lastScheduledTime = this.state.audioContext.currentTime;
         this.scheduledNotes = [];
 
         if (wasPlaying) {
-            this.start(positionInTicks);
+            this.start(timeInMs);
         }
 
-        this.events.onPositionChange?.(positionInTicks);
+        this.events.onPositionChange?.(timeInMs);
     }
 
     public dispose() {

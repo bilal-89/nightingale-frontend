@@ -1,15 +1,13 @@
 import { SynthesisParameters } from '../../../audio/types/audioTypes';
 
 // src/features/player/types/note.ts
-
-// In your types.ts
 export interface NoteEvent {
     id: string;
-    timestamp: number;
-    duration: number;
+    timestamp: number;        // Already in ms, perfect!
+    duration: number;         // Already in ms, perfect!
     note: number;
     velocity: number;
-    tuning?: number; // Optional but will be normalized to 0 in selector
+    tuning?: number;
     synthesis: {
         envelope: {
             attack: number;
@@ -18,10 +16,20 @@ export interface NoteEvent {
             release: number;
         };
     };
+    // New optional properties for timing expression
+    quantizeOffset?: number;  // How far note was moved by quantization
+    originalTime?: number;    // Pre-quantized time for reference
 }
+
 export interface NoteModification {
     pitch?: number;
     velocity?: number;
     duration?: number;
     synthesis?: Partial<SynthesisParameters>;
+}
+
+export interface NoteParameterUpdate {
+    clipId: string;
+    noteIndex: number;
+    parameters: NoteEvent;
 }

@@ -2,11 +2,12 @@ import { NoteEvent } from './note';
 
 export interface Clip {
     id: string;
-    startCell: number;
-    length: number;
+    startTime: number;    // Changed from startCell
+    duration: number;     // Changed from length
     track: number;
-    isSelected: boolean;
     notes: NoteEvent[];
+    isSelected?: boolean;
+    selectedNoteIndex?: number;  // Added this
     parameters: ClipParameters;
 }
 

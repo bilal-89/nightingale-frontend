@@ -4,35 +4,32 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../../../../store';
 import { PlaybackState, LoopRegion, SchedulingConfig } from '../../types/playback';
 
-// The complete state interface for our playback functionality, combining
-// both musical timing and playback system configuration
 interface PlaybackSliceState {
     // Core playback state
-    isPlaying: boolean;          // Whether playback is currently active
-    currentTime: number;         // Current playback position in seconds
-    tempo: number;              // Tempo in beats per minute (BPM)
+    isPlaying: boolean;
+    currentTime: number;         // Now stored in milliseconds for continuous timing
+    tempo: number;
 
-    // Loop region configuration
-    loopRegion?: LoopRegion;    // Optional loop start/end points
-    loopEnabled: boolean;        // Whether looping is active
+    // Loop region configuration (also in milliseconds)
+    loopRegion?: LoopRegion;
+    loopEnabled: boolean;
 
-    // Scheduling configuration - controls how far ahead we schedule audio events
+    // Scheduling configuration for stable audio playback
     schedulingConfig: SchedulingConfig;
 
-    // Additional playback settings for musician-friendly features
-    metronomeEnabled: boolean;   // Whether metronome is active
-    countInEnabled: boolean;     // Whether count-in is enabled
-    prerollBars: number;         // Number of bars for count-in
+    // Additional playback features
+    metronomeEnabled: boolean;
+    countInEnabled: boolean;
+    prerollBars: number;
 }
 
-// Initialize our state with sensible defaults for music production
 const initialState: PlaybackSliceState = {
     isPlaying: false,
     currentTime: 0,
-    tempo: 120,                 // Default to standard 120 BPM
+    tempo: 120,
     loopEnabled: false,
     schedulingConfig: {
-        scheduleAheadTime: 0.1,  // Schedule 100ms ahead for stable playback
+        scheduleAheadTime: 0.1,  // 100ms look-ahead for stability
         schedulerInterval: 25     // Update scheduler every 25ms
     },
     metronomeEnabled: false,
@@ -40,45 +37,57 @@ const initialState: PlaybackSliceState = {
     prerollBars: 1
 };
 
-// Our playback slice manages all timing and playback-related state changes
 const playbackSlice = createSlice({
     name: 'playback',
     initialState,
     reducers: {
-        // Basic transport controls that any DAW would have
         startPlayback: (state) => {
             state.isPlaying = true;
+            console.log('Playback started at:', state.currentTime);
         },
 
         stopPlayback: (state) => {
             state.isPlaying = false;
+            console.log('Playback stopped at:', state.currentTime);
         },
 
-        // Time management - handles both continuous playback and user-initiated changes
         updatePlaybackPosition: (state, action: PayloadAction<number>) => {
-            state.currentTime = action.payload;
+            // Update position with millisecond precision
+            const newTime = action.payload;
 
-            // Automatically handle loop points during playback
+            // Handle loop points if enabled
             if (state.loopEnabled && state.loopRegion) {
-                if (state.currentTime >= state.loopRegion.end) {
+                if (newTime >= state.loopRegion.end) {
                     state.currentTime = state.loopRegion.start;
+                    console.log('Loop point reached, resetting to:', state.currentTime);
+                } else {
+                    state.currentTime = newTime;
                 }
+            } else {
+                state.currentTime = newTime;
             }
+
+            // Log for debugging timing issues
+            console.log('Position updated:', {
+                time: state.currentTime,
+                isPlaying: state.isPlaying,
+                loopActive: state.loopEnabled && state.loopRegion
+            });
         },
 
         setPlaybackPosition: (state, action: PayloadAction<number>) => {
-            state.currentTime = Math.max(0, action.payload); // Prevent negative time
+            state.currentTime = Math.max(0, action.payload);
+            console.log('Position manually set to:', state.currentTime);
         },
 
-        // Tempo management with reasonable limits
         setTempo: (state, action: PayloadAction<number>) => {
-            state.tempo = Math.max(20, Math.min(300, action.payload)); // Clamp between 20-300 BPM
+            state.tempo = Math.max(20, Math.min(300, action.payload));
         },
 
-        // Loop region management - essential for music production workflow
         setLoopRegion: (state, action: PayloadAction<LoopRegion>) => {
             state.loopRegion = action.payload;
-            state.loopEnabled = true;  // Enable looping when setting a region
+            state.loopEnabled = true;
+            console.log('Loop region set:', action.payload);
         },
 
         clearLoopRegion: (state) => {
@@ -87,13 +96,11 @@ const playbackSlice = createSlice({
         },
 
         toggleLoopEnabled: (state) => {
-            // Only toggle if we have a valid loop region
             if (state.loopRegion) {
                 state.loopEnabled = !state.loopEnabled;
             }
         },
 
-        // Scheduling configuration - allows fine-tuning of playback engine
         updateSchedulingConfig: (state, action: PayloadAction<Partial<SchedulingConfig>>) => {
             state.schedulingConfig = {
                 ...state.schedulingConfig,
@@ -101,7 +108,6 @@ const playbackSlice = createSlice({
             };
         },
 
-        // Musician-friendly playback settings
         toggleMetronome: (state) => {
             state.metronomeEnabled = !state.metronomeEnabled;
         },
@@ -111,12 +117,12 @@ const playbackSlice = createSlice({
         },
 
         setPrerollBars: (state, action: PayloadAction<number>) => {
-            state.prerollBars = Math.max(0, Math.min(4, action.payload)); // Limit to 0-4 bars
+            state.prerollBars = Math.max(0, Math.min(4, action.payload));
         }
     }
 });
 
-// Export actions for use in components and middleware
+// Export all actions
 export const {
     startPlayback,
     stopPlayback,
@@ -132,7 +138,7 @@ export const {
     setPrerollBars
 } = playbackSlice.actions;
 
-// Export selectors with descriptive names for clarity
+// Export selectors with proper time unit handling
 export const selectIsPlaying = (state: RootState) => state.playback.isPlaying;
 export const selectCurrentTime = (state: RootState) => state.playback.currentTime;
 export const selectTempo = (state: RootState) => state.playback.tempo;
@@ -143,7 +149,7 @@ export const selectMetronomeEnabled = (state: RootState) => state.playback.metro
 export const selectCountInEnabled = (state: RootState) => state.playback.countInEnabled;
 export const selectPrerollBars = (state: RootState) => state.playback.prerollBars;
 
-// A compound selector that provides the complete playback state in one call
+// Combined playback state selector
 export const selectPlaybackState = (state: RootState): PlaybackState => ({
     isPlaying: state.playback.isPlaying,
     currentTime: state.playback.currentTime,

@@ -1,34 +1,16 @@
 // src/features/player/state/slices/player.slice.ts
 
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import {createSelector, createSlice, PayloadAction} from '@reduxjs/toolkit';
 import type { RootState } from '../../../../store';
 import {
     Clip,
     NoteEvent,
     NoteSelection,
-    NoteUpdatePayload,
-    DragState,
-    GridPosition
+    TimePosition,
+    NoteParameterUpdate,
 } from '../../types';
 
-// Add new interface for note parameter updates
-interface NoteParameterUpdate {
-    clipId: string;
-    noteIndex: number;
-    parameters: {
-        synthesis?: {
-            envelope?: {
-                attack?: number;
-                decay?: number;
-                sustain?: number;
-                release?: number;
-            };
-        };
-        velocity?: number;
-        tuning?: number;
-    };
-}
-
+// Our state now uses time-based positioning instead of grid cells
 interface PlayerState {
     // Recording state
     isRecording: boolean;
@@ -41,15 +23,17 @@ interface PlayerState {
 
     // Selection and editing
     selectedNote: NoteSelection | null;
-    selectedClips: string[];  // Array of clip IDs
+    selectedClips: string[];
 
-    // Grid interaction state
-    dragState: DragState | null;
-
-    // Configuration
+    // Timeline configuration
     tempo: number;
-    gridResolution: number;  // Number of cells per beat
     numberOfTracks: number;
+
+    // Timeline view settings
+    timelineZoom: number;     // Pixels per millisecond
+    snapEnabled: boolean;     // Whether snap-to-grid is enabled
+    snapResolution: number;   // Snap resolution in milliseconds
+    snapStrength: number;     // 0-1, allows partial quantization
 }
 
 const initialState: PlayerState = {
@@ -60,10 +44,12 @@ const initialState: PlayerState = {
     clips: [],
     selectedNote: null,
     selectedClips: [],
-    dragState: null,
     tempo: 120,
-    gridResolution: 4,
-    numberOfTracks: 4
+    numberOfTracks: 4,
+    timelineZoom: 0.05,
+    snapEnabled: true,
+    snapResolution: 250,
+    snapStrength: 1.0
 };
 
 const playerSlice = createSlice({
@@ -110,6 +96,25 @@ const playerSlice = createSlice({
             }
         },
 
+        deleteClip: (state, action: PayloadAction<string>) => {
+            state.clips = state.clips.filter(clip => clip.id !== action.payload);
+        },
+
+        // New time-based movement
+        moveClip: (state, action: PayloadAction<{
+            id: string;
+            position: {
+                time: number;
+                track: number;
+            };
+        }>) => {
+            const clip = state.clips.find(c => c.id === action.payload.id);
+            if (clip) {
+                clip.startTime = action.payload.position.time;
+                clip.track = action.payload.position.track;
+            }
+        },
+
         updateNoteEvent: (state, action: PayloadAction<{
             id: string;
             duration: number;
@@ -126,39 +131,18 @@ const playerSlice = createSlice({
             }
         },
 
-        moveClip: (state, action: PayloadAction<{
-            id: string;
-            position: GridPosition;
-        }>) => {
-            const clip = state.clips.find(c => c.id === action.payload.id);
-            if (clip) {
-                clip.track = action.payload.position.track;
-                clip.startCell = action.payload.position.cell;
-            }
-        },
-
-        deleteClip: (state, action: PayloadAction<string>) => {
-            state.clips = state.clips.filter(clip => clip.id !== action.payload);
-        },
-
-        // Note editing
+        // Note selection and editing
         selectNote: (state, action: PayloadAction<NoteSelection | null>) => {
-            console.log('selectNote action:', action.payload);
             state.selectedNote = action.payload;
-            // Clear clip selection when selecting a note
             if (action.payload) {
                 state.selectedClips = [action.payload.clipId];
             }
-            console.log('New state:', {
-                selectedNote: state.selectedNote,
-                selectedClips: state.selectedClips
-            });
         },
 
         updateSelectedNote: (state, action: PayloadAction<Partial<NoteEvent>>) => {
             if (!state.selectedNote) return;
 
-            const clip = state.clips.find(c => c.id === state.selectedNote!.clipId);
+            const clip = state.clips.find(c => c.id === state.selectedNote.clipId);
             if (!clip) return;
 
             const note = clip.notes[state.selectedNote.noteIndex];
@@ -170,44 +154,15 @@ const playerSlice = createSlice({
             };
         },
 
-        // New parameter update reducer
-        // src/features/player/state/slices/player.slice.ts
-
-// ... rest of your imports and interfaces ...
-
-// Inside your playerSlice.reducers object, update the updateNoteParameters reducer:
-        updateNoteParameters: (state, action: PayloadAction<{
-            clipId: string;
-            noteIndex: number;
-            parameters: {
-                synthesis?: {
-                    envelope?: {
-                        attack?: number;
-                        decay?: number;
-                        sustain?: number;
-                        release?: number;
-                    };
-                };
-                tuning?: number;
-                velocity?: number;
-            };
-        }>) => {
+        updateNoteParameters: (state, action: PayloadAction<NoteParameterUpdate>) => {
             const { clipId, noteIndex, parameters } = action.payload;
-            console.log('Update note parameters:', { clipId, noteIndex, parameters }); // Debug log
 
             const clip = state.clips.find(c => c.id === clipId);
-            if (!clip) {
-                console.warn('Clip not found:', clipId);
-                return;
-            }
+            if (!clip) return;
 
             const note = clip.notes[noteIndex];
-            if (!note) {
-                console.warn('Note not found:', noteIndex);
-                return;
-            }
+            if (!note) return;
 
-            // Update synthesis parameters if provided
             if (parameters.synthesis?.envelope) {
                 note.synthesis = {
                     ...note.synthesis,
@@ -218,39 +173,34 @@ const playerSlice = createSlice({
                 };
             }
 
-            // Handle tuning updates
             if (parameters.tuning !== undefined) {
-                console.log('Setting tuning from', note.tuning, 'to', parameters.tuning);
                 note.tuning = parameters.tuning;
             }
 
-            // Handle velocity updates
             if (parameters.velocity !== undefined) {
                 note.velocity = parameters.velocity;
             }
-
-            console.log('Updated note:', note); // Debug log
         },
 
-        // Drag state management
-        setDragState: (state, action: PayloadAction<DragState | null>) => {
-            state.dragState = action.payload;
+        // Timeline view controls
+        setTimelineZoom: (state, action: PayloadAction<number>) => {
+            state.timelineZoom = action.payload;
         },
 
-        updateDragPosition: (state, action: PayloadAction<GridPosition>) => {
-            if (state.dragState) {
-                state.dragState.currentPoint = action.payload;
-            }
+        setSnapSettings: (state, action: PayloadAction<{
+            enabled: boolean;
+            resolution?: number;
+            strength?: number;
+        }>) => {
+            const { enabled, resolution, strength } = action.payload;
+            state.snapEnabled = enabled;
+            if (resolution !== undefined) state.snapResolution = resolution;
+            if (strength !== undefined) state.snapStrength = strength;
         },
 
-        // Configuration
         setTempo: (state, action: PayloadAction<number>) => {
             state.tempo = Math.max(20, Math.min(300, action.payload));
-        },
-
-        setGridResolution: (state, action: PayloadAction<number>) => {
-            state.gridResolution = action.payload;
-        },
+        }
     }
 });
 
@@ -264,24 +214,36 @@ export const {
     updateClip,
     moveClip,
     deleteClip,
+    quantizeClip,
+    setClipTiming,
+    setTimelineZoom,
+    setSnapSettings,
     updateNoteEvent,
     selectNote,
     updateSelectedNote,
     updateNoteParameters,
-    setDragState,
-    updateDragPosition,
-    setTempo,
-    setGridResolution
+    setTempo
 } = playerSlice.actions;
 
-// Export selectors
+// Enhanced selectors
 export const selectIsRecording = (state: RootState) => state.player.isRecording;
 export const selectCurrentTrack = (state: RootState) => state.player.currentTrack;
 export const selectClips = (state: RootState) => state.player.clips;
-// Add this to your player.slice.ts
+export const selectTimelineSettings = createSelector(
+    (state: RootState) => state.player,
+    (player) => ({
+        zoom: player.timelineZoom,
+        snap: {
+            enabled: player.snapEnabled,
+            resolution: player.snapResolution,
+            strength: player.snapStrength
+        }
+    })
+);
 
-// In your player.slice.ts
+export const selectTempo = (state: RootState) => state.player.tempo;
 
+// Add the selectSelectedNote selector
 export const selectSelectedNote = (state: RootState) => {
     const selection = state.player.selectedNote;
     if (!selection) return null;
@@ -292,12 +254,12 @@ export const selectSelectedNote = (state: RootState) => {
     const note = clip.notes[selection.noteIndex];
     if (!note) return null;
 
-    console.log('Selected note in selector:', note); // Debug log
+    console.log('Selected note in selector:', note);
 
-    // Ensure all required properties exist
+    // Normalize note data to ensure all required properties exist
     const normalizedNote = {
         ...note,
-        tuning: note.tuning ?? 0, // Make sure tuning exists
+        tuning: note.tuning ?? 0,
         synthesis: note.synthesis ?? {
             envelope: {
                 attack: 0.05,
@@ -314,8 +276,5 @@ export const selectSelectedNote = (state: RootState) => {
         noteIndex: selection.noteIndex
     };
 };
-export const selectDragState = (state: RootState) => state.player.dragState;
-export const selectTempo = (state: RootState) => state.player.tempo;
 
-// Export reducer
 export default playerSlice.reducer;
