@@ -211,9 +211,6 @@ const ParameterPanel: React.FC = () => {
                      transition: 'opacity 150ms ease-in-out',
                      pointerEvents: isPanelVisible ? 'none' : 'auto'
                  }}>
-                <div className="text-gray-500 dark:text-gray-400">
-                    Click to show parameters
-                </div>
             </div>
         </div>
     );
