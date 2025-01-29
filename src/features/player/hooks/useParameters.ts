@@ -2,8 +2,8 @@
 
 import { useCallback } from 'react';
 import { useAppDispatch } from './useStore';
-import { updateNoteParameters } from '../state/slices/player.slice';
 import { ParameterService } from '../parameters/parameter.service';
+import { updateNoteParameters } from '../state/slices/player.slice';
 
 const parameterService = new ParameterService();
 
@@ -11,40 +11,57 @@ export const useParameters = () => {
     const dispatch = useAppDispatch();
 
     const handleParameterChange = useCallback((
-        clipId: string,
-        noteIndex: number,
+        trackId: string,
+        noteId: string,
         parameterId: string,
         displayValue: number
     ) => {
-        const definition = parameterService.getDefinition(parameterId);
-        if (!definition) return;
+        console.log('Parameter change:', {
+            trackId,
+            noteId,
+            parameterId,
+            displayValue
+        });
 
         const internalValue = parameterService.convertToInternal(parameterId, displayValue);
 
-        switch (definition.group) {
+        console.log('Converted to internal:', {
+            displayValue,
+            internalValue
+        });
+
+        const updates: any = {};
+
+        // Handle different parameter types
+        switch (parameterService.getDefinition(parameterId)?.group) {
             case 'envelope':
-                dispatch(updateNoteParameters({
-                    clipId,
-                    noteIndex,
-                    parameters: {
-                        synthesis: {
-                            envelope: {
-                                [parameterId]: internalValue
-                            }
-                        }
-                    }
-                }));
-                break;
-            case 'note':
-                dispatch(updateNoteParameters({
-                    clipId,
-                    noteIndex,
-                    parameters: {
+                updates.synthesis = {
+                    envelope: {
                         [parameterId]: internalValue
                     }
-                }));
+                };
+                break;
+
+            case 'note':
+                if (parameterId === 'velocity') {
+                    updates.velocity = Math.round(internalValue * 127);
+                } else if (parameterId === 'tuning') {
+                    updates.tuning = internalValue;
+                }
                 break;
         }
+
+        console.log('Dispatching update:', {
+            trackId,
+            noteId,
+            updates
+        });
+
+        dispatch(updateNoteParameters({
+            trackId,
+            noteId,
+            updates
+        }));
     }, [dispatch]);
 
     return {

@@ -12,6 +12,7 @@ import {
     updatePlaybackPosition,
     setTempo
 } from '../state/slices/playback.slice';
+import { selectTracks } from '../state/slices/player.slice';
 
 export const usePlayback = () => {
     // Redux state
@@ -19,7 +20,7 @@ export const usePlayback = () => {
     const isPlaying = useAppSelector(state => state.playback.isPlaying);
     const currentTime = useAppSelector(state => state.playback.currentTime);
     const tempo = useAppSelector(state => state.playback.tempo);
-    const clips = useAppSelector(state => state.player.clips);
+    const tracks = useAppSelector(selectTracks);
 
     // Service refs
     const playbackServiceRef = useRef<PlaybackService | null>(null);
@@ -36,19 +37,21 @@ export const usePlayback = () => {
     useEffect(() => {
         if (!playbackServiceRef.current) {
             const service = new PlaybackService({
-                onPositionChange: (positionInTicks) => {
-                    const timeSinceLastUpdate = positionInTicks - lastPositionUpdateRef.current;
+                onPositionChange: (positionInMs) => {
+                    const timeSinceLastUpdate = positionInMs - lastPositionUpdateRef.current;
                     // Update position roughly every 30fps
-                    if (timeSinceLastUpdate > TIMING.msToTicks(32, tempo)) {
-                        lastPositionUpdateRef.current = positionInTicks;
-                        dispatch(updatePlaybackPosition(positionInTicks));
+                    if (timeSinceLastUpdate > 32) { // 1000ms / 30fps ≈ 32ms
+                        lastPositionUpdateRef.current = positionInMs;
+                        dispatch(updatePlaybackPosition(positionInMs));
                     }
                 },
                 onPlaybackStart: async () => {
                     await keyboardAudioManager.initialize();
+                    const totalNotes = tracks.reduce((sum, track) => sum + track.notes.length, 0);
                     console.log('Playback started', {
-                        clips: clips.length,
-                        currentTimeInTicks: currentTime
+                        tracks: tracks.length,
+                        totalNotes,
+                        currentTimeInMs: currentTime
                     });
                 },
                 onPlaybackStop: () => {
@@ -72,19 +75,20 @@ export const usePlayback = () => {
                 playbackServiceRef.current = null;
             }
         };
-    }, [dispatch, cleanupIntervals, tempo]);
+    }, [dispatch, cleanupIntervals, tempo, tracks]);
 
-    // Update clips when they change
+    // Update tracks when they change
     useEffect(() => {
         const service = playbackServiceRef.current;
-        if (service && clips.length > 0) {
-            console.log('Updating clips:', {
-                count: clips.length,
-                totalNotes: clips.reduce((sum, c) => sum + c.notes.length, 0)
+        if (service) {
+            const totalNotes = tracks.reduce((sum, track) => sum + track.notes.length, 0);
+            console.log('Updating tracks:', {
+                count: tracks.length,
+                totalNotes
             });
-            service.setClips(clips);
+            service.setTracks(tracks);
         }
-    }, [clips]);
+    }, [tracks]);
 
     // Handle playback state changes
     useEffect(() => {
@@ -123,11 +127,11 @@ export const usePlayback = () => {
         dispatch(stopPlayback());
     }, [dispatch]);
 
-    const seek = useCallback((timeInTicks: number) => {
+    const seek = useCallback((timeInMs: number) => {
         const service = playbackServiceRef.current;
         if (service) {
-            dispatch(setPlaybackPosition(timeInTicks));
-            service.seek(timeInTicks);
+            dispatch(setPlaybackPosition(timeInMs));
+            service.seek(timeInMs);
         }
     }, [dispatch]);
 
@@ -143,7 +147,7 @@ export const usePlayback = () => {
         play,
         stop,
         seek,
-        updatePosition: (timeInTicks: number) => dispatch(updatePlaybackPosition(timeInTicks)),
+        updatePosition: (timeInMs: number) => dispatch(updatePlaybackPosition(timeInMs)),
         setTempo: updateTempo
     };
 };

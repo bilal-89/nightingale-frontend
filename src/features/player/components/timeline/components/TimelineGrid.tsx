@@ -1,105 +1,58 @@
 // src/features/player/components/timeline/components/TimelineGrid.tsx
 
-import React, { useState, useCallback, useMemo } from 'react';
-import { usePlayback } from '../../../hooks/usePlayback';
-import { useClips } from '../../../hooks/useClips';
-import { useAppDispatch, useAppSelector } from '../../../hooks/useStore';
-import { selectCurrentTrack, setCurrentTrack } from '../../../state/slices/player.slice';
-import Clip from '../../clips/Clip';
+import React, { useCallback, useMemo } from 'react';
+import { usePlayback } from '../../../hooks';
+import { useAppDispatch, useAppSelector } from '../../../hooks';
+import {
+    selectCurrentTrack,
+    selectTracks,
+    selectTimelineSettings,
+    setCurrentTrack, addTrack
+} from '../../../state/slices/player.slice';
+import Note from '../../notes/Note';
 import { TIMING } from '../../../utils/time.utils';
-import { DragState, GridPosition } from '../../../types';
 
-// Grid constants define our musical grid's visual structure
 const GRID_CONSTANTS = {
-    TRACKS: 4,           // Number of simultaneous tracks
-    CELLS: 64,          // Total number of 16th note divisions
-    CELL_WIDTH: 48,     // Visual width of each cell in pixels
-    TRACK_HEIGHT: 96,   // Height of each track
-    HEADER_HEIGHT: 32,  // Height of the timeline header
-    NOTE_HEIGHT: 3      // Height of note visualizations
+    TRACKS: 4,
+    CELLS: 64,
+    CELL_WIDTH: 48,
+    TRACK_HEIGHT: 96,
+    HEADER_HEIGHT: 32,
+    NOTE_HEIGHT: 3
 } as const;
 
 export const TimelineGrid: React.FC = () => {
     const dispatch = useAppDispatch();
-    const { isPlaying, currentTime, tempo } = usePlayback();
-    const { clips, moveClip } = useClips();
-    const currentTrack = useAppSelector(selectCurrentTrack);
-    const [dragState, setDragState] = useState<DragState | null>(null);
+    const { isPlaying, currentTime } = usePlayback();
+    const tracks = useAppSelector(selectTracks);
+    const currentTrackIndex = useAppSelector(selectCurrentTrack);
+    const timelineSettings = useAppSelector(selectTimelineSettings);
+    const selectedNoteId = useAppSelector(state => state.player.selectedNoteId);
 
-    // Calculate playback position using musical timing
-    const playbackPosition = useMemo(() => {
-        if (!clips.length) return 0;
-        const currentTicks = TIMING.msToTicks(currentTime * 1000, tempo);
-        const pixelsPerTick = GRID_CONSTANTS.CELL_WIDTH / TIMING.cellsToTicks(1);
-        return currentTicks * pixelsPerTick;
-    }, [clips, currentTime, tempo]);
-
-    // Convert mouse position to musical grid coordinates
-    const getGridPosition = useCallback((e: React.MouseEvent): GridPosition => {
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top - GRID_CONSTANTS.HEADER_HEIGHT;
-
-        const ticksPerPixel = TIMING.cellsToTicks(1) / GRID_CONSTANTS.CELL_WIDTH;
-        const ticks = Math.round(x * ticksPerPixel);
-        const cell = TIMING.ticksToCells(ticks);
-
-        return {
-            cell: Math.max(0, cell),
-            track: Math.max(0, Math.min(
-                GRID_CONSTANTS.TRACKS - 1,
-                Math.floor(y / GRID_CONSTANTS.TRACK_HEIGHT)
-            ))
-        };
-    }, []);
-
-    // Handle drag operations with musical timing
-    const handleMouseDown = useCallback((e: React.MouseEvent, clipId?: string) => {
-        e.preventDefault();
-        const position = getGridPosition(e);
-
-        setDragState({
-            type: clipId ? 'MOVE' : 'CREATE',
-            startPoint: position,
-            currentPoint: position,
-            clipId,
-            startTicks: TIMING.cellsToTicks(position.cell)
-        });
-    }, [getGridPosition]);
-
-    // Handle clip movement with musical timing
-    const handleMouseMove = useCallback((e: React.MouseEvent) => {
-        if (!dragState) return;
-
-        const position = getGridPosition(e);
-
-        if (dragState.currentPoint.cell !== position.cell ||
-            dragState.currentPoint.track !== position.track) {
-
-            setDragState(prev => prev ? {
-                ...prev,
-                currentPoint: position
-            } : null);
-
-            if (dragState.type === 'MOVE' && dragState.clipId) {
-                moveClip(dragState.clipId, {
-                    cell: position.cell,
-                    track: position.track,
-                    startTicks: TIMING.cellsToTicks(position.cell)
-                });
+    // Calculate note ranges for each track
+    const trackRanges = useMemo(() => {
+        return tracks.map(track => {
+            if (track.notes.length === 0) {
+                return { lowestNote: 60, highestNote: 72 }; // Default octave range
             }
-        }
-    }, [dragState, moveClip, getGridPosition]);
+            const notes = track.notes.map(n => n.note);
+            return {
+                lowestNote: Math.min(...notes),
+                highestNote: Math.max(...notes)
+            };
+        });
+    }, [tracks]);
 
-    const handleMouseUp = useCallback(() => {
-        setDragState(null);
-    }, []);
+    // Calculate playback position
+    const playbackPosition = useMemo(() => {
+        const pixelsPerMs = timelineSettings.zoom;
+        return currentTime * pixelsPerMs;
+    }, [currentTime, timelineSettings.zoom]);
 
     const handleTrackSelect = useCallback((trackIndex: number) => {
         dispatch(setCurrentTrack(trackIndex));
     }, [dispatch]);
 
-    // Format time display using musical time
     const formatGridTime = useCallback((cellIndex: number) => {
         const beats = Math.floor(cellIndex / TIMING.CELLS_PER_BEAT) + 1;
         const subdivision = (cellIndex % TIMING.CELLS_PER_BEAT) + 1;
@@ -115,30 +68,34 @@ export const TimelineGrid: React.FC = () => {
                         Time
                     </div>
 
-                    {Array(GRID_CONSTANTS.TRACKS).fill(null).map((_, index) => (
+                    {tracks.map((track, index) => (
                         <div
-                            key={`track-header-${index}`}
+                            key={track.id}
                             className="h-24 border-b border-[#d1cdc4] bg-[#e8e4dc] px-2 py-1 flex items-center gap-2"
                         >
                             <button
                                 className={`w-3 h-3 rounded-full transition-all duration-300 
-                                    ${currentTrack === index ? 'bg-green-500' : 'bg-gray-300'}
+                                    ${currentTrackIndex === index ? 'bg-green-500' : 'bg-gray-300'}
                                     hover:scale-110`}
                                 onClick={() => handleTrackSelect(index)}
-                                title={`Select Track ${index + 1}`}
+                                title={`Select ${track.name}`}
                             />
-                            <span className="text-sm">Track {index + 1}</span>
+                            <span className="text-sm">{track.name}</span>
                         </div>
                     ))}
+
+                    {/* Add Track Button */}
+                    <button
+                        className="w-full h-12 flex items-center justify-center text-sm text-gray-600
+                            hover:bg-[#f0ece6] transition-colors"
+                        onClick={() => dispatch(addTrack())}
+                    >
+                        + Add Track
+                    </button>
                 </div>
 
                 {/* Main grid area */}
-                <div
-                    className="flex-grow overflow-x-auto relative"
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                >
+                <div className="flex-grow overflow-x-auto relative">
                     <div style={{ width: GRID_CONSTANTS.CELLS * GRID_CONSTANTS.CELL_WIDTH }}>
                         {/* Time ruler */}
                         <div className="flex h-8 border-b border-[#d1cdc4]">
@@ -153,26 +110,39 @@ export const TimelineGrid: React.FC = () => {
                             ))}
                         </div>
 
-                        {/* Grid cells */}
-                        {Array(GRID_CONSTANTS.TRACKS).fill(null).map((_, trackIndex) => (
+                        {/* Track lanes */}
+                        {tracks.map((track, trackIndex) => (
                             <div
-                                key={`track-${trackIndex}`}
-                                className="flex h-24 border-b border-[#d1cdc4]"
+                                key={track.id}
+                                className={`relative h-24 border-b border-[#d1cdc4] 
+                                    ${trackIndex === currentTrackIndex ? 'bg-[#f5f2ed]' : 'bg-[#f0ece6]'}`}
                             >
+                                {/* Grid background */}
                                 {Array(GRID_CONSTANTS.CELLS).fill(null).map((_, cellIndex) => (
                                     <div
                                         key={`cell-${trackIndex}-${cellIndex}`}
-                                        className={`flex-shrink-0 border-r border-[#d1cdc4] 
-                                            transition-colors duration-150
-                                            ${dragState?.currentPoint.track === trackIndex &&
-                                        dragState.currentPoint.cell === cellIndex
-                                            ? 'bg-blue-50'
-                                            : trackIndex === currentTrack
-                                                ? 'bg-[#f5f2ed]'
-                                                : 'bg-[#f0ece6]'
-                                        }`}
-                                        style={{ width: GRID_CONSTANTS.CELL_WIDTH }}
-                                        onMouseDown={(e) => handleMouseDown(e)}
+                                        className="absolute border-r border-[#d1cdc4]"
+                                        style={{
+                                            left: cellIndex * GRID_CONSTANTS.CELL_WIDTH,
+                                            top: 0,
+                                            width: GRID_CONSTANTS.CELL_WIDTH,
+                                            height: '100%'
+                                        }}
+                                    />
+                                ))}
+
+                                {/* Notes */}
+                                {track.notes.map(note => (
+                                    <Note
+                                        key={note.id}
+                                        note={note}
+                                        trackId={track.id}
+                                        trackIndex={trackIndex}
+                                        timelineZoom={timelineSettings.zoom}
+                                        availableTracks={tracks.map(t => t.id)}
+                                        isSelected={selectedNoteId === note.id}
+                                        lowestNote={trackRanges[trackIndex].lowestNote}
+                                        highestNote={trackRanges[trackIndex].highestNote}
                                     />
                                 ))}
                             </div>
@@ -188,21 +158,6 @@ export const TimelineGrid: React.FC = () => {
                                 }}
                             />
                         )}
-
-                        {/* Clips layer */}
-                        <div className="absolute top-8 left-0 right-0 bottom-0">
-                            {clips.map(clip => (
-                                <Clip
-                                    key={clip.id}
-                                    clip={{
-                                        ...clip,
-                                        startTicks: TIMING.cellsToTicks(clip.startCell)
-                                    }}
-                                    isDragging={dragState?.clipId === clip.id}
-                                    onMouseDown={(e) => handleMouseDown(e, clip.id)}
-                                />
-                            ))}
-                        </div>
                     </div>
                 </div>
             </div>

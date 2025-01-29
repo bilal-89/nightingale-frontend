@@ -1,41 +1,20 @@
 // src/features/player/hooks/useClips.ts
 
 import { useAppDispatch, useAppSelector } from './useStore';
-import { Clip, TimePosition, TimingUpdate, QuantizeSettings } from '../types';
-import {
-    addClip,
-    updateClip,
-    moveClip,
-    deleteClip,
-    quantizeClip,
-    setClipTiming
-} from '../state/slices/player.slice';
+import { Clip, TimePosition } from '../types';
 
+// Temporary implementation to prevent errors during transition
 export const useClips = () => {
     const dispatch = useAppDispatch();
-    const clips = useAppSelector(state => state.player.clips);
+    const clips: Clip[] = []; // Empty array for now
 
     return {
-        // State
         clips,
-
-        // Actions
-        addClip: (clip: Clip) =>
-            dispatch(addClip(clip)),
-
-        updateClip: (id: string, updates: Partial<Clip>) =>
-            dispatch(updateClip({ id, updates })),
-
-        moveClip: (id: string, position: TimePosition) =>
-            dispatch(moveClip({ id, position })),
-
-        deleteClip: (id: string) =>
-            dispatch(deleteClip(id)),
-
-        quantizeClip: (id: string, settings: QuantizeSettings) =>
-            dispatch(quantizeClip({ id, settings })),
-
-        setClipTiming: (id: string, timing: TimingUpdate) =>
-            dispatch(setClipTiming({ id, timing }))
+        addClip: () => {},
+        updateClip: () => {},
+        moveClip: () => {},
+        deleteClip: () => {},
+        quantizeClip: () => {},
+        setClipTiming: () => {}
     };
 };

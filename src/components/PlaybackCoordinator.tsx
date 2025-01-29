@@ -7,9 +7,7 @@ import {
     selectTempo,
     selectCurrentTime,
     updatePlaybackPosition,
-    stopPlayback
 } from '../features/player/state/slices/playback.slice';
-import { useClips } from '../features/player/hooks';
 import {
     // selectIsPlaying,
     selectClips,

@@ -1,11 +1,10 @@
 import React from 'react';
-import { usePlayback } from '../hooks/usePlayback';
-import { useAppDispatch, useAppSelector } from '../hooks/useStore';
+import { usePlayback } from '../hooks';
+import { useAppDispatch, useAppSelector } from '../hooks';
 import { Card } from '../../../components/ui/card';
 import { Play, Square, SkipBack, Circle } from 'lucide-react';
 import TimelineGrid from './timeline/components/TimelineGrid';
 import { TimeDisplay } from './transport/TimeDisplay';
-import TransportControls from './transport/TransportControls';
 
 import { NoteInspector } from './inspector/NoteInspector';
 
@@ -102,7 +101,7 @@ export const Player: React.FC = () => {
 
             {/* Timeline Grid */}
             <TimelineGrid />
-            <TransportControls />
+            {/*<TransportControls />*/}
             <NoteInspector />
         </Card>
     );
