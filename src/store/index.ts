@@ -2,13 +2,13 @@
 
 import { configureStore, Middleware } from '@reduxjs/toolkit';
 import keyboardReducer from './slices/keyboard/keyboard.slice';
-import arrangementReducer from './slices/arrangement/arrangement.slice';
+// import arrangementReducer from './slices/arrangement/arrangement.slice';
 import playerReducer from '../features/player/state/slices/player.slice';
 import playbackReducer from '../features/player/state/slices/playback.slice';
 
 import { keyboardAudioMiddleware } from './middleware/keyboardAudio.middleware';
 import { drumAudioMiddleware } from './middleware/drumAudio.middleware';
-import { arrangementMiddleware } from './middleware/arrangement.middleware';
+// import { arrangementMiddleware } from './middleware/arrangement.middleware';
 import { playbackMiddleware } from './middleware/playback.middleware';
 import { playerMiddleware } from './middleware/player.middleware';
 
@@ -52,7 +52,7 @@ const IGNORED_PATHS = [
 const customMiddleware: Middleware[] = [
     keyboardAudioMiddleware,
     drumAudioMiddleware,
-    arrangementMiddleware,
+    // arrangementMiddleware,
     playbackMiddleware,
     playerMiddleware  // Add our new player middleware
 ];
@@ -61,7 +61,7 @@ export const store = configureStore({
     reducer: {
         // Keep existing reducers
         keyboard: keyboardReducer,
-        arrangement: arrangementReducer,
+        // arrangement: arrangementReducer,
 
         // Add our new reducers
         player: playerReducer,

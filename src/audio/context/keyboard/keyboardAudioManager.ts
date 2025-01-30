@@ -140,7 +140,7 @@ class KeyboardAudioManager {
     setNoteParameter(note: number, parameter: string, value: number): void {
         if (this.currentMode === 'drums') return;
 
-        console.log(`Setting parameter: ${parameter} = ${value} for note ${note}`); // Debug log
+        // console.log(`Setting parameter: ${parameter} = ${value} for note ${note}`); // Debug log
 
         switch (parameter) {
             case 'tuning':
@@ -174,10 +174,10 @@ class KeyboardAudioManager {
         }
 
         // Debug log after parameter is set
-        console.log(`Current state for note ${note}:`, {
-            filterParams: this.filterParams.get(note),
-            activeVoice: this.activeVoices.get(note)
-        });
+        // console.log(`Current state for note ${note}:`, {
+        //     filterParams: this.filterParams.get(note),
+        //     activeVoice: this.activeVoices.get(note)
+        // });
     }
 
     private setFilterCutoff(note: number, frequency: number): void {

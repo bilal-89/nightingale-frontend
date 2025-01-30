@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export type Waveform = 'sine' | 'square' | 'sawtooth' | 'triangle';
+export type ParameterContext = 'keyboard' | 'note';
 
 // Define the structure for a single parameter
 export interface Parameter {
@@ -15,7 +16,7 @@ export interface KeyParameters {
     velocity: Parameter;
     warbleRate: Parameter;
     warbleDepth: Parameter;
-    waveform?: Waveform;  // New parameter for per-key waveform
+    waveform?: Waveform;  // Parameter for per-key waveform
 
     // ADSR envelope parameters
     attack: Parameter;
@@ -36,7 +37,8 @@ export interface KeyboardState {
     isInitialized: boolean;
     mode: SynthMode;
     isParameterPanelVisible: boolean;
-    globalWaveform: Waveform;  // New global waveform setting
+    globalWaveform: Waveform;  // Global waveform setting
+    parameterContext: ParameterContext;  // New field for context tracking
 }
 
 const defaultParameters: KeyParameters = {
@@ -60,7 +62,8 @@ const initialState: KeyboardState = {
     isInitialized: false,
     mode: 'tunable',
     isParameterPanelVisible: false,
-    globalWaveform: 'sine'  // Default waveform
+    globalWaveform: 'sine',
+    parameterContext: 'keyboard'  // Default context
 };
 
 const keyboardSlice = createSlice({
@@ -75,8 +78,8 @@ const keyboardSlice = createSlice({
             const note = action.payload;
             if (!state.activeNotes.includes(note)) {
                 state.activeNotes.push(note);
-                // If panel is visible, update the selected key
-                if (state.isParameterPanelVisible) {
+                // If panel is visible and in keyboard context, update selected key
+                if (state.isParameterPanelVisible && state.parameterContext === 'keyboard') {
                     state.selectedKey = note;
                 }
             }
@@ -89,8 +92,17 @@ const keyboardSlice = createSlice({
 
         togglePanel: (state) => {
             state.isParameterPanelVisible = !state.isParameterPanelVisible;
-            // If hiding panel, clear selected key
+            // If hiding panel, reset context and selection
             if (!state.isParameterPanelVisible) {
+                state.selectedKey = null;
+                state.parameterContext = 'keyboard';
+            }
+        },
+
+        setParameterContext: (state, action: PayloadAction<ParameterContext>) => {
+            state.parameterContext = action.payload;
+            // Clear selected key when switching to note context
+            if (action.payload === 'note') {
                 state.selectedKey = null;
             }
         },
@@ -133,6 +145,17 @@ const keyboardSlice = createSlice({
             state.keyParameters[keyNumber].waveform = waveform;
         },
 
+        setSelectedKey: (state, action: PayloadAction<number | null>) => {
+            state.selectedKey = action.payload;
+            // Update context and panel visibility when selecting a key
+            if (action.payload !== null) {
+                state.parameterContext = 'keyboard';
+                state.isParameterPanelVisible = true;
+            } else if (state.parameterContext === 'keyboard') {
+                state.isParameterPanelVisible = false;
+            }
+        },
+
         resetKeyParameters: (state, action: PayloadAction<number>) => {
             const keyNumber = action.payload;
             delete state.keyParameters[keyNumber];
@@ -144,13 +167,13 @@ const keyboardSlice = createSlice({
         resetAllParameters: (state) => {
             state.keyParameters = {};
             state.selectedKey = null;
-            // Don't reset globalWaveform - it persists across resets
         },
 
         setMode: (state, action: PayloadAction<SynthMode>) => {
             state.mode = action.payload;
             state.activeNotes = [];
             state.selectedKey = null;
+            state.parameterContext = 'keyboard';
         },
 
         cleanup: (state) => {
@@ -158,7 +181,7 @@ const keyboardSlice = createSlice({
             state.isInitialized = false;
             state.selectedKey = null;
             state.isParameterPanelVisible = false;
-            // Don't reset globalWaveform on cleanup
+            state.parameterContext = 'keyboard';
         }
     }
 });
@@ -174,6 +197,8 @@ export const {
     resetKeyParameters,
     resetAllParameters,
     setMode,
+    setSelectedKey,
+    setParameterContext,
     cleanup
 } = keyboardSlice.actions;
 
@@ -186,6 +211,9 @@ export const selectSelectedKey = (state: { keyboard: KeyboardState }) =>
 
 export const selectIsPanelVisible = (state: { keyboard: KeyboardState }) =>
     state.keyboard.isParameterPanelVisible;
+
+export const selectParameterContext = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.parameterContext;
 
 export const selectKeyParameters = (state: { keyboard: KeyboardState }, keyNumber: number) =>
     state.keyboard.keyParameters[keyNumber] ?? {};

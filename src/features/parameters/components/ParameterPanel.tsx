@@ -287,7 +287,7 @@ const ParameterPanel: React.FC = () => {
                         rawValue = selectedNote.note[param.id];
                 }
 
-                console.log(`Parameter ${param.id}:`, { rawValue }); // Debug log
+                // console.log(`Parameter ${param.id}:`, { rawValue }); // Debug log
                 acc[param.id] = rawValue ?? param.defaultValue;
                 return acc;
             }, {} as Record<string, number>);

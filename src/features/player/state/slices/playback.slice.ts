@@ -43,12 +43,12 @@ const playbackSlice = createSlice({
     reducers: {
         startPlayback: (state) => {
             state.isPlaying = true;
-            console.log('Playback started at:', state.currentTime);
+            // console.log('Playback started at:', state.currentTime);
         },
 
         stopPlayback: (state) => {
             state.isPlaying = false;
-            console.log('Playback stopped at:', state.currentTime);
+            // console.log('Playback stopped at:', state.currentTime);
         },
 
         updatePlaybackPosition: (state, action: PayloadAction<number>) => {
@@ -59,7 +59,7 @@ const playbackSlice = createSlice({
             if (state.loopEnabled && state.loopRegion) {
                 if (newTime >= state.loopRegion.end) {
                     state.currentTime = state.loopRegion.start;
-                    console.log('Loop point reached, resetting to:', state.currentTime);
+                    // console.log('Loop point reached, resetting to:', state.currentTime);
                 } else {
                     state.currentTime = newTime;
                 }
@@ -68,11 +68,11 @@ const playbackSlice = createSlice({
             }
 
             // Log for debugging timing issues
-            console.log('Position updated:', {
-                time: state.currentTime,
-                isPlaying: state.isPlaying,
-                loopActive: state.loopEnabled && state.loopRegion
-            });
+            // console.log('Position updated:', {
+            //     time: state.currentTime,
+            //     isPlaying: state.isPlaying,
+            //     loopActive: state.loopEnabled && state.loopRegion
+            // });
         },
 
         setPlaybackPosition: (state, action: PayloadAction<number>) => {

@@ -63,6 +63,8 @@ const Note: React.FC<NoteProps> = ({
         handleDragStart(e, note, trackId, trackIndex);
     }, [note, trackId, trackIndex, handleDragStart]);
 
+
+
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
             e.preventDefault();
