@@ -56,14 +56,6 @@ const initialState: PlayerState = {
             color: '#f59e0b',
             isMuted: false,
             isSolo: false
-        },
-        {
-            id: 'track-4',
-            name: 'Track 4',
-            notes: [],
-            color: '#ec4899',
-            isMuted: false,
-            isSolo: false
         }
     ],
     selectedNoteId: null,

@@ -5,9 +5,6 @@ import { Card } from '../../../components/ui/card';
 import { Play, Square, SkipBack, Circle } from 'lucide-react';
 import TimelineGrid from './timeline/components/TimelineGrid';
 import { TimeDisplay } from './transport/TimeDisplay';
-
-import { NoteInspector } from './inspector/NoteInspector';
-
 import { startRecording, stopRecording } from '../state/slices/player.slice';
 
 export const Player: React.FC = () => {

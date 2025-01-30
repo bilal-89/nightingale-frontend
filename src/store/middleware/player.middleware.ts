@@ -1,9 +1,7 @@
 // src/store/middleware/player.middleware.ts
 
-import { Middleware } from '@reduxjs/toolkit';
+import { Middleware, AnyAction } from '@reduxjs/toolkit';
 import {
-    addNoteToTrack,
-    updateNoteParameters,
     commitRecordingBuffer
 } from '../../features/player/state/slices/player.slice';
 import type { NoteEvent } from '../../features/player/types';
@@ -17,7 +15,13 @@ function logNoteTiming(stage: string, data: any) {
     });
 }
 
+const isPlayerAction = (action: unknown): action is AnyAction & { payload?: any } => {
+    return typeof action === 'object' && action !== null && 'type' in action;
+};
+
 export const playerMiddleware: Middleware = store => next => action => {
+    if (!isPlayerAction(action)) return next(action);
+    
     const result = next(action);
     const state = store.getState();
     const keyboardState = state.keyboard;
@@ -132,7 +136,7 @@ export const playerMiddleware: Middleware = store => next => action => {
                 });
 
                 // Adjust timing for active notes
-                activeNotes.forEach((noteInfo, note) => {
+                activeNotes.forEach((noteInfo) => {
                     noteInfo.startTime = Math.round(noteInfo.startTime * tempoRatio);
                     if (noteInfo.noteEvent.duration) {
                         noteInfo.noteEvent.duration = Math.round(

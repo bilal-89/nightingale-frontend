@@ -1,6 +1,6 @@
 import { SynthesisParameters, CompleteNoteEvent } from '../../types/audioTypes';
 import { drumSoundManager } from '../drums/drumSoundManager';
-import { Waveform } from '../../store/slices/keyboard/keyboard.slice';
+import { Waveform } from '../../../store/slices/keyboard/keyboard.slice';
 
 
 
@@ -62,12 +62,6 @@ class KeyboardAudioManager {
 
     getCurrentTime(): number {
         return this.audioContext?.currentTime ?? 0;
-    }
-
-    // Utility function to convert velocity to gain
-    private velocityToGain(velocity: number): number {
-        const normalizedVelocity = velocity / 127;
-        return Math.pow(normalizedVelocity, 1.5) * this.DEFAULT_GAIN;
     }
 
     // Get envelope parameters for a note, with conversion to proper units
@@ -195,7 +189,6 @@ class KeyboardAudioManager {
 
                 // Calculate envelope timings
                 const attackEndTime = time + envelope.attack;
-                const decayEndTime = attackEndTime + envelope.decay;
                 const releaseStartTime = time + noteEvent.duration;
                 const releaseEndTime = releaseStartTime + envelope.release;
 
@@ -266,13 +259,6 @@ class KeyboardAudioManager {
         }
 
         return curve;
-    }
-
-// Update velocityToGain for smoother dynamics
-    private velocityToGain(velocity: number): number {
-        const normalizedVelocity = velocity / 127;
-        // Use cubic curve for more natural velocity response
-        return Math.pow(normalizedVelocity, 3) * this.DEFAULT_GAIN;
     }
 
     // Create and configure a new note
@@ -491,6 +477,12 @@ class KeyboardAudioManager {
             this.mainGain = null;
             this.isInitialized = false;
         }
+    }
+
+    private velocityToGain(velocity: number): number {
+        const normalizedVelocity = velocity / 127;
+        // Use cubic curve for more natural velocity response
+        return Math.pow(normalizedVelocity, 3) * this.DEFAULT_GAIN;
     }
 }
 
