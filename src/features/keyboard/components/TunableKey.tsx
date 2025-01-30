@@ -1,8 +1,6 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useRef } from 'react';
 import { KeyProps } from './keyboard.types';
 import { drumSounds } from '../../../audio/constants/drumSounds';
-import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { togglePanel, selectIsPanelVisible } from '../../../store/slices/keyboard/keyboard.slice';
 
 // Extending the key props to include necessary properties while omitting 'isBirdsong'
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
@@ -13,30 +11,26 @@ interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
     onNoteOn: (note: number) => void;
     onNoteOff: (note: number) => void;
     onTuningChange: (note: number, tuning: number) => void;
+    onPanelClick: () => void;
+    isPanelVisible: boolean;
 }
 
 const TunableKey: React.FC<ExtendedKeyProps> = ({
                                                     note,
                                                     isPressed,
-                                                    tuning,
                                                     onNoteOn,
                                                     onNoteOff,
-                                                    onTuningChange,
                                                     mode
                                                 }) => {
     // Setting up Redux dispatch and selector for panel visibility
-    const dispatch = useAppDispatch();
     const isTuningRef = useRef(false);
     const drumSound = mode === 'drums' ? drumSounds[note] : null;
 
     // Handle tuning changes with the slider
-    const handleTuningChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const newTuning = Number(e.target.value);
-        onTuningChange(note, newTuning);
-    }, [note, onTuningChange]);
+
 
     // Handle playing notes with mouse interactions
-    const handleMouseDown = (e: React.MouseEvent) => {
+    const handleMouseDown = () => {
         if (isTuningRef.current) return;
         onNoteOn(note);
     };

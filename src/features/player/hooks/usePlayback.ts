@@ -3,7 +3,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from './useStore';
 import { PlaybackService } from '../services/playback.service';
-import { TIMING } from '../utils/time.utils';
 import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
 import {
     startPlayback,

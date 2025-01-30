@@ -11,11 +11,12 @@ export interface PlaybackEvents {
     onError?: (error: Error) => void;
 }
 
+// Core state needed for playback timing
 interface PlaybackState {
     audioContext: AudioContext;
-    startTime: number;
-    tempo: number;
-    lastScheduledTime: number;
+    startTime: number;        // Reference point for audio timing
+    tempo: number;           // Current tempo in BPM
+    lastScheduledTime: number; // Last time we scheduled notes
 }
 
 interface ScheduledNote {
@@ -31,11 +32,14 @@ export class PlaybackService {
     private tracks: Track[] = [];
     private scheduledNotes: ScheduledNote[] = [];
     private schedulerTimer: number | null = null;
-    private updateTimer: number | null = null;
+    private animationFrameId: number | null = null;
 
-    private readonly SCHEDULE_AHEAD_TIME = 0.1;
-    private readonly SCHEDULER_INTERVAL = 25;
-    private readonly UPDATE_INTERVAL = 16;
+    // The wall clock time when playback started - used for timeline marker
+    private playbackStartTime: number = 0;
+
+    // Constants for timing system
+    private readonly SCHEDULE_AHEAD_TIME = 0.1;  // Schedule audio 100ms ahead
+    private readonly SCHEDULER_INTERVAL = 25;    // Check for notes every 25ms
 
     constructor(private events: PlaybackEvents = {}) {}
 
@@ -43,6 +47,7 @@ export class PlaybackService {
         if (this.isPlaying) return;
 
         try {
+            // Initialize audio system
             await keyboardAudioManager.initialize();
             const audioContext = keyboardAudioManager.getContext();
             if (!audioContext) throw new Error('No audio context');
@@ -51,6 +56,10 @@ export class PlaybackService {
                 await audioContext.resume();
             }
 
+            // Set up timing system - we use two different time bases:
+            // 1. Wall clock time (performance.now) for visual updates
+            // 2. Audio context time for precise audio scheduling
+            this.playbackStartTime = performance.now() - startTimeInMs;
             const startTimeInSeconds = startTimeInMs / 1000;
 
             this.state = {
@@ -62,8 +71,11 @@ export class PlaybackService {
 
             this.isPlaying = true;
             this.scheduledNotes = [];
-            this.scheduler();
-            this.startPositionUpdates();
+
+            // Start our two main systems
+            this.startScheduler();       // For audio playback
+            this.startTimelineUpdate();  // For visual timeline
+
             this.events.onPlaybackStart?.();
 
         } catch (error) {
@@ -72,19 +84,120 @@ export class PlaybackService {
         }
     }
 
+    // Visual timeline update system using requestAnimationFrame for smooth animation
+    private startTimelineUpdate() {
+        const updateTimeline = () => {
+            if (!this.isPlaying) return;
+
+            // Calculate position from wall clock time for smooth visual updates
+            const currentTime = performance.now() - this.playbackStartTime;
+            this.events.onPositionChange?.(currentTime);
+
+            this.animationFrameId = requestAnimationFrame(updateTimeline);
+        };
+
+        this.animationFrameId = requestAnimationFrame(updateTimeline);
+    }
+
+    // Audio scheduling system that looks ahead to schedule upcoming notes
+    private startScheduler() {
+        if (!this.state || !this.isPlaying) return;
+
+        const currentTime = this.state.audioContext.currentTime;
+        const scheduleUntil = currentTime + this.SCHEDULE_AHEAD_TIME;
+
+        // Process each track's notes for scheduling
+        this.tracks.forEach(track => {
+            track.notes.forEach(note => {
+                const absoluteStartTime = this.state!.startTime + (note.timestamp / 1000);
+                const scheduleId = `${track.id}-${note.id}-${absoluteStartTime.toFixed(3)}`;
+
+                // Schedule notes within our look-ahead window
+                if (absoluteStartTime >= this.state!.lastScheduledTime &&
+                    absoluteStartTime < scheduleUntil &&
+                    !this.isNoteScheduled(scheduleId)) {
+                    this.scheduleNote(note, track.id, absoluteStartTime, scheduleId);
+                }
+            });
+        });
+
+        // Clean up notes that have already played
+        this.scheduledNotes = this.scheduledNotes.filter(
+            scheduled => scheduled.absoluteStartTime >= currentTime
+        );
+
+        // Update scheduling window and continue
+        this.state.lastScheduledTime = scheduleUntil;
+        this.schedulerTimer = window.setTimeout(
+            () => this.startScheduler(),
+            this.SCHEDULER_INTERVAL
+        );
+    }
+
+    private scheduleNote(note: NoteEvent, trackId: string, absoluteStartTime: number, scheduleId: string) {
+        try {
+            const previousMode = keyboardAudioManager.getCurrentMode();
+
+            // Configure synthesis for this note
+            if (note.synthesis.mode === 'tunable') {
+                keyboardAudioManager.setMode('tunable');
+
+                if (note.tuning !== undefined) {
+                    keyboardAudioManager.setNoteTuning(note.note, note.tuning);
+                }
+
+                if (note.synthesis.waveform) {
+                    keyboardAudioManager.setNoteWaveform(note.note, note.synthesis.waveform);
+                }
+            } else {
+                keyboardAudioManager.setMode('drums');
+            }
+
+            // Schedule the note to play
+            keyboardAudioManager.playExactNote({
+                ...note,
+                timestamp: absoluteStartTime,
+                duration: note.duration / 1000,
+                synthesis: {
+                    ...note.synthesis,
+                    envelope: {
+                        attack: 0.005,
+                        decay: 0,
+                        sustain: 1,
+                        release: 0.005,
+                        ...note.synthesis.envelope
+                    }
+                }
+            }, absoluteStartTime);
+
+            // Remember that we scheduled this note
+            this.scheduledNotes.push({
+                id: scheduleId,
+                note,
+                trackId,
+                absoluteStartTime
+            });
+
+            // Restore previous synthesis state
+            keyboardAudioManager.setMode(previousMode);
+            if (note.synthesis.mode === 'tunable' && note.tuning !== undefined) {
+                keyboardAudioManager.setNoteTuning(note.note, 0);
+            }
+
+        } catch (error) {
+            console.error('Note scheduling failed:', {
+                note: note.note,
+                time: absoluteStartTime,
+                error
+            });
+        }
+    }
+
     public stop() {
         if (!this.isPlaying) return;
 
         this.isPlaying = false;
-        if (this.schedulerTimer !== null) {
-            window.clearTimeout(this.schedulerTimer);
-            this.schedulerTimer = null;
-        }
-        if (this.updateTimer !== null) {
-            window.clearInterval(this.updateTimer);
-            this.updateTimer = null;
-        }
-
+        this.cleanupTimers();
         this.scheduledNotes = [];
         this.events.onPlaybackStop?.();
     }
@@ -97,115 +210,14 @@ export class PlaybackService {
         this.tracks = tracks;
     }
 
-    private scheduler() {
-        if (!this.state || !this.isPlaying) return;
-
-        const currentTime = this.state.audioContext.currentTime;
-        const scheduleUntil = currentTime + this.SCHEDULE_AHEAD_TIME;
-
-        this.tracks.forEach(track => {
-            track.notes.forEach(note => {
-                const absoluteStartTime = this.state!.startTime + (note.timestamp / 1000);
-                const scheduleId = `${track.id}-${note.id}-${absoluteStartTime.toFixed(3)}`;
-
-                if (absoluteStartTime >= this.state!.lastScheduledTime &&
-                    absoluteStartTime < scheduleUntil &&
-                    !this.isNoteScheduled(scheduleId)) {
-
-                    try {
-                        const previousMode = keyboardAudioManager.getCurrentMode();
-
-                        if (note.synthesis.mode === 'tunable') {
-                            keyboardAudioManager.setMode('tunable');
-
-                            if (note.tuning !== undefined) {
-                                keyboardAudioManager.setNoteTuning(note.note, note.tuning);
-                            }
-
-                            if (note.synthesis.waveform) {
-                                keyboardAudioManager.setNoteWaveform(
-                                    note.note,
-                                    note.synthesis.waveform
-                                );
-                            }
-                        } else {
-                            keyboardAudioManager.setMode('drums');
-                        }
-
-                        keyboardAudioManager.playExactNote({
-                            ...note,
-                            timestamp: absoluteStartTime,
-                            duration: note.duration / 1000,
-                            synthesis: {
-                                ...note.synthesis,
-                                envelope: {
-                                    attack: 0.005,
-                                    decay: 0,
-                                    sustain: 1,
-                                    release: 0.005,
-                                    ...note.synthesis.envelope
-                                }
-                            }
-                        }, absoluteStartTime);
-
-                        this.scheduledNotes.push({
-                            id: scheduleId,
-                            note,
-                            trackId: track.id,
-                            absoluteStartTime
-                        });
-
-                        keyboardAudioManager.setMode(previousMode);
-                        if (note.synthesis.mode === 'tunable' && note.tuning !== undefined) {
-                            keyboardAudioManager.setNoteTuning(note.note, 0);
-                        }
-
-                    } catch (error) {
-                        console.error('Note scheduling failed:', {
-                            error,
-                            note: note.note,
-                            time: absoluteStartTime
-                        });
-                    }
-                }
-            });
-        });
-
-        this.scheduledNotes = this.scheduledNotes.filter(
-            scheduled => scheduled.absoluteStartTime >= currentTime
-        );
-
-        this.state.lastScheduledTime = scheduleUntil;
-        this.schedulerTimer = window.setTimeout(
-            () => this.scheduler(),
-            this.SCHEDULER_INTERVAL
-        );
-    }
-
     private isNoteScheduled(scheduleId: string): boolean {
         return this.scheduledNotes.some(scheduled => scheduled.id === scheduleId);
     }
 
-    private startPositionUpdates() {
-        this.updateTimer = window.setInterval(() => {
-            if (!this.isPlaying) {
-                if (this.updateTimer !== null) {
-                    window.clearInterval(this.updateTimer);
-                    this.updateTimer = null;
-                }
-                return;
-            }
-
-            const currentTimeMs = this.getCurrentTimeInMs();
-            this.events.onPositionChange?.(currentTimeMs);
-        }, this.UPDATE_INTERVAL);
-    }
-
     public getCurrentTimeInMs(): number {
-        if (!this.state || !this.isPlaying) return 0;
-        const currentTime = this.state.audioContext.currentTime;
-        const elapsedSeconds = currentTime - this.state.startTime;
-        return elapsedSeconds * 1000;
+        // Use wall clock time for smooth visual timing
+        if (!this.isPlaying) return 0;
+        return performance.now() - this.playbackStartTime;
     }
 
     public setTempo(newTempo: number) {
@@ -213,9 +225,10 @@ export class PlaybackService {
 
         const currentTime = this.getCurrentTimeInMs();
         this.state.tempo = newTempo;
-        const newStartTimeSeconds = this.state.audioContext.currentTime - (currentTime / 1000);
 
-        this.state.startTime = newStartTimeSeconds;
+        // When tempo changes, update our timing system to maintain position
+        this.playbackStartTime = performance.now() - currentTime;
+        this.state.startTime = this.state.audioContext.currentTime - (currentTime / 1000);
         this.state.lastScheduledTime = this.state.audioContext.currentTime;
         this.scheduledNotes = [];
     }
@@ -223,21 +236,27 @@ export class PlaybackService {
     public seek(timeInMs: number) {
         if (!this.state) return;
 
-        const wasPlaying = this.isPlaying;
-        if (wasPlaying) {
-            this.stop();
-        }
+        // Update wall clock timing
+        this.playbackStartTime = performance.now() - timeInMs;
 
-        const newStartTimeSeconds = this.state.audioContext.currentTime - (timeInMs / 1000);
-        this.state.startTime = newStartTimeSeconds;
+        // Update audio scheduling system
+        this.state.startTime = this.state.audioContext.currentTime - (timeInMs / 1000);
         this.state.lastScheduledTime = this.state.audioContext.currentTime;
         this.scheduledNotes = [];
 
-        if (wasPlaying) {
-            this.start(timeInMs);
-        }
-
+        // Notify of position change
         this.events.onPositionChange?.(timeInMs);
+    }
+
+    private cleanupTimers() {
+        if (this.schedulerTimer !== null) {
+            window.clearTimeout(this.schedulerTimer);
+            this.schedulerTimer = null;
+        }
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
     }
 
     public dispose() {

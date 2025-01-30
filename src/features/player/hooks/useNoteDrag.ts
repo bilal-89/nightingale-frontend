@@ -21,7 +21,6 @@ export function useNoteDrag() {
     const handleDragStart = useCallback((
         e: React.MouseEvent<HTMLDivElement>,
         note: NoteEvent,
-        trackId: string,
         trackIndex: number
     ) => {
         e.stopPropagation();

@@ -102,7 +102,7 @@ export const Player: React.FC = () => {
             {/* Timeline Grid */}
             <TimelineGrid />
             {/*<TransportControls />*/}
-            <NoteInspector />
+            {/*<NoteInspector />*/}
         </Card>
     );
 };

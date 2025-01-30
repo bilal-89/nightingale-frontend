@@ -5,6 +5,7 @@ import {
     CardHeader,
     CardTitle,
 } from "./ui/card.tsx";
+import {NoteEvent} from "../types/arrangement.ts";
 
 interface NoteInspectorProps {
     noteEvent?: {

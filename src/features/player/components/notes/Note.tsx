@@ -1,5 +1,3 @@
-// src/features/player/components/notes/Note.tsx
-
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAppDispatch } from '../../hooks';
 import { selectNote } from '../../state/slices/player.slice';
@@ -93,14 +91,14 @@ const Note: React.FC<NoteProps> = ({
                     Math.max(PADDING, verticalPosition))}px`,
                 width: `${Math.max(4, width)}px`,
                 height: `${LAYOUT.NOTE_HEIGHT}px`,
-                backgroundColor: '#e8e4dc',
+                backgroundColor: '#968c7d',
                 opacity: note.velocity / 127,
                 boxShadow: isSelected || isLocalDragging
-                    ? 'inset 2px 2px 4px #d1cdc4, inset -2px -2px 4px #ffffff'
-                    : '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff',
+                    ? 'inset 2px 2px 3px rgba(0, 0, 0, 0.2), inset -1px -1px 2px rgba(255, 255, 255, 0.3)'
+                    : '2px 2px 3px rgba(0, 0, 0, 0.2), -1px -1px 2px rgba(255, 255, 255, 0.3), inset 1px 1px 1px rgba(255, 255, 255, 0.1)',
                 background: isSelected || isLocalDragging
-                    ? '#e8e4dc'
-                    : 'linear-gradient(145deg, #f0ece6, #e8e4dc)'
+                    ? '#968c7d'
+                    : 'linear-gradient(145deg, #a09483, #8c8270)'
             }}
             onMouseDown={handleMouseDown}
             onClick={handleClick}

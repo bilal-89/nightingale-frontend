@@ -1,7 +1,7 @@
 // src/features/player/hooks/useTracks.ts
 
 import { useAppDispatch, useAppSelector } from './useStore';
-import { NoteEvent, Track } from '../types';
+import { NoteEvent } from '../types';
 import {
     addTrack,
     deleteTrack,
@@ -13,6 +13,7 @@ import {
     selectTracks,
     selectCurrentTrack
 } from '../state/slices/player.slice';
+import {Track} from "../types/track.ts";
 
 export const useTracks = () => {
     const dispatch = useAppDispatch();
@@ -50,20 +51,20 @@ export const useTracks = () => {
             dispatch(updateNoteParameters({ trackId, noteId, updates }))
     };
 };
-
-// Optional: If you need quantization functionality
-export const useNoteQuantization = () => {
-    const { updateNoteParameters } = useTracks();
-
-    return {
-        quantizeNote: (
-            trackId: string,
-            noteId: string,
-            settings: { resolution: number; strength: number }
-        ) => {
-            // Implement quantization logic here
-            // This would snap the note to the nearest grid position based on resolution
-            // and apply the strength factor for partial quantization
-        }
-    };
-};
+//
+// // Optional: If you need quantization functionality
+// export const useNoteQuantization = () => {
+//     const { updateNoteParameters } = useTracks();
+//
+//     return {
+//         quantizeNote: (
+//             trackId: string,
+//             noteId: string,
+//             settings: { resolution: number; strength: number }
+//         ) => {
+//             // Implement quantization logic here
+//             // This would snap the note to the nearest grid position based on resolution
+//             // and apply the strength factor for partial quantization
+//         }
+//     };
+// };
