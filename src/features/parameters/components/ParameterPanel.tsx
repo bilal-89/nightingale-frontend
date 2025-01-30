@@ -3,15 +3,17 @@ import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import {
     selectIsPanelVisible,
     setKeyParameter,
-    togglePanel
+    togglePanel,
+    KeyParameters
 } from '../../../store/slices/keyboard/keyboard.slice';
 import { useParameters } from '../../player/hooks/useParameters';
 import { selectSelectedNote } from '../../player/state/slices/player.slice';
 
-// Define the possible contexts our parameter panel can be in
+// Define our possible parameter contexts and groups
 type ParameterContext = 'keyboard' | 'note';
+type ParameterGroup = 'envelope' | 'note' | 'filter';  // Added 'filter' to groups
 
-// Define the structure of a parameter with all its properties
+// Define our parameter interface with strong typing
 interface Parameter {
     id: string;
     name: string;
@@ -22,11 +24,12 @@ interface Parameter {
     defaultValue: number;
     contexts: ParameterContext[];
     extraControls?: boolean;
-    group?: 'envelope' | 'note';
+    group?: ParameterGroup;  // Updated to use ParameterGroup type
 }
 
-// Define all available parameters for both keyboard and note contexts
+// Define all available parameters including new filter controls
 const parameters: Parameter[] = [
+    // Note parameters
     {
         id: 'tuning',
         name: 'Tuning',
@@ -48,7 +51,19 @@ const parameters: Parameter[] = [
         contexts: ['keyboard', 'note'],
         group: 'note'
     },
-    // ADSR parameters - available in both contexts
+    {
+        id: 'microTiming',
+        name: 'Micro-timing',
+        min: -50,
+        max: 50,
+        step: 1,
+        unit: 'ms',
+        defaultValue: 0,
+        contexts: ['note'],
+        extraControls: true,
+        group: 'note'
+    },
+    // ADSR Envelope parameters
     {
         id: 'attack',
         name: 'Attack',
@@ -93,28 +108,85 @@ const parameters: Parameter[] = [
         contexts: ['keyboard', 'note'],
         group: 'envelope'
     },
-    // Note-specific parameters
+    // Filter parameters
     {
-        id: 'microTiming',
-        name: 'Micro-timing',
-        min: -50,
-        max: 50,
+        id: 'filterCutoff',
+        name: 'Filter Cutoff',
+        min: 20,
+        max: 20000,
         step: 1,
-        unit: 'ms',
-        defaultValue: 0,
-        contexts: ['note'],
-        extraControls: true,
-        group: 'note'
+        unit: 'Hz',
+        defaultValue: 20000,
+        contexts: ['keyboard', 'note'],
+        group: 'filter',
+
+    },
+    {
+        id: 'filterResonance',
+        name: 'Resonance',
+        min: 0,
+        max: 20,
+        step: 0.1,
+        unit: 'Q',
+        defaultValue: 0.707,
+        contexts: ['keyboard', 'note'],
+        group: 'filter'
     }
 ];
 
-// Individual parameter control component for displaying and editing a single parameter
+const isValidParameterId = (id: string): id is keyof KeyParameters => {
+    return ['tuning', 'velocity', 'attack', 'decay', 'sustain', 'release', 'filterCutoff', 'filterResonance'].includes(id);
+};
+
+const isEnvelopeParam = (id: string): id is keyof typeof selectedNote.note.synthesis.envelope => {
+    return ['attack', 'decay', 'sustain', 'release'].includes(id);
+};
+
 const ParameterControl: React.FC<{
     parameter: Parameter;
     value: number;
     onChange: (value: number) => void;
     showExtraControls?: boolean;
 }> = ({ parameter, value, onChange, showExtraControls }) => {
+    // Transform value for display in the slider
+    const getSliderValue = (param: Parameter, val: number) => {
+        if (param.id === 'filterCutoff') {
+            // Convert frequency to logarithmic position (0-100)
+            return Math.round((Math.log(val) - Math.log(param.min)) /
+                (Math.log(param.max) - Math.log(param.min)) * 100);
+        }
+        return val;
+    };
+
+    // Transform slider value back to frequency
+    const getFrequencyValue = (param: Parameter, val: number) => {
+        if (param.id === 'filterCutoff') {
+            // Convert slider position (0-100) to frequency
+            const minLog = Math.log(param.min);
+            const maxLog = Math.log(param.max);
+            return Math.round(Math.exp(minLog + (val / 100) * (maxLog - minLog)));
+        }
+        return val;
+    };
+
+    const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = Number(e.target.value);
+        if (parameter.id === 'filterCutoff') {
+            // For filter cutoff, convert from slider position to frequency
+            onChange(getFrequencyValue(parameter, newValue));
+        } else {
+            onChange(newValue);
+        }
+    };
+
+    // Calculate the visual progress for the slider
+    const getProgressWidth = () => {
+        const displayValue = getSliderValue(parameter, value);
+        const min = parameter.id === 'filterCutoff' ? 0 : parameter.min;
+        const max = parameter.id === 'filterCutoff' ? 100 : parameter.max;
+        return `${((displayValue - min) / (max - min)) * 100}%`;
+    };
+
     return (
         <div className="p-4 rounded-2xl bg-[#e5e9ec]"
              style={{
@@ -153,16 +225,16 @@ const ParameterControl: React.FC<{
                  }}>
                 <input
                     type="range"
-                    min={parameter.min}
-                    max={parameter.max}
-                    step={parameter.step}
-                    value={value}
-                    onChange={(e) => onChange(Number(e.target.value))}
+                    min={parameter.id === 'filterCutoff' ? 0 : parameter.min}
+                    max={parameter.id === 'filterCutoff' ? 100 : parameter.max}
+                    step={parameter.id === 'filterCutoff' ? 1 : parameter.step}
+                    value={getSliderValue(parameter, value)}
+                    onChange={handleSliderChange}
                     className="absolute w-full h-full opacity-0 cursor-pointer"
                 />
                 <div className="absolute h-full bg-blue-500 rounded-full"
                      style={{
-                         width: `${((value - parameter.min) / (parameter.max - parameter.min)) * 100}%`,
+                         width: getProgressWidth(),
                          boxShadow: '2px 2px 4px rgba(0,0,0,0.1)'
                      }}
                 />
@@ -178,119 +250,97 @@ const ParameterPanel: React.FC = () => {
     const selectedNote = useAppSelector(selectSelectedNote);
     const isPanelVisible = useAppSelector(selectIsPanelVisible);
     const [isPressed, setIsPressed] = useState(false);
-    const { handleParameterChange, parameterService } = useParameters();
+    const { handleParameterChange } = useParameters();
     const keyboardActiveNotes = useAppSelector(state => state.keyboard.activeNotes);
     const keyParameters = useAppSelector(state => state.keyboard.keyParameters);
-    const [isKeyboardActive, setIsKeyboardActive] = useState(false);
-
-    // Add state for managing context and keyboard interaction
     const [activeContext, setActiveContext] = useState<ParameterContext>('keyboard');
-    const [lastKeyboardInteraction, setLastKeyboardInteraction] = useState(0);
 
-
-    // Effect to handle keyboard interactions
+    // Context switching effects
     useEffect(() => {
-        // We'll consider the keyboard active only when:
-        // 1. There are currently notes being played (keyboardActiveNotes > 0)
-        // OR
-        // 2. A key was just clicked/selected (selectedKey !== null)
-        const isCurrentlyActive = keyboardActiveNotes > 0 || selectedKey !== null;
-
+        const isCurrentlyActive = keyboardActiveNotes.length > 0 || selectedKey !== null;
         if (isCurrentlyActive) {
-            setIsKeyboardActive(true);
             setActiveContext('keyboard');
-        } else {
-            // If no keys are being played or selected, the keyboard is inactive
-            setIsKeyboardActive(false);
-
-            // If we have a selected note and the keyboard just became inactive,
-            // we should switch to note context
-            if (selectedNote) {
-                setActiveContext('note');
-            }
+        } else if (selectedNote) {
+            setActiveContext('note');
         }
     }, [selectedKey, keyboardActiveNotes, selectedNote]);
 
-    useEffect(() => {
-        if (selectedNote && !isKeyboardActive) {
-            // Only switch to note context if the keyboard isn't being used
-            setActiveContext('note');
-        }
-    }, [selectedNote, isKeyboardActive]);
-
-    // Enhanced selector to handle both contexts and value conversion
+    // Parameter value management
     const parameterValues = useMemo(() => {
         if (activeContext === 'note' && selectedNote) {
-            return parameters.reduce((values, param) => {
-                if (!param.contexts.includes('note')) return values;
-
+            const values = parameters.reduce((acc, param) => {
                 let rawValue;
-                if (param.group === 'envelope') {
-                    rawValue = selectedNote.note.synthesis?.envelope?.[param.id];
-                } else {
-                    rawValue = selectedNote.note[param.id];
+
+                switch (param.group) {
+                    case 'filter':
+                        // Handle filter parameters specifically
+                        rawValue = param.id === 'filterCutoff'
+                            ? selectedNote.note.synthesis?.effects?.filter?.frequency
+                            : selectedNote.note.synthesis?.effects?.filter?.Q;
+                        break;
+                    case 'envelope':
+                        if (isEnvelopeParam(param.id)) {
+                            rawValue = selectedNote.note.synthesis?.envelope?.[param.id];
+                        }
+                        break;
+                    default:
+                        rawValue = selectedNote.note[param.id];
                 }
 
-                // Direct value handling for note parameters
-                values[param.id] = rawValue ?? param.defaultValue;
-                return values;
+                console.log(`Parameter ${param.id}:`, { rawValue }); // Debug log
+                acc[param.id] = rawValue ?? param.defaultValue;
+                return acc;
             }, {} as Record<string, number>);
+
+            return values;
         }
 
         if (activeContext === 'keyboard' && selectedKey !== null) {
             return parameters.reduce((values, param) => {
-                if (!param.contexts.includes('keyboard')) return values;
-
-                // We now correctly access the parameter value from the keyboard parameters state
-                const keyValue = keyParameters[selectedKey]?.[param.id]?.value;
-                values[param.id] = keyValue ?? param.defaultValue;
+                if (isValidParameterId(param.id)) {
+                    const keyValue = keyParameters[selectedKey]?.[param.id]?.value;
+                    values[param.id] = keyValue ?? param.defaultValue;
+                }
                 return values;
             }, {} as Record<string, number>);
         }
 
         return {};
-    }, [activeContext, selectedKey, selectedNote, keyParameters]); // Added keyParameters to dependencies
+    }, [activeContext, selectedKey, selectedNote, keyParameters]);
 
-    // Panel interaction handlers
+
+    // Interaction handlers
     const handlePanelClick = () => dispatch(togglePanel());
     const handleMouseDown = () => setIsPressed(true);
     const handleMouseUp = () => setIsPressed(false);
     const handleMouseLeave = () => setIsPressed(false);
 
-    // Parameter update handler for both contexts
     const handleParameterUpdate = useMemo(() => (
         (parameterId: string, value: number) => {
+            console.log('Parameter update:', { parameterId, value }); // Debug log
+
             if (activeContext === 'keyboard' && selectedKey !== null) {
                 dispatch(setKeyParameter({
                     keyNumber: selectedKey,
-                    parameter: parameterId as any,
+                    parameter: parameterId,
                     value
                 }));
             } else if (activeContext === 'note' && selectedNote) {
-                // For notes, we're already getting the display value from the slider
                 handleParameterChange(
                     selectedNote.trackId,
                     selectedNote.note.id,
                     parameterId,
-                    value  // This is already in display value format
+                    value
                 );
             }
         }
     ), [dispatch, selectedKey, selectedNote, activeContext, handleParameterChange]);
 
-    // Show only parameters relevant to current context
-    const availableParameters = parameters.filter(param =>
-        param.contexts.includes(activeContext)
-    );
 
-    // Calculate panel height based on visible parameters
-    const totalParameterHeight = availableParameters.length * 96;
-
-    // Get container style based on press state
+    // Style management
     const getContainerStyle = () => {
         const baseStyle = {
-            height: `${totalParameterHeight + 48}px`,
-            transition: 'all 100ms ease-in-out',
+            transition: 'all 100ms ease-in-out'
         };
 
         if (isPressed) {
@@ -298,7 +348,7 @@ const ParameterPanel: React.FC = () => {
                 ...baseStyle,
                 boxShadow: 'inset 2px 2px 5px #c8ccd0, inset -2px -2px 5px #ffffff',
                 transform: 'translateY(1px)',
-                border: '1px solid rgba(255, 255, 255, 0.9)',
+                border: '1px solid rgba(255, 255, 255, 0.9)'
             };
         }
 
@@ -306,9 +356,22 @@ const ParameterPanel: React.FC = () => {
             ...baseStyle,
             boxShadow: '4px 4px 10px #c8ccd0, -4px -4px 10px #ffffff',
             transform: 'translateY(0)',
-            border: '1px solid rgba(255, 255, 255, 0.7)',
+            border: '1px solid rgba(255, 255, 255, 0.7)'
         };
     };
+
+    // Organize parameters by group
+    const parametersByGroup = useMemo(() => {
+        const groups = new Map<ParameterGroup, Parameter[]>();
+        parameters.forEach(param => {
+            if (param.group && param.contexts.includes(activeContext)) {
+                const group = groups.get(param.group) || [];
+                group.push(param);
+                groups.set(param.group, group);
+            }
+        });
+        return groups;
+    }, [activeContext]);
 
     return (
         <div
@@ -337,23 +400,23 @@ const ParameterPanel: React.FC = () => {
                     )}
                 </div>
 
-                {availableParameters.map(param => (
-                    <ParameterControl
-                        key={param.id}
-                        parameter={param}
-                        value={parameterValues[param.id] ?? param.defaultValue}
-                        onChange={(value) => handleParameterUpdate(param.id, value)}
-                        showExtraControls={param.extraControls && activeContext === 'note'}
-                    />
+                {/* Render parameters by group */}
+                {Array.from(parametersByGroup.entries()).map(([group, groupParams]) => (
+                    <div key={group} className="mb-4">
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">
+                            {group.charAt(0).toUpperCase() + group.slice(1)}
+                        </h3>
+                        {groupParams.map(param => (
+                            <ParameterControl
+                                key={param.id}
+                                parameter={param}
+                                value={parameterValues[param.id] ?? param.defaultValue}
+                                onChange={(value) => handleParameterUpdate(param.id, value)}
+                                showExtraControls={param.extraControls && activeContext === 'note'}
+                            />
+                        ))}
+                    </div>
                 ))}
-            </div>
-
-            <div className="absolute inset-0 flex items-center justify-center"
-                 style={{
-                     opacity: isPanelVisible ? 0 : 1,
-                     transition: 'opacity 150ms ease-in-out',
-                     pointerEvents: isPanelVisible ? 'none' : 'auto'
-                 }}>
             </div>
         </div>
     );

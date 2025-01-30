@@ -22,6 +22,8 @@ export interface KeyParameters {
     decay: Parameter;
     sustain: Parameter;
     release: Parameter;
+    filterCutoff: Parameter;
+    filterResonance: Parameter;
 }
 
 export type SynthMode = 'tunable' | 'drums';
@@ -45,7 +47,9 @@ const defaultParameters: KeyParameters = {
     attack: { value: 50, defaultValue: 50 },
     decay: { value: 100, defaultValue: 100 },
     sustain: { value: 70, defaultValue: 70 },
-    release: { value: 150, defaultValue: 150 }
+    release: { value: 150, defaultValue: 150 },
+    filterCutoff: { value: 20000, defaultValue: 20000 },
+    filterResonance: { value: 0.707, defaultValue: 0.707 }
 };
 
 const initialState: KeyboardState = {
