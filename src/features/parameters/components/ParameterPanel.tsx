@@ -1,33 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { selectIsPanelVisible, togglePanel } from '../../../store/slices/keyboard/keyboard.slice';
-// import { selectSelectedNote } from '../../player/state/slices/player.slice';
-import { useParameterContext } from '../hooks/useParameterContext';
 import { useParameterValues } from '../hooks/useParameterValues';
 import { parameters } from '../constants/parameters';
+import { ParameterContext } from '../types/types';
 
-/**
- * A streamlined parameter panel that maintains the clean aesthetic of the original
- * while providing enhanced parameter organization and context awareness.
- */
 const ParameterPanel: React.FC = () => {
     const dispatch = useAppDispatch();
     const isPanelVisible = useAppSelector(selectIsPanelVisible);
-    // const selectedNote = useAppSelector(selectSelectedNote);
+
+    // Track both press state and context
     const [isPressed, setIsPressed] = useState(false);
+    const [context, setContext] = useState<ParameterContext>('keyboard');
 
-    // Get current context and parameter values
-    const activeContext = useParameterContext();
-    const { parameterValues, handleParameterUpdate } = useParameterValues(activeContext);
+    // Get parameter values and update handler for current context
+    const { parameterValues, handleParameterUpdate } = useParameterValues(context);
 
-    // Organize parameters by their groups
+    // Organize parameters by their functional groups
     const groups = {
-        note: parameters.filter(p => p.group === 'note' && p.contexts.includes(activeContext)),
-        envelope: parameters.filter(p => p.group === 'envelope' && p.contexts.includes(activeContext)),
-        filter: parameters.filter(p => p.group === 'filter' && p.contexts.includes(activeContext))
+        note: parameters.filter(p => p.group === 'note' && p.contexts.includes(context)),
+        envelope: parameters.filter(p => p.group === 'envelope' && p.contexts.includes(context)),
+        filter: parameters.filter(p => p.group === 'filter' && p.contexts.includes(context))
     };
 
-    // Panel style based on interaction state
+    // Track whether the click started on the container
+    const [clickedContainer, setClickedContainer] = useState(false);
+
+    // Handle mouse down - set states only if clicking the container directly
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+        // Check if the click target is the container itself
+        if (e.target === e.currentTarget) {
+            setIsPressed(true);
+            setClickedContainer(true);
+            if (!isPanelVisible) {
+                dispatch(togglePanel());
+            }
+        }
+    }, [dispatch, isPanelVisible]);
+
+    // Handle mouse up - switch context only if the click started on the container
+    const handleMouseUp = useCallback((e: React.MouseEvent) => {
+        if (isPressed && clickedContainer) {
+            setContext(prev => prev === 'keyboard' ? 'note' : 'keyboard');
+        }
+        setIsPressed(false);
+        setClickedContainer(false);
+    }, [isPressed, clickedContainer]);
+
+    // Handle mouse leave - reset pressed state without switching context
+    const handleMouseLeave = useCallback(() => {
+        setIsPressed(false);
+        setClickedContainer(false);
+    }, []);
+
+    // Visual feedback styles for press interaction
     const getContainerStyle = () => ({
         transition: 'all 100ms ease-in-out',
         ...(isPressed ? {
@@ -43,39 +69,32 @@ const ParameterPanel: React.FC = () => {
 
     return (
         <div
-            onClick={() => dispatch(togglePanel())}
-            onMouseDown={() => setIsPressed(true)}
-            onMouseUp={() => setIsPressed(false)}
-            onMouseLeave={() => setIsPressed(false)}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
             className="w-full max-w-md p-6 bg-[#e5e9ec] rounded-3xl cursor-pointer relative"
             style={getContainerStyle()}
         >
+            {/* Panel content container with visibility animation */}
             <div
                 className="space-y-6"
                 style={{
-                    opacity: isPanelVisible ? 1 : 0,
+                    opacity: isPanelVisible && !isPressed ? 1 : 0,
                     transition: 'opacity 150ms ease-in-out',
-                    pointerEvents: isPanelVisible ? 'auto' : 'none'
+                    pointerEvents: isPanelVisible && !isPressed ? 'auto' : 'none'
                 }}
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Panel header */}
+                {/* Rest of the component remains unchanged */}
                 <div className="flex justify-between items-center mb-4">
                     <div className="text-sm font-medium text-gray-700">
-                        {activeContext === 'note' ? 'Note Parameters' : 'Keyboard Parameters'}
+                        {context === 'note' ? 'Note Parameters' : 'Keyboard Parameters'}
                     </div>
-                    {/*{selectedNote && activeContext === 'note' && (*/}
-                    {/*    <div className="text-xs text-gray-500">*/}
-                    {/*        Note: {selectedNote.note.note}*/}
-                    {/*    </div>*/}
-                    {/*)}*/}
                 </div>
 
-                {/* Parameter groups */}
                 <div className="space-y-6">
                     {Object.entries(groups).map(([groupName, groupParams]) => (
                         <div key={groupName} className="space-y-4">
-                            {/* Group parameters */}
                             {groupParams.map(param => (
                                 <div
                                     key={param.id}
@@ -89,7 +108,7 @@ const ParameterPanel: React.FC = () => {
                                             {param.name}
                                         </label>
                                         <div className="flex items-center gap-2">
-                                            {param.extraControls && activeContext === 'note' && (
+                                            {param.extraControls && context === 'note' && (
                                                 <>
                                                     <button
                                                         onClick={() => handleParameterUpdate(
@@ -118,7 +137,6 @@ const ParameterPanel: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Parameter slider */}
                                     <div
                                         className="relative h-2 bg-[#e5e9ec] rounded-full"
                                         style={{
