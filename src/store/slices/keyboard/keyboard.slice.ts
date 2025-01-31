@@ -101,7 +101,7 @@ const keyboardSlice = createSlice({
 
         setParameterContext: (state, action: PayloadAction<ParameterContext>) => {
             state.parameterContext = action.payload;
-            // Clear selected key when switching to note context
+            // Clear keyboard selection when switching to note context
             if (action.payload === 'note') {
                 state.selectedKey = null;
             }
@@ -184,6 +184,7 @@ const keyboardSlice = createSlice({
             state.parameterContext = 'keyboard';
         }
     }
+
 });
 
 export const {
