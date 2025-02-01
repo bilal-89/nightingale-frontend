@@ -1,6 +1,7 @@
 import { SynthesisParameters } from '../../audio/types/audioTypes';
 
 export interface NoteEvent {
+    tuning: number;
     id: string;
     note: number;
     timestamp: number;

@@ -92,17 +92,26 @@ export class ParameterService {
         const definition = this.definitions.get(parameterId);
         if (!definition) return 0;
 
-        // For tuning, we work directly with cent values
-        if (parameterId === 'tuning') {
-            console.log('Converting tuning value:', {
-                display: displayValue,
-                internal: displayValue
-            });
-            return displayValue;
+        let internalValue: number;
+
+        // Direct milliseconds to seconds conversion for ADSR time parameters
+        if (['attack', 'decay', 'release'].includes(parameterId)) {
+            internalValue = displayValue / 1000;
+            // Convert range from ms to seconds for comparison
+            const minSeconds = definition.range.min;
+            const maxSeconds = definition.range.max;
+            return Math.max(minSeconds, Math.min(maxSeconds, internalValue));
         }
 
-        // For other parameters, apply the display scale conversion
-        return displayValue / definition.display.scale;
+        // Special handling for sustain (percentage to ratio)
+        if (parameterId === 'sustain') {
+            internalValue = displayValue / 100; // Convert percentage to ratio
+            return Math.max(definition.range.min, Math.min(definition.range.max, internalValue));
+        }
+
+        // Handle other parameters (like tuning)
+        internalValue = displayValue / definition.display.scale;
+        return Math.max(definition.range.min, Math.min(definition.range.max, internalValue));
     }
 
     /**

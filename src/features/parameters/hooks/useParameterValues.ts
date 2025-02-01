@@ -36,6 +36,7 @@ export const useParameterValues = (activeContext: ParameterContext) => {
     // Get parameter change handler from useParameters hook
     const { handleParameterChange } = useParameters();
 
+
     /**
      * Calculate current parameter values based on context and selection state.
      * This handles both keyboard and note contexts, providing appropriate values
@@ -60,18 +61,42 @@ export const useParameterValues = (activeContext: ParameterContext) => {
                     case 'envelope': {
                         // Handle envelope parameters (ADSR)
                         if (isEnvelopeParam(param.id)) {
-                            rawValue = selectedNote.note.synthesis?.envelope?.[param.id];
+                            // Convert from internal (seconds) to display (ms)
+                            const internalValue = selectedNote.note.synthesis?.envelope?.[param.id];
+                            if (internalValue !== undefined) {
+                                // Time parameters need to be converted from seconds to ms
+                                if (['attack', 'decay', 'release'].includes(param.id)) {
+                                    rawValue = internalValue * 1000;
+                                } else if (param.id === 'sustain') {
+                                    // Sustain needs to be converted from ratio to percentage
+                                    rawValue = internalValue * 100;
+                                } else {
+                                    rawValue = internalValue;
+                                }
+                            }
                         }
                         break;
                     }
                     default: {
                         // Handle basic note properties (tuning, velocity, etc.)
                         if (isNoteProperty(param.id)) {
-                            rawValue = selectedNote.note[param.id];
+                            if (param.id === 'velocity') {
+                                rawValue = selectedNote.note.velocity;
+                            } else if (param.id === 'tuning') {
+                                rawValue = selectedNote.note.tuning;
+                            } else {
+                                rawValue = selectedNote.note[param.id];
+                            }
                         }
                         break;
                     }
                 }
+
+                console.log(`Parameter ${param.id} value:`, {
+                    raw: rawValue,
+                    default: param.defaultValue,
+                    final: rawValue ?? param.defaultValue
+                });
 
                 // Use default value if no value is found
                 acc[param.id] = rawValue ?? param.defaultValue;

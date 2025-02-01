@@ -1,14 +1,13 @@
-// src/features/player/hooks/useParameters.ts
-
 import { useCallback } from 'react';
-import { useAppDispatch } from './useStore';
+import { useAppDispatch, useAppSelector } from './useStore';
 import { ParameterService } from '../parameters/parameter.service';
-import { updateNoteParameters } from '../state/slices/player.slice';
+import { updateNoteParameters, selectSelectedNote } from '../state/slices/player.slice';
 
 const parameterService = new ParameterService();
 
 export const useParameters = () => {
     const dispatch = useAppDispatch();
+    const selectedNote = useAppSelector(selectSelectedNote);
 
     const handleParameterChange = useCallback((
         trackId: string,
@@ -36,7 +35,9 @@ export const useParameters = () => {
         switch (parameterService.getDefinition(parameterId)?.group) {
             case 'envelope':
                 updates.synthesis = {
+                    ...selectedNote?.note.synthesis,  // Preserve existing synthesis state
                     envelope: {
+                        ...selectedNote?.note.synthesis?.envelope,  // Preserve existing envelope state
                         [parameterId]: internalValue
                     }
                 };
@@ -62,7 +63,7 @@ export const useParameters = () => {
             noteId,
             updates
         }));
-    }, [dispatch]);
+    }, [dispatch, selectedNote]);
 
     return {
         parameterService,
