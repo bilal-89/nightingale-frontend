@@ -346,7 +346,6 @@ class KeyboardAudioManager {
             } else {
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
-                const filterNode = this.audioContext.createBiquadFilter();
                 const envelope = noteEvent.synthesis.envelope;
                 const maxGain = this.velocityToGain(noteEvent.velocity);
 
@@ -357,58 +356,57 @@ class KeyboardAudioManager {
                     time
                 );
 
-                // Configure filter
-                filterNode.type = 'lowpass';
-                if (noteEvent.synthesis.effects?.filter) {
-                    filterNode.frequency.setValueAtTime(
-                        noteEvent.synthesis.effects.filter.frequency,
-                        time
-                    );
-                    filterNode.Q.setValueAtTime(
-                        noteEvent.synthesis.effects.filter.Q,
-                        time
-                    );
-                }
-
-                // Set up audio routing
-                oscillator.connect(filterNode);
-                filterNode.connect(gainNode);
-                gainNode.connect(this.mainGain!);
-
-                // Calculate timing points
+                // Calculate envelope timings
                 const attackEndTime = time + envelope.attack;
-                const decayEndTime = attackEndTime + envelope.decay;
                 const releaseStartTime = time + noteEvent.duration;
                 const releaseEndTime = releaseStartTime + envelope.release;
 
-                // Initialize gain at 0
+                // Set initial gain
                 gainNode.gain.setValueAtTime(0, time);
 
-                // Attack phase - using linear ramp instead of curve
-                gainNode.gain.linearRampToValueAtTime(maxGain, attackEndTime);
+                // Handle attack phase differently based on attack time
+                if (envelope.attack <= 0.001) {
+                    gainNode.gain.setValueAtTime(maxGain, time);
+                } else {
+                    gainNode.gain.setValueCurveAtTime(
+                        this.createAttackCurve(noteEvent.velocity),
+                        time,
+                        envelope.attack
+                    );
+                }
 
-                // Decay phase - using linear ramp to sustain level
+                // Decay and sustain
                 const sustainLevel = maxGain * envelope.sustain;
-                gainNode.gain.linearRampToValueAtTime(sustainLevel, decayEndTime);
+                gainNode.gain.setTargetAtTime(
+                    sustainLevel,
+                    attackEndTime,
+                    envelope.decay / 4
+                );
 
-                // Release phase - using linear ramp
-                gainNode.gain.linearRampToValueAtTime(sustainLevel, releaseStartTime);
-                gainNode.gain.linearRampToValueAtTime(0, releaseEndTime);
+                // Release phase
+                gainNode.gain.setTargetAtTime(
+                    0,
+                    releaseStartTime,
+                    envelope.release / 3
+                );
 
-                // Start and stop the oscillator
+                // Connect audio path
+                oscillator.connect(gainNode);
+                gainNode.connect(this.mainGain!);
+
+                // Schedule precise start/stop times
                 oscillator.start(time);
-                oscillator.stop(releaseEndTime + 0.05);
+                oscillator.stop(releaseEndTime + 0.1);
 
                 // Clean up
                 setTimeout(() => {
                     try {
                         oscillator.disconnect();
-                        filterNode.disconnect();
                         gainNode.disconnect();
                     } catch (error) {
                         console.error('Error cleaning up note:', error);
                     }
-                }, (releaseEndTime + 0.1 - this.audioContext.currentTime) * 1000);
+                }, (releaseEndTime + 0.2 - this.audioContext.currentTime) * 1000);
             }
         } catch (error) {
             console.error('Error in playExactNote:', error);

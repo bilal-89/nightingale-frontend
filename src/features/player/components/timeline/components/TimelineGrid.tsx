@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { usePlayback } from '../../../hooks';
 import { useAppDispatch, useAppSelector } from '../../../hooks';
 import {
@@ -28,6 +28,9 @@ export const TimelineGrid: React.FC = () => {
     const currentTrackIndex = useAppSelector(selectCurrentTrack);
     const timelineSettings = useAppSelector(selectTimelineSettings);
     const selectedNoteId = useAppSelector(state => state.player.selectedNoteId);
+
+    // Track which button is currently being pressed for interaction feedback
+    const [pressedTrackId, setPressedTrackId] = useState<string | null>(null);
 
     // Calculate note ranges for each track
     const trackRanges = useMemo(() => {
@@ -59,6 +62,16 @@ export const TimelineGrid: React.FC = () => {
         return `${beats}.${subdivision}`;
     }, []);
 
+    // Enhanced track button interaction handlers
+    const handleTrackMouseDown = (trackId: string) => setPressedTrackId(trackId);
+    const handleTrackMouseUp = (trackId: string, index: number) => {
+        if (pressedTrackId === trackId) {
+            handleTrackSelect(index);
+        }
+        setPressedTrackId(null);
+    };
+    const handleTrackMouseLeave = () => setPressedTrackId(null);
+
     return (
         <div className="w-full bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="flex">
@@ -69,22 +82,30 @@ export const TimelineGrid: React.FC = () => {
                         Time
                     </div>
 
-                    {/* Track buttons */}
+                    {/* Track buttons with enhanced tactile feedback */}
                     {tracks.map((track, index) => (
                         <button
                             key={track.id}
-                            onClick={() => handleTrackSelect(index)}
+                            onMouseDown={() => handleTrackMouseDown(track.id)}
+                            onMouseUp={() => handleTrackMouseUp(track.id, index)}
+                            onMouseLeave={handleTrackMouseLeave}
                             className={cn(
-                                "w-full h-24 px-3 border-b border-[#d1cdc4] transition-all duration-200",
+                                "w-full h-24 px-3 border-b border-[#d1cdc4] transition-all duration-100",
                                 "flex items-center text-left",
                                 currentTrackIndex === index
-                                    ? "bg-[#e8e4dc] shadow-inner"
+                                    ? "bg-[#e8e4dc]"
                                     : "bg-[#f5f2ed] hover:bg-[#eae6df]"
                             )}
                             style={{
-                                boxShadow: currentTrackIndex === index
-                                    ? 'inset 2px 2px 4px #d1cdc4, inset -2px -2px 4px #ffffff'
-                                    : undefined
+                                boxShadow: currentTrackIndex === index || pressedTrackId === track.id
+                                    ? 'inset 2px 2px 5px #c8ccd0, inset -2px -2px 5px #ffffff'
+                                    : '4px 4px 10px #c8ccd0, -4px -4px 10px #ffffff',
+                                transform: (currentTrackIndex === index || pressedTrackId === track.id)
+                                    ? 'translateY(1px)'
+                                    : 'translateY(0)',
+                                border: (currentTrackIndex === index || pressedTrackId === track.id)
+                                    ? '1px solid rgba(255, 255, 255, 0.9)'
+                                    : '1px solid rgba(255, 255, 255, 0.7)'
                             }}
                         >
                             <span className={cn(
