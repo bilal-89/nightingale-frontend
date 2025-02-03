@@ -58,7 +58,7 @@ export const Track: React.FC<TrackProps> = ({
                     isSelected ? "text-gray-900" : "text-gray-600",
 
                     // Hover effects
-                    "hover:bg-[#eae6df]",
+                    // "hover:bg-[#eae6df]",
 
                     // Focus styles
                     "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

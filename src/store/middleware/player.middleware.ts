@@ -21,7 +21,7 @@ const isPlayerAction = (action: unknown): action is AnyAction & { payload?: any 
 
 export const playerMiddleware: Middleware = store => next => action => {
     if (!isPlayerAction(action)) return next(action);
-    
+
     const result = next(action);
     const state = store.getState();
     const keyboardState = state.keyboard;
@@ -32,18 +32,22 @@ export const playerMiddleware: Middleware = store => next => action => {
                 const note = action.payload;
                 const msTime = Date.now() - (state.player.recordingStartTime || 0);
 
+                // Get tuning value from keyboard state
+                const tuningValue = keyboardState.keyParameters[note]?.tuning?.value ?? 0;
+
                 // Get waveform from keyboard state
                 const currentWaveform = keyboardState?.keyParameters?.[note]?.waveform
                     || keyboardState?.globalWaveform
                     || 'sine';
 
-                // Create note event with timing and synthesis info
+                // Create note event with timing, tuning, and synthesis info
                 const noteEvent: NoteEvent = {
                     id: `note-${Date.now()}-${note}`,
                     note,
-                    timestamp: msTime, // Store in milliseconds for direct track positioning
+                    timestamp: msTime,
                     velocity: 100,
-                    duration: 0,  // Will be updated when note ends
+                    duration: 0,
+                    tuning: tuningValue,  // Include tuning value in the note event
                     synthesis: {
                         mode: keyboardState?.mode || 'tunable',
                         waveform: currentWaveform,
@@ -58,12 +62,22 @@ export const playerMiddleware: Middleware = store => next => action => {
                     }
                 };
 
-                // Store both timing and synthesis info
+                // Log note recording with tuning
+                logNoteTiming('Note Start', {
+                    note,
+                    tuning: tuningValue,
+                    waveform: currentWaveform,
+                    mode: keyboardState?.mode,
+                    timestamp: msTime
+                });
+
+                // Store both timing and synthesis info, including tuning
                 activeNotes.set(note, {
                     startTime: msTime,
                     noteEvent,
                     synthesis: {
                         ...noteEvent.synthesis,
+                        tuning: tuningValue,  // Store tuning in synthesis info
                         originalTimestamp: msTime
                     }
                 });
@@ -90,20 +104,50 @@ export const playerMiddleware: Middleware = store => next => action => {
                         startTime: noteInfo.startTime,
                         endTime,
                         calculatedDuration: duration,
-                        noteId: noteInfo.noteEvent.id
+                        noteId: noteInfo.noteEvent.id,
+                        tuning: noteInfo.noteEvent.tuning  // Log tuning value
                     });
 
-                    // Update note duration in recording buffer
+                    // Update note duration in recording buffer, preserving tuning
                     store.dispatch({
                         type: 'player/updateNoteEvent',
                         payload: {
                             id: noteInfo.noteEvent.id,
                             duration,
-                            synthesis: noteInfo.synthesis
+                            tuning: noteInfo.noteEvent.tuning,  // Preserve tuning in update
+                            synthesis: {
+                                ...noteInfo.synthesis,
+                                tuning: noteInfo.noteEvent.tuning  // Include tuning in synthesis
+                            }
                         }
                     });
 
                     activeNotes.delete(action.payload);
+                }
+            }
+            break;
+        }
+
+        case 'keyboard/setKeyParameter': {
+            // Handle tuning parameter changes during recording
+            if (state.player.isRecording &&
+                action.payload.parameter === 'tuning' &&
+                activeNotes.has(action.payload.keyNumber)) {
+
+                const note = action.payload.keyNumber;
+                const newTuning = action.payload.value;
+                const noteInfo = activeNotes.get(note);
+
+                if (noteInfo) {
+                    // Update the active note's tuning
+                    noteInfo.noteEvent.tuning = newTuning;
+                    noteInfo.synthesis.tuning = newTuning;
+
+                    logNoteTiming('Tuning Update', {
+                        note,
+                        newTuning,
+                        noteId: noteInfo.noteEvent.id
+                    });
                 }
             }
             break;

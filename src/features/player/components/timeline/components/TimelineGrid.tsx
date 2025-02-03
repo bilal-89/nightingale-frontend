@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { usePlayback } from '../../../hooks';
+import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../hooks';
+import { useTiming } from '../../../hooks/useTiming';  // Our new timing hook
 import {
     selectCurrentTrack,
     selectTracks,
@@ -8,10 +8,12 @@ import {
     setCurrentTrack,
     addTrack
 } from '../../../state/slices/player.slice';
+import { selectIsPlaying } from '../../../state/slices/playback.slice';
 import Note from '../../notes/Note';
 import { TIMING } from '../../../utils/time.utils';
 import { cn } from '../../../../../lib/utils';
 
+// These constants define our grid layout and dimensions
 const GRID_CONSTANTS = {
     TRACKS: 4,
     CELLS: 64,
@@ -23,16 +25,26 @@ const GRID_CONSTANTS = {
 
 export const TimelineGrid: React.FC = () => {
     const dispatch = useAppDispatch();
-    const { isPlaying, currentTime } = usePlayback();
+
+    // Get timing information from our new hook instead of usePlayback
+    const { getCurrentTime } = useTiming();
+    const isPlaying = useAppSelector(selectIsPlaying);
+
+    // Other state selectors
     const tracks = useAppSelector(selectTracks);
     const currentTrackIndex = useAppSelector(selectCurrentTrack);
     const timelineSettings = useAppSelector(selectTimelineSettings);
     const selectedNoteId = useAppSelector(state => state.player.selectedNoteId);
 
-    // Track which button is currently being pressed for interaction feedback
+    // Track interaction state
     const [pressedTrackId, setPressedTrackId] = useState<string | null>(null);
 
-    // Calculate note ranges for each track
+    // Ref for animation frame management
+    const animationFrameRef = useRef<number | null>(null);
+    // Ref to store current playback position
+    const playbackPositionRef = useRef<number>(0);
+
+    // Calculate note ranges for each track for vertical positioning
     const trackRanges = useMemo(() => {
         return tracks.map(track => {
             if (track.notes.length === 0) {
@@ -46,23 +58,59 @@ export const TimelineGrid: React.FC = () => {
         });
     }, [tracks]);
 
-    // Calculate playback position
-    const playbackPosition = useMemo(() => {
-        const pixelsPerMs = timelineSettings.zoom;
-        return currentTime * pixelsPerMs;
-    }, [currentTime, timelineSettings.zoom]);
+    // Set up smooth playback position animation using requestAnimationFrame
+    useEffect(() => {
+        let lastTimestamp: number | null = null;
 
+        const updatePlaybackPosition = (timestamp: number) => {
+            if (!isPlaying) {
+                lastTimestamp = null;
+                return;
+            }
+
+            if (lastTimestamp === null) {
+                lastTimestamp = timestamp;
+            }
+
+            // Get current time from timing service
+            const currentTimeMs = getCurrentTime();
+
+            // Convert time to pixels based on zoom level
+            const pixelsPerMs = timelineSettings.zoom;
+            const newPosition = currentTimeMs * pixelsPerMs;
+
+            // Update position with smooth animation
+            playbackPositionRef.current = newPosition;
+
+            // Request next frame
+            animationFrameRef.current = requestAnimationFrame(updatePlaybackPosition);
+        };
+
+        if (isPlaying) {
+            animationFrameRef.current = requestAnimationFrame(updatePlaybackPosition);
+        }
+
+        // Cleanup animation frame on unmount or when playback stops
+        return () => {
+            if (animationFrameRef.current !== null) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }, [isPlaying, getCurrentTime, timelineSettings.zoom]);
+
+    // Track selection handler
     const handleTrackSelect = useCallback((trackIndex: number) => {
         dispatch(setCurrentTrack(trackIndex));
     }, [dispatch]);
 
+    // Time formatter for grid labels
     const formatGridTime = useCallback((cellIndex: number) => {
         const beats = Math.floor(cellIndex / TIMING.CELLS_PER_BEAT) + 1;
         const subdivision = (cellIndex % TIMING.CELLS_PER_BEAT) + 1;
         return `${beats}.${subdivision}`;
     }, []);
 
-    // Enhanced track button interaction handlers
+    // Track button interaction handlers
     const handleTrackMouseDown = (trackId: string) => setPressedTrackId(trackId);
     const handleTrackMouseUp = (trackId: string, index: number) => {
         if (pressedTrackId === trackId) {
@@ -94,7 +142,7 @@ export const TimelineGrid: React.FC = () => {
                                 "flex items-center text-left",
                                 currentTrackIndex === index
                                     ? "bg-[#e8e4dc]"
-                                    : "bg-[#f5f2ed] hover:bg-[#eae6df]"
+                                    : "bg-[#f5f2ed]"
                             )}
                             style={{
                                 boxShadow: currentTrackIndex === index || pressedTrackId === track.id
@@ -124,7 +172,7 @@ export const TimelineGrid: React.FC = () => {
                             "w-full h-12 px-3",
                             "flex items-center justify-center",
                             "text-sm font-medium text-gray-600",
-                            "bg-[#f5f2ed] hover:bg-[#eae6df] transition-all duration-200",
+                            // "bg-[#f5f2ed] hover:bg-[#eae6df] transition-all duration-200",
                             "shadow-[2px_2px_4px_#d1cdc4,_-2px_-2px_4px_#ffffff]"
                         )}
                     >
@@ -152,25 +200,8 @@ export const TimelineGrid: React.FC = () => {
                         {tracks.map((track, trackIndex) => (
                             <div
                                 key={track.id}
-                                className={cn(
-                                    "relative h-24 border-b border-[#d1cdc4]",
-                                    trackIndex === currentTrackIndex ? 'bg-[#f5f2ed]' : 'bg-[#f0ece6]'
-                                )}
+                                className="relative h-24 border-b border-[#d1cdc4] bg-[#f5f2ed]"
                             >
-                                {/* Grid background */}
-                                {Array(GRID_CONSTANTS.CELLS).fill(null).map((_, cellIndex) => (
-                                    <div
-                                        key={`cell-${trackIndex}-${cellIndex}`}
-                                        className="absolute border-r border-[#d1cdc4]"
-                                        style={{
-                                            left: cellIndex * GRID_CONSTANTS.CELL_WIDTH,
-                                            top: 0,
-                                            width: GRID_CONSTANTS.CELL_WIDTH,
-                                            height: '100%'
-                                        }}
-                                    />
-                                ))}
-
                                 {/* Notes */}
                                 {track.notes.map(note => (
                                     <Note
@@ -188,13 +219,13 @@ export const TimelineGrid: React.FC = () => {
                             </div>
                         ))}
 
-                        {/* Playback position indicator */}
+                        {/* Updated playback position indicator with hardware acceleration */}
                         {isPlaying && (
                             <div
-                                className="absolute top-0 bottom-0 w-px bg-green-500 z-20 pointer-events-none"
+                                className="absolute top-0 bottom-0 w-px bg-green-500 z-20 pointer-events-none transform-gpu"
                                 style={{
-                                    left: `${playbackPosition}px`,
-                                    transition: 'left 0.016s linear'
+                                    transform: `translateX(${playbackPositionRef.current}px)`,
+                                    willChange: 'transform'
                                 }}
                             />
                         )}
