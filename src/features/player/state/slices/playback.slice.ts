@@ -1,23 +1,30 @@
-// src/features/player/state/slices/playback.slice.ts
-
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../../../../store';
 import { PlaybackState, LoopRegion, SchedulingConfig } from '../../types/playback';
 
+// Helper to convert percentage to milliseconds
+const percentToMs = (percent: number, totalDuration: number) => {
+    return Math.floor(percent * totalDuration);
+};
+
+// Helper to convert milliseconds to percentage
+const msToPercent = (ms: number, totalDuration: number) => {
+    return ms / totalDuration;
+};
+
 interface PlaybackSliceState {
-    // Core playback state
     isPlaying: boolean;
-    currentTime: number;         // Now stored in milliseconds for continuous timing
+    currentTime: number;         // In milliseconds
     tempo: number;
+    totalDuration: number;       // Total duration in milliseconds
 
-    // Loop region configuration (also in milliseconds)
-    loopRegion?: LoopRegion;
+    // Loop configuration
+    loopRegion?: LoopRegion;    // Using existing LoopRegion type
     loopEnabled: boolean;
+    isSettingLoopPoints: boolean;// Track if we're in loop point setting mode
+    temporaryLoopStart?: number; // For storing first click position
 
-    // Scheduling configuration for stable audio playback
     schedulingConfig: SchedulingConfig;
-
-    // Additional playback features
     metronomeEnabled: boolean;
     countInEnabled: boolean;
     prerollBars: number;
@@ -27,10 +34,12 @@ const initialState: PlaybackSliceState = {
     isPlaying: false,
     currentTime: 0,
     tempo: 120,
+    totalDuration: 4 * 60 * 1000, // Default 4 bars at 120bpm = 8000ms
     loopEnabled: false,
+    isSettingLoopPoints: false,
     schedulingConfig: {
-        scheduleAheadTime: 0.1,  // 100ms look-ahead for stability
-        schedulerInterval: 25     // Update scheduler every 25ms
+        scheduleAheadTime: 0.1,
+        schedulerInterval: 25
     },
     metronomeEnabled: false,
     countInEnabled: false,
@@ -43,62 +52,101 @@ const playbackSlice = createSlice({
     reducers: {
         startPlayback: (state) => {
             state.isPlaying = true;
-            console.log('Playback started at:', state.currentTime);
         },
 
         stopPlayback: (state) => {
             state.isPlaying = false;
-            console.log('Playback stopped at:', state.currentTime);
         },
 
         updatePlaybackPosition: (state, action: PayloadAction<number>) => {
-            // Update position with millisecond precision
             const newTime = action.payload;
 
-            // Handle loop points if enabled
             if (state.loopEnabled && state.loopRegion) {
                 if (newTime >= state.loopRegion.end) {
                     state.currentTime = state.loopRegion.start;
-                    console.log('Loop point reached, resetting to:', state.currentTime);
                 } else {
                     state.currentTime = newTime;
                 }
             } else {
                 state.currentTime = newTime;
             }
-
-            // Log for debugging timing issues
-            console.log('Position updated:', {
-                time: state.currentTime,
-                isPlaying: state.isPlaying,
-                loopActive: state.loopEnabled && state.loopRegion
-            });
         },
 
         setPlaybackPosition: (state, action: PayloadAction<number>) => {
             state.currentTime = Math.max(0, action.payload);
-            console.log('Position manually set to:', state.currentTime);
         },
 
-        setTempo: (state, action: PayloadAction<number>) => {
-            state.tempo = Math.max(20, Math.min(300, action.payload));
-        },
-
-        setLoopRegion: (state, action: PayloadAction<LoopRegion>) => {
-            state.loopRegion = action.payload;
-            state.loopEnabled = true;
-            console.log('Loop region set:', action.payload);
-        },
-
-        clearLoopRegion: (state) => {
+        // New action for handling continuous loop point setting
+        startSettingLoopPoints: (state) => {
+            state.isSettingLoopPoints = true;
+            state.temporaryLoopStart = undefined;
             state.loopRegion = undefined;
             state.loopEnabled = false;
+        },
+
+        // Handle first click of loop point setting
+        setTemporaryLoopStart: (state, action: PayloadAction<number>) => {
+            const position = percentToMs(action.payload, state.totalDuration);
+            state.temporaryLoopStart = position;
+        },
+
+        // Handle second click and finalize loop points
+        finalizeLoopPoints: (state, action: PayloadAction<number>) => {
+            if (state.temporaryLoopStart !== undefined) {
+                const endPosition = percentToMs(action.payload, state.totalDuration);
+                const startPosition = state.temporaryLoopStart;
+
+                // Ensure start is before end
+                const start = Math.min(startPosition, endPosition);
+                const end = Math.max(startPosition, endPosition);
+
+                state.loopRegion = { start, end };
+                state.loopEnabled = true;
+                state.isSettingLoopPoints = false;
+                state.temporaryLoopStart = undefined;
+            }
+        },
+
+        // Update loop points through drag operations
+        updateLoopPoints: (state, action: PayloadAction<{ start?: number; end?: number }>) => {
+            if (!state.loopRegion) return;
+
+            const { start, end } = action.payload;
+            if (start !== undefined) {
+                const startMs = percentToMs(start, state.totalDuration);
+                if (startMs < state.loopRegion.end) {
+                    state.loopRegion.start = startMs;
+                }
+            }
+            if (end !== undefined) {
+                const endMs = percentToMs(end, state.totalDuration);
+                if (endMs > state.loopRegion.start) {
+                    state.loopRegion.end = endMs;
+                }
+            }
+        },
+
+        clearLoopPoints: (state) => {
+            state.loopRegion = undefined;
+            state.loopEnabled = false;
+            state.isSettingLoopPoints = false;
+            state.temporaryLoopStart = undefined;
         },
 
         toggleLoopEnabled: (state) => {
             if (state.loopRegion) {
                 state.loopEnabled = !state.loopEnabled;
             }
+        },
+
+        setTempo: (state, action: PayloadAction<number>) => {
+            state.tempo = Math.max(20, Math.min(300, action.payload));
+            // Update total duration based on new tempo
+            state.totalDuration = (4 * 60 * 1000 * 120) / state.tempo;
+        },
+
+        setTotalDuration: (state, action: PayloadAction<number>) => {
+            state.totalDuration = action.payload;
         },
 
         updateSchedulingConfig: (state, action: PayloadAction<Partial<SchedulingConfig>>) => {
@@ -122,34 +170,45 @@ const playbackSlice = createSlice({
     }
 });
 
-// Export all actions
+// Export actions
 export const {
     startPlayback,
     stopPlayback,
     updatePlaybackPosition,
     setPlaybackPosition,
-    setTempo,
-    setLoopRegion,
-    clearLoopRegion,
+    startSettingLoopPoints,
+    setTemporaryLoopStart,
+    finalizeLoopPoints,
+    updateLoopPoints,
+    clearLoopPoints,
     toggleLoopEnabled,
+    setTempo,
+    setTotalDuration,
     updateSchedulingConfig,
     toggleMetronome,
     toggleCountIn,
     setPrerollBars
 } = playbackSlice.actions;
 
-// Export selectors with proper time unit handling
+// Enhanced selectors
 export const selectIsPlaying = (state: RootState) => state.playback.isPlaying;
 export const selectCurrentTime = (state: RootState) => state.playback.currentTime;
 export const selectTempo = (state: RootState) => state.playback.tempo;
 export const selectLoopRegion = (state: RootState) => state.playback.loopRegion;
 export const selectIsLoopEnabled = (state: RootState) => state.playback.loopEnabled;
-export const selectSchedulingConfig = (state: RootState) => state.playback.schedulingConfig;
-export const selectMetronomeEnabled = (state: RootState) => state.playback.metronomeEnabled;
-export const selectCountInEnabled = (state: RootState) => state.playback.countInEnabled;
-export const selectPrerollBars = (state: RootState) => state.playback.prerollBars;
+export const selectIsSettingLoopPoints = (state: RootState) => state.playback.isSettingLoopPoints;
+export const selectTemporaryLoopStart = (state: RootState) => state.playback.temporaryLoopStart;
 
-// Combined playback state selector
+// New selector for converting loop points to percentages
+export const selectLoopRegionAsPercentages = (state: RootState) => {
+    if (!state.playback.loopRegion) return undefined;
+    const { start, end } = state.playback.loopRegion;
+    return {
+        start: msToPercent(start, state.playback.totalDuration),
+        end: msToPercent(end, state.playback.totalDuration)
+    };
+};
+
 export const selectPlaybackState = (state: RootState): PlaybackState => ({
     isPlaying: state.playback.isPlaying,
     currentTime: state.playback.currentTime,

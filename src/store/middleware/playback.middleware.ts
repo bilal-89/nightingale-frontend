@@ -1,34 +1,26 @@
 // src/store/middleware/playback.middleware.ts
 
 import { Middleware } from '@reduxjs/toolkit';
+import { TimingService } from '../../features/player/services/timing.service';
 import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
 import {
     selectClips,
     selectTempo,
     selectIsPlaying,
+    selectCurrentTime,
     updatePlaybackPosition,
     stopPlayback
 } from '../slices/arrangement/arrangement.slice';
+import {
+    selectLoopRegion,
+    selectIsLoopEnabled,
+    // selectSchedulingConfig
+} from '../../features/player/state/slices/playback.slice';
 
-const SCHEDULE_AHEAD_TIME = 0.1;
-const SCHEDULER_INTERVAL = 25;
-
-interface PlaybackState {
-    schedulerInterval: number | null;
-    animationFrame: number | null;
-    lastScheduleTime: number;
-    playbackStartTime: number;
-}
-
-const playbackState: PlaybackState = {
-    schedulerInterval: null,
-    animationFrame: null,
-    lastScheduleTime: 0,
-    playbackStartTime: 0
-};
+let timingService: TimingService | null = null;
 
 const debug = (message: string, data?: any) => {
-    console.log(`[Playback Middleware] ${message}`, data || '');
+    console.log(`[Playback] ${message}`, data || '');
 };
 
 export const playbackMiddleware: Middleware = store => next => async action => {
@@ -38,77 +30,94 @@ export const playbackMiddleware: Middleware = store => next => async action => {
         case 'arrangement/startPlayback': {
             debug('Starting playback');
             const state = store.getState();
-            const tempo = selectTempo(state);
+            const currentTime = selectCurrentTime(state);
+            const loopRegion = selectLoopRegion(state);
+            const isLoopEnabled = selectIsLoopEnabled(state);
+            const schedulingConfig = selectSchedulingConfig(state);
 
             try {
-                // Initialize audio if needed
-                await keyboardAudioManager.initialize();
-                const audioContext = keyboardAudioManager.getContext();
-                if (!audioContext) throw new Error('No audio context');
+                // Create new timing service if needed
+                if (!timingService) {
+                    timingService = new TimingService(
+                        {
+                            ...schedulingConfig,
+                            visualRefreshRate: 16.67
+                        },
+                        {
+                            onTick: (timeMs) => {
+                                const state = store.getState();
+                                const loopRegion = selectLoopRegion(state);
+                                const isLoopEnabled = selectIsLoopEnabled(state);
 
-                // Setup playback timing
-                playbackState.playbackStartTime = audioContext.currentTime;
-                playbackState.lastScheduleTime = audioContext.currentTime;
+                                // Handle loop points during playback
+                                if (isLoopEnabled && loopRegion && timeMs >= loopRegion.end) {
+                                    // Jump back to loop start
+                                    timingService?.seekTo(loopRegion.start);
+                                    store.dispatch(updatePlaybackPosition(loopRegion.start));
+                                } else {
+                                    store.dispatch(updatePlaybackPosition(timeMs));
+                                }
+                            },
+                            onScheduleNotes: (startTime, endTime) => {
+                                const state = store.getState();
+                                const clips = selectClips(state);
+                                const tempo = selectTempo(state);
+                                const loopRegion = selectLoopRegion(state);
+                                const isLoopEnabled = selectIsLoopEnabled(state);
 
-                // Setup scheduling loop
-                const scheduleNotes = () => {
-                    try {
-                        const now = audioContext.currentTime;
-                        const scheduleEnd = now + SCHEDULE_AHEAD_TIME;
-                        const clips = selectClips(state);
-                        const beatsPerSecond = tempo / 60;
+                                // Calculate actual scheduling window considering loop points
+                                let scheduleStart = startTime * 1000;
+                                let scheduleEnd = endTime * 1000;
 
-                        clips.forEach(clip => {
-                            // Convert grid position to beats
-                            const clipStartBeats = clip.startCell / 4; // Assuming 4 cells per beat
-
-                            clip.notes.forEach(noteEvent => {
-                                // Convert note timestamp to beats
-                                const noteStartBeats = clipStartBeats + (noteEvent.timestamp / (60000 / tempo));
-
-                                // Convert musical time back to real time for scheduling
-                                const absoluteStartTime = playbackStartTime + (noteStartBeats * 60 / tempo);
-
-                                // Convert duration to real time based on current tempo
-                                const noteDuration = noteEvent.duration * (60 / tempo);
-
-                                if (absoluteStartTime >= playbackState.lastScheduleTime &&
-                                    absoluteStartTime < scheduleEnd) {
-                                    try {
-                                        keyboardAudioManager.playExactNote(
-                                            {
-                                                ...noteEvent,
-                                                timestamp: absoluteStartTime,
-                                                duration: noteDuration
-                                            },
-                                            absoluteStartTime
+                                if (isLoopEnabled && loopRegion) {
+                                    // If we're approaching the loop end, also schedule notes from the start
+                                    if (scheduleEnd > loopRegion.end) {
+                                        // Schedule notes up to loop end
+                                        scheduleNotesInRange(
+                                            clips,
+                                            tempo,
+                                            scheduleStart,
+                                            loopRegion.end,
+                                            startTime
                                         );
-                                    } catch (error) {
-                                        debug('Failed to schedule note', { error, noteEvent });
+
+                                        // Schedule notes from loop start
+                                        const loopOverflowTime = scheduleEnd - loopRegion.end;
+                                        scheduleNotesInRange(
+                                            clips,
+                                            tempo,
+                                            loopRegion.start,
+                                            loopRegion.start + loopOverflowTime,
+                                            startTime + (loopRegion.start - scheduleStart) / 1000
+                                        );
+                                        return;
                                     }
                                 }
-                            });
-                        });
 
-                        playbackState.lastScheduleTime = scheduleEnd;
-                    } catch (error) {
-                        debug('Error in scheduler', error);
+                                // Normal note scheduling
+                                scheduleNotesInRange(clips, tempo, scheduleStart, scheduleEnd, startTime);
+                            }
+                        }
+                    );
+                }
+
+                // Initialize audio systems
+                await timingService.initialize();
+
+                // Handle starting playback with loop points
+                if (isLoopEnabled && loopRegion) {
+                    // If we're outside the loop region, start from loop start
+                    if (currentTime < loopRegion.start || currentTime >= loopRegion.end) {
+                        timingService.start(loopRegion.start);
+                    } else {
+                        timingService.start(currentTime);
                     }
-                };
-
-                // Start scheduling loop
-                playbackState.schedulerInterval = window.setInterval(scheduleNotes, SCHEDULER_INTERVAL);
-
-                // Start animation frame for UI updates
-                const updateUI = () => {
-                    const currentTime = audioContext.currentTime - playbackState.playbackStartTime;
-                    store.dispatch(updatePlaybackPosition(currentTime));
-                    playbackState.animationFrame = requestAnimationFrame(updateUI);
-                };
-                updateUI();
+                } else {
+                    timingService.start(currentTime);
+                }
 
             } catch (error) {
-                debug('Error starting playback', error);
+                debug('Failed to start playback', error);
                 store.dispatch(stopPlayback());
             }
             break;
@@ -116,76 +125,99 @@ export const playbackMiddleware: Middleware = store => next => async action => {
 
         case 'arrangement/stopPlayback': {
             debug('Stopping playback');
-
-            // Clear scheduling interval
-            if (playbackState.schedulerInterval) {
-                clearInterval(playbackState.schedulerInterval);
-                playbackState.schedulerInterval = null;
+            if (timingService) {
+                timingService.stop();
+                timingService.reset();
             }
-
-            // Clear animation frame
-            if (playbackState.animationFrame) {
-                cancelAnimationFrame(playbackState.animationFrame);
-                playbackState.animationFrame = null;
-            }
-
-            // Reset timing
-            playbackState.lastScheduleTime = 0;
-            playbackState.playbackStartTime = 0;
             break;
         }
 
         case 'player/setTempo': {
-            debug('Updating playback tempo', action.payload);
-            const state = store.getState();
-            const isPlaying = selectIsPlaying(state);
-
-            if (isPlaying) {
-                // Store current playback position before tempo change
-                const audioContext = keyboardAudioManager.getContext();
-                const currentPosition = audioContext
-                    ? audioContext.currentTime - playbackState.playbackStartTime
-                    : 0;
-
-                // Stop and restart playback to reset scheduling with new tempo
-                store.dispatch(stopPlayback());
-
-                // Reset playback state with new timing
-                playbackState.playbackStartTime = audioContext
-                    ? audioContext.currentTime - currentPosition
-                    : 0;
-                playbackState.lastScheduleTime = audioContext?.currentTime || 0;
-
-                // Restart playback at the same musical position
-                store.dispatch({ type: 'arrangement/startPlayback' });
+            debug('Setting tempo', action.payload);
+            if (timingService) {
+                timingService.setTempo(action.payload);
             }
             break;
         }
 
         case 'arrangement/setPlaybackPosition': {
-            debug('Setting playback position', action.payload);
+            debug('Setting position', action.payload);
             const state = store.getState();
             const isPlaying = selectIsPlaying(state);
+            const loopRegion = selectLoopRegion(state);
+            const isLoopEnabled = selectIsLoopEnabled(state);
 
-            // Stop current playback
-            if (playbackState.schedulerInterval) {
-                clearInterval(playbackState.schedulerInterval);
-                playbackState.schedulerInterval = null;
-            }
-            if (playbackState.animationFrame) {
-                cancelAnimationFrame(playbackState.animationFrame);
-                playbackState.animationFrame = null;
+            // Handle manual seeking with loop points
+            if (isLoopEnabled && loopRegion) {
+                const newPosition = action.payload;
+                // If seeking outside loop region, clamp to loop region
+                if (newPosition < loopRegion.start || newPosition >= loopRegion.end) {
+                    action.payload = loopRegion.start;
+                }
             }
 
-            // If playing, restart from new position
-            if (isPlaying) {
-                store.dispatch({ type: 'arrangement/startPlayback' });
+            if (isPlaying && timingService) {
+                timingService.stop();
+                timingService.start(action.payload);
             }
             break;
+        }
+
+        case 'playback/setLoopRegion': {
+            debug('Setting loop region', action.payload);
+            // When loop points change, update scheduling if needed
+            const state = store.getState();
+            const isPlaying = selectIsPlaying(state);
+            const currentTime = selectCurrentTime(state);
+
+            if (isPlaying && timingService) {
+                const { start, end } = action.payload;
+                if (currentTime < start || currentTime >= end) {
+                    timingService.stop();
+                    timingService.start(start);
+                }
+            }
+            break;
+        }
+
+        // Add cleanup on unmount
+        case '@@init': {
+            return () => {
+                if (timingService) {
+                    timingService.dispose();
+                    timingService = null;
+                }
+            };
         }
     }
 
     return result;
+};
+
+// Helper function to schedule notes within a specific time range
+const scheduleNotesInRange = (
+    clips: any[],
+    tempo: number,
+    startTimeMs: number,
+    endTimeMs: number,
+    scheduleStartTime: number
+) => {
+    clips.forEach(clip => {
+        clip.notes.forEach(note => {
+            const noteTimeMs = clip.startCell / 4 * (60000 / tempo) + note.timestamp;
+
+            if (noteTimeMs >= startTimeMs && noteTimeMs < endTimeMs) {
+                keyboardAudioManager.playExactNote(
+                    {
+                        ...note,
+                        timestamp: scheduleStartTime + (noteTimeMs - startTimeMs) / 1000,
+                        duration: (note.duration || 100) / 1000
+                    },
+                    scheduleStartTime + (noteTimeMs - startTimeMs) / 1000
+                );
+            }
+        });
+    });
 };
 
 export default playbackMiddleware;

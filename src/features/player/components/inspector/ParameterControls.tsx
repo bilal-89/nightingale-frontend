@@ -54,21 +54,24 @@ const ParameterControl: React.FC<ParameterControlProps> = ({ definition, value, 
 
 interface ParameterControlsProps {
     note: NoteEvent;
-    clipId: string;
-    noteIndex: number;
+    trackId: string;
+    noteId: string;
 }
-
-// src/features/player/components/inspector/ParameterControls.tsx
 
 export const ParameterControls: React.FC<ParameterControlsProps> = ({
                                                                         note,
-                                                                        clipId,
-                                                                        noteIndex
+                                                                        trackId,
+                                                                        noteId
                                                                     }) => {
     const { parameterService, handleParameterChange } = useParameters();
     const parameters = parameterService.getAllParameters();
 
-    console.log('Current note:', note); // Debug log
+    console.log('Rendering ParameterControls:', {
+        note,
+        trackId,
+        noteId,
+        parameters
+    });
 
     return (
         <div className="space-y-4 p-4 bg-[#e5e9ec] rounded-3xl"
@@ -77,7 +80,7 @@ export const ParameterControls: React.FC<ParameterControlsProps> = ({
              }}>
             {parameters.map(definition => {
                 const value = parameterService.getValue(note, definition.id);
-                console.log(`Rendering parameter ${definition.id}:`, { value, definition });
+                console.log(`Parameter ${definition.id}:`, { value, definition });
 
                 if (!value) return null;
 
@@ -89,9 +92,16 @@ export const ParameterControls: React.FC<ParameterControlsProps> = ({
                         onChange={(displayValue) => {
                             console.log(`Parameter change ${definition.id}:`, {
                                 from: value.display,
-                                to: displayValue
+                                to: displayValue,
+                                trackId,
+                                noteId
                             });
-                            handleParameterChange(clipId, noteIndex, definition.id, displayValue);
+                            handleParameterChange(
+                                trackId,
+                                noteId,
+                                definition.id,
+                                displayValue
+                            );
                         }}
                     />
                 );

@@ -1,10 +1,6 @@
-import { useState } from 'react';
 import { Provider } from 'react-redux';
 import { store } from './store';
-import { TunableKeyboard } from './features/keyboard';
-import { ArrangementView } from "./features/arrangement";
 import { Player } from "./features/player";  // Import our new Player component
-import ParameterPanel from "./features/parameters/components/ParameterPanel.tsx";
 import KeyboardWorkspace from "./features/workspace/components/KeyboardWorkspace.tsx";
 
 // Add console logs to help debug
@@ -12,7 +8,7 @@ console.log('App rendering');
 
 const App = () => {
     // Add state for toggling between old and new implementations
-    const [useNewPlayer, setUseNewPlayer] = useState(false);
+    // const [useNewPlayer, setUseNewPlayer] = useState(false);
 
     return (
         <Provider store={store}>

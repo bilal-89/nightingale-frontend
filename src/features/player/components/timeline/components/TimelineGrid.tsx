@@ -1,144 +1,187 @@
-// src/features/player/components/timeline/components/TimelineGrid.tsx
-
-import React, { useState, useCallback, useMemo } from 'react';
-import { usePlayback } from '../../../hooks/usePlayback';
-import { useClips } from '../../../hooks/useClips';
-import { useAppDispatch, useAppSelector } from '../../../hooks/useStore';
-import { selectCurrentTrack, setCurrentTrack } from '../../../state/slices/player.slice';
-import Clip from '../../clips/Clip';
+import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '../../../hooks';
+import { useTiming } from '../../../hooks/useTiming';  // Our new timing hook
+import {
+    selectCurrentTrack,
+    selectTracks,
+    selectTimelineSettings,
+    setCurrentTrack,
+    addTrack
+} from '../../../state/slices/player.slice';
+import { selectIsPlaying } from '../../../state/slices/playback.slice';
+import Note from '../../notes/Note';
 import { TIMING } from '../../../utils/time.utils';
-import { DragState, GridPosition } from '../../../types';
+import { cn } from '../../../../../lib/utils';
 
-// Grid constants define our musical grid's visual structure
+// These constants define our grid layout and dimensions
 const GRID_CONSTANTS = {
-    TRACKS: 4,           // Number of simultaneous tracks
-    CELLS: 64,          // Total number of 16th note divisions
-    CELL_WIDTH: 48,     // Visual width of each cell in pixels
-    TRACK_HEIGHT: 96,   // Height of each track
-    HEADER_HEIGHT: 32,  // Height of the timeline header
-    NOTE_HEIGHT: 3      // Height of note visualizations
+    TRACKS: 4,
+    CELLS: 64,
+    CELL_WIDTH: 48,
+    TRACK_HEIGHT: 96,
+    HEADER_HEIGHT: 32,
+    NOTE_HEIGHT: 3
 } as const;
 
 export const TimelineGrid: React.FC = () => {
     const dispatch = useAppDispatch();
-    const { isPlaying, currentTime, tempo } = usePlayback();
-    const { clips, moveClip } = useClips();
-    const currentTrack = useAppSelector(selectCurrentTrack);
-    const [dragState, setDragState] = useState<DragState | null>(null);
 
-    // Calculate playback position using musical timing
-    const playbackPosition = useMemo(() => {
-        if (!clips.length) return 0;
-        const currentTicks = TIMING.msToTicks(currentTime * 1000, tempo);
-        const pixelsPerTick = GRID_CONSTANTS.CELL_WIDTH / TIMING.cellsToTicks(1);
-        return currentTicks * pixelsPerTick;
-    }, [clips, currentTime, tempo]);
+    // Get timing information from our new hook instead of usePlayback
+    const { getCurrentTime } = useTiming();
+    const isPlaying = useAppSelector(selectIsPlaying);
 
-    // Convert mouse position to musical grid coordinates
-    const getGridPosition = useCallback((e: React.MouseEvent): GridPosition => {
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top - GRID_CONSTANTS.HEADER_HEIGHT;
+    // Other state selectors
+    const tracks = useAppSelector(selectTracks);
+    const currentTrackIndex = useAppSelector(selectCurrentTrack);
+    const timelineSettings = useAppSelector(selectTimelineSettings);
+    const selectedNoteId = useAppSelector(state => state.player.selectedNoteId);
 
-        const ticksPerPixel = TIMING.cellsToTicks(1) / GRID_CONSTANTS.CELL_WIDTH;
-        const ticks = Math.round(x * ticksPerPixel);
-        const cell = TIMING.ticksToCells(ticks);
+    // Track interaction state
+    const [pressedTrackId, setPressedTrackId] = useState<string | null>(null);
 
-        return {
-            cell: Math.max(0, cell),
-            track: Math.max(0, Math.min(
-                GRID_CONSTANTS.TRACKS - 1,
-                Math.floor(y / GRID_CONSTANTS.TRACK_HEIGHT)
-            ))
-        };
-    }, []);
+    // Ref for animation frame management
+    const animationFrameRef = useRef<number | null>(null);
+    // Ref to store current playback position
+    const playbackPositionRef = useRef<number>(0);
 
-    // Handle drag operations with musical timing
-    const handleMouseDown = useCallback((e: React.MouseEvent, clipId?: string) => {
-        e.preventDefault();
-        const position = getGridPosition(e);
-
-        setDragState({
-            type: clipId ? 'MOVE' : 'CREATE',
-            startPoint: position,
-            currentPoint: position,
-            clipId,
-            startTicks: TIMING.cellsToTicks(position.cell)
-        });
-    }, [getGridPosition]);
-
-    // Handle clip movement with musical timing
-    const handleMouseMove = useCallback((e: React.MouseEvent) => {
-        if (!dragState) return;
-
-        const position = getGridPosition(e);
-
-        if (dragState.currentPoint.cell !== position.cell ||
-            dragState.currentPoint.track !== position.track) {
-
-            setDragState(prev => prev ? {
-                ...prev,
-                currentPoint: position
-            } : null);
-
-            if (dragState.type === 'MOVE' && dragState.clipId) {
-                moveClip(dragState.clipId, {
-                    cell: position.cell,
-                    track: position.track,
-                    startTicks: TIMING.cellsToTicks(position.cell)
-                });
+    // Calculate note ranges for each track for vertical positioning
+    const trackRanges = useMemo(() => {
+        return tracks.map(track => {
+            if (track.notes.length === 0) {
+                return { lowestNote: 60, highestNote: 72 }; // Default octave range
             }
+            const notes = track.notes.map(n => n.note);
+            return {
+                lowestNote: Math.min(...notes),
+                highestNote: Math.max(...notes)
+            };
+        });
+    }, [tracks]);
+
+    // Set up smooth playback position animation using requestAnimationFrame
+    useEffect(() => {
+        let lastTimestamp: number | null = null;
+
+        const updatePlaybackPosition = (timestamp: number) => {
+            if (!isPlaying) {
+                lastTimestamp = null;
+                return;
+            }
+
+            if (lastTimestamp === null) {
+                lastTimestamp = timestamp;
+            }
+
+            // Get current time from timing service
+            const currentTimeMs = getCurrentTime();
+
+            // Convert time to pixels based on zoom level
+            const pixelsPerMs = timelineSettings.zoom;
+            const newPosition = currentTimeMs * pixelsPerMs;
+
+            // Update position with smooth animation
+            playbackPositionRef.current = newPosition;
+
+            // Request next frame
+            animationFrameRef.current = requestAnimationFrame(updatePlaybackPosition);
+        };
+
+        if (isPlaying) {
+            animationFrameRef.current = requestAnimationFrame(updatePlaybackPosition);
         }
-    }, [dragState, moveClip, getGridPosition]);
 
-    const handleMouseUp = useCallback(() => {
-        setDragState(null);
-    }, []);
+        // Cleanup animation frame on unmount or when playback stops
+        return () => {
+            if (animationFrameRef.current !== null) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }, [isPlaying, getCurrentTime, timelineSettings.zoom]);
 
+    // Track selection handler
     const handleTrackSelect = useCallback((trackIndex: number) => {
         dispatch(setCurrentTrack(trackIndex));
     }, [dispatch]);
 
-    // Format time display using musical time
+    // Time formatter for grid labels
     const formatGridTime = useCallback((cellIndex: number) => {
         const beats = Math.floor(cellIndex / TIMING.CELLS_PER_BEAT) + 1;
         const subdivision = (cellIndex % TIMING.CELLS_PER_BEAT) + 1;
         return `${beats}.${subdivision}`;
     }, []);
 
+    // Track button interaction handlers
+    const handleTrackMouseDown = (trackId: string) => setPressedTrackId(trackId);
+    const handleTrackMouseUp = (trackId: string, index: number) => {
+        if (pressedTrackId === trackId) {
+            handleTrackSelect(index);
+        }
+        setPressedTrackId(null);
+    };
+    const handleTrackMouseLeave = () => setPressedTrackId(null);
+
     return (
         <div className="w-full bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="flex">
                 {/* Track headers section */}
                 <div className="w-32 flex-shrink-0 border-r border-[#d1cdc4]">
-                    <div className="h-8 border-b border-[#d1cdc4] bg-[#e8e4dc] px-2 py-1 text-sm">
+                    {/* Time header */}
+                    <div className="h-8 border-b border-[#d1cdc4] bg-[#e8e4dc] px-2 py-1 text-sm font-medium">
                         Time
                     </div>
 
-                    {Array(GRID_CONSTANTS.TRACKS).fill(null).map((_, index) => (
-                        <div
-                            key={`track-header-${index}`}
-                            className="h-24 border-b border-[#d1cdc4] bg-[#e8e4dc] px-2 py-1 flex items-center gap-2"
+                    {/* Track buttons with enhanced tactile feedback */}
+                    {tracks.map((track, index) => (
+                        <button
+                            key={track.id}
+                            onMouseDown={() => handleTrackMouseDown(track.id)}
+                            onMouseUp={() => handleTrackMouseUp(track.id, index)}
+                            onMouseLeave={handleTrackMouseLeave}
+                            className={cn(
+                                "w-full h-24 px-3 border-b border-[#d1cdc4] transition-all duration-100",
+                                "flex items-center text-left",
+                                currentTrackIndex === index
+                                    ? "bg-[#e8e4dc]"
+                                    : "bg-[#f5f2ed]"
+                            )}
+                            style={{
+                                boxShadow: currentTrackIndex === index || pressedTrackId === track.id
+                                    ? 'inset 2px 2px 5px #c8ccd0, inset -2px -2px 5px #ffffff'
+                                    : '4px 4px 10px #c8ccd0, -4px -4px 10px #ffffff',
+                                transform: (currentTrackIndex === index || pressedTrackId === track.id)
+                                    ? 'translateY(1px)'
+                                    : 'translateY(0)',
+                                border: (currentTrackIndex === index || pressedTrackId === track.id)
+                                    ? '1px solid rgba(255, 255, 255, 0.9)'
+                                    : '1px solid rgba(255, 255, 255, 0.7)'
+                            }}
                         >
-                            <button
-                                className={`w-3 h-3 rounded-full transition-all duration-300 
-                                    ${currentTrack === index ? 'bg-green-500' : 'bg-gray-300'}
-                                    hover:scale-110`}
-                                onClick={() => handleTrackSelect(index)}
-                                title={`Select Track ${index + 1}`}
-                            />
-                            <span className="text-sm">Track {index + 1}</span>
-                        </div>
+                            <span className={cn(
+                                "text-sm font-medium",
+                                currentTrackIndex === index ? "text-gray-900" : "text-gray-600"
+                            )}>
+                                {track.name}
+                            </span>
+                        </button>
                     ))}
+
+                    {/* Add Track Button */}
+                    <button
+                        onClick={() => dispatch(addTrack())}
+                        className={cn(
+                            "w-full h-12 px-3",
+                            "flex items-center justify-center",
+                            "text-sm font-medium text-gray-600",
+                            // "bg-[#f5f2ed] hover:bg-[#eae6df] transition-all duration-200",
+                            "shadow-[2px_2px_4px_#d1cdc4,_-2px_-2px_4px_#ffffff]"
+                        )}
+                    >
+                        + Add Track
+                    </button>
                 </div>
 
                 {/* Main grid area */}
-                <div
-                    className="flex-grow overflow-x-auto relative"
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                >
+                <div className="flex-grow overflow-x-auto relative">
                     <div style={{ width: GRID_CONSTANTS.CELLS * GRID_CONSTANTS.CELL_WIDTH }}>
                         {/* Time ruler */}
                         <div className="flex h-8 border-b border-[#d1cdc4]">
@@ -153,56 +196,39 @@ export const TimelineGrid: React.FC = () => {
                             ))}
                         </div>
 
-                        {/* Grid cells */}
-                        {Array(GRID_CONSTANTS.TRACKS).fill(null).map((_, trackIndex) => (
+                        {/* Track lanes */}
+                        {tracks.map((track, trackIndex) => (
                             <div
-                                key={`track-${trackIndex}`}
-                                className="flex h-24 border-b border-[#d1cdc4]"
+                                key={track.id}
+                                className="relative h-24 border-b border-[#d1cdc4] bg-[#f5f2ed]"
                             >
-                                {Array(GRID_CONSTANTS.CELLS).fill(null).map((_, cellIndex) => (
-                                    <div
-                                        key={`cell-${trackIndex}-${cellIndex}`}
-                                        className={`flex-shrink-0 border-r border-[#d1cdc4] 
-                                            transition-colors duration-150
-                                            ${dragState?.currentPoint.track === trackIndex &&
-                                        dragState.currentPoint.cell === cellIndex
-                                            ? 'bg-blue-50'
-                                            : trackIndex === currentTrack
-                                                ? 'bg-[#f5f2ed]'
-                                                : 'bg-[#f0ece6]'
-                                        }`}
-                                        style={{ width: GRID_CONSTANTS.CELL_WIDTH }}
-                                        onMouseDown={(e) => handleMouseDown(e)}
+                                {/* Notes */}
+                                {track.notes.map(note => (
+                                    <Note
+                                        key={note.id}
+                                        note={note}
+                                        trackId={track.id}
+                                        trackIndex={trackIndex}
+                                        timelineZoom={timelineSettings.zoom}
+                                        availableTracks={tracks.map(t => t.id)}
+                                        isSelected={selectedNoteId === note.id}
+                                        lowestNote={trackRanges[trackIndex].lowestNote}
+                                        highestNote={trackRanges[trackIndex].highestNote}
                                     />
                                 ))}
                             </div>
                         ))}
 
-                        {/* Playback position indicator */}
+                        {/* Updated playback position indicator with hardware acceleration */}
                         {isPlaying && (
                             <div
-                                className="absolute top-0 bottom-0 w-px bg-green-500 z-20 pointer-events-none"
+                                className="absolute top-0 bottom-0 w-px bg-green-500 z-20 pointer-events-none transform-gpu"
                                 style={{
-                                    left: `${playbackPosition}px`,
-                                    transition: 'left 0.016s linear'
+                                    transform: `translateX(${playbackPositionRef.current}px)`,
+                                    willChange: 'transform'
                                 }}
                             />
                         )}
-
-                        {/* Clips layer */}
-                        <div className="absolute top-8 left-0 right-0 bottom-0">
-                            {clips.map(clip => (
-                                <Clip
-                                    key={clip.id}
-                                    clip={{
-                                        ...clip,
-                                        startTicks: TIMING.cellsToTicks(clip.startCell)
-                                    }}
-                                    isDragging={dragState?.clipId === clip.id}
-                                    onMouseDown={(e) => handleMouseDown(e, clip.id)}
-                                />
-                            ))}
-                        </div>
                     </div>
                 </div>
             </div>

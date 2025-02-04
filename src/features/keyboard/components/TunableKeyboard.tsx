@@ -21,8 +21,9 @@ import {
 } from '../../../store/slices/keyboard/keyboard.slice';
 import { initializeAudioContext } from '../../../store/middleware/keyboardAudio.middleware';
 import { RootState } from '../../../store';
+import { useTiming } from '../../../features/player/hooks/useTiming';
+import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
 
-// Define the available synthesis modes and their display labels
 const modeLabels: Record<SynthMode, string> = {
     tunable: "Tones",
     drums: "Drums"
@@ -63,6 +64,7 @@ const modeStyles: Record<SynthMode, {
 
 const TunableKeyboard: React.FC = () => {
     const dispatch = useAppDispatch();
+    const timing = useTiming();
     const activeNotes = useSelector(selectActiveNotes);
     const isInitialized = useSelector(selectIsInitialized);
     const currentMode = useSelector(selectMode);
@@ -77,7 +79,10 @@ const TunableKeyboard: React.FC = () => {
 
     const handleNoteOn = useCallback((note: number) => {
         initializeAudio();
+
+        // Just play the note - it will use whatever tuning is currently set
         dispatch(noteOn(note));
+
     }, [dispatch, initializeAudio]);
 
     const handleNoteOff = useCallback((note: number) => {
@@ -85,12 +90,21 @@ const TunableKeyboard: React.FC = () => {
     }, [dispatch]);
 
     const handleTuningChange = useCallback((note: number, cents: number) => {
+        // Update audio engine first for immediate feedback
+        keyboardAudioManager.setNoteParameter(note, 'tuning', cents);
+
+        // Save tuning state in timing service for playback
+        timing.saveTuningState(note, cents);
+
+        // Update Redux state to persist the tuning value
         dispatch(setKeyParameter({
             keyNumber: note,
             parameter: 'tuning',
             value: cents
         }));
-    }, [dispatch]);
+
+        console.log('Tuning updated:', { note, cents });
+    }, [dispatch, timing]);
 
     const handleModeChange = useCallback((newMode: SynthMode) => {
         dispatch(setMode(newMode));
@@ -154,7 +168,6 @@ const TunableKeyboard: React.FC = () => {
     return (
         <Card className={`p-8 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background}`}>
             <div className="flex flex-col gap-6">
-                {/* Mode Selection */}
                 <div className="flex justify-center gap-4">
                     {(['tunable', 'drums'] as const).map((mode) => (
                         <button
@@ -175,7 +188,6 @@ const TunableKeyboard: React.FC = () => {
                         </button>
                     ))}
                 </div>
-
 
                 <div
                     className={`
@@ -208,8 +220,6 @@ const TunableKeyboard: React.FC = () => {
                         ))}
                     </div>
 
-
-
                     <div className="contents transition-all duration-300 ease-in-out">
                         {notes.slice(6, 12).map(({note}) => (
                             <div key={note} className="flex justify-center transition-all duration-300 ease-in-out">
@@ -229,7 +239,6 @@ const TunableKeyboard: React.FC = () => {
                         ))}
                     </div>
 
-                    {/* Waveform Selection - Only show for tunable mode */}
                     {currentMode === 'tunable' && (
                         <div className="col-span-6 flex justify-center gap-3 mt-4">
                             {(['sine', 'square', 'sawtooth', 'triangle'] as const).map((waveform) => (
@@ -257,7 +266,6 @@ const TunableKeyboard: React.FC = () => {
                             ))}
                         </div>
                     )}
-
                 </div>
             </div>
         </Card>

@@ -16,14 +16,12 @@ const noteNameFromMidi = (midi: number) => {
 export const NoteInspector: React.FC = () => {
     const selectedNote = useAppSelector(selectSelectedNote);
 
-    // Add logging to track note updates
     useEffect(() => {
         if (selectedNote) {
             console.log('Selected note updated:', {
                 note: selectedNote.note,
-                tuning: selectedNote.note.tuning,
-                clipId: selectedNote.clipId,
-                noteIndex: selectedNote.noteIndex
+                trackId: selectedNote.trackId,
+                tuning: selectedNote.note.tuning
             });
         }
     }, [selectedNote]);
@@ -41,26 +39,18 @@ export const NoteInspector: React.FC = () => {
         );
     }
 
-    // Log every render with the current note data
-    console.log('Rendering NoteInspector with:', {
-        note: selectedNote.note,
-        tuning: selectedNote.note.tuning,
-        clipId: selectedNote.clipId,
-        noteIndex: selectedNote.noteIndex
-    });
-
     return (
         <Card className="w-full bg-[#e8e4dc]">
             <CardHeader>
                 <CardTitle>
-                    Note: {noteNameFromMidi(selectedNote.note.pitch)}
+                    Note: {noteNameFromMidi(selectedNote.note.note)}
                 </CardTitle>
             </CardHeader>
             <CardContent>
                 <ParameterControls
                     note={selectedNote.note}
-                    clipId={selectedNote.clipId}
-                    noteIndex={selectedNote.noteIndex}
+                    trackId={selectedNote.trackId}
+                    noteId={selectedNote.note.id}
                 />
             </CardContent>
         </Card>

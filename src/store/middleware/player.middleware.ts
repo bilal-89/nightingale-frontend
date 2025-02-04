@@ -1,12 +1,10 @@
 // src/store/middleware/player.middleware.ts
 
-import { Middleware } from '@reduxjs/toolkit';
+import { Middleware, AnyAction } from '@reduxjs/toolkit';
 import {
-    addNoteEvent,
-    addClip
+    commitRecordingBuffer
 } from '../../features/player/state/slices/player.slice';
 import type { NoteEvent } from '../../features/player/types';
-import { TIMING } from '../../features/player/utils/time.utils';
 
 const activeNotes = new Map();
 
@@ -17,7 +15,13 @@ function logNoteTiming(stage: string, data: any) {
     });
 }
 
+const isPlayerAction = (action: unknown): action is AnyAction & { payload?: any } => {
+    return typeof action === 'object' && action !== null && 'type' in action;
+};
+
 export const playerMiddleware: Middleware = store => next => action => {
+    if (!isPlayerAction(action)) return next(action);
+
     const result = next(action);
     const state = store.getState();
     const keyboardState = state.keyboard;
@@ -25,23 +29,25 @@ export const playerMiddleware: Middleware = store => next => action => {
     switch (action.type) {
         case 'keyboard/noteOn': {
             if (state.player.isRecording) {
-                // const timestamp = Date.now() - (state.player.recordingStartTime || 0);
                 const note = action.payload;
                 const msTime = Date.now() - (state.player.recordingStartTime || 0);
-                const timestamp = TIMING.msToTicks(msTime, state.player.tempo);
+
+                // Get tuning value from keyboard state
+                const tuningValue = keyboardState.keyParameters[note]?.tuning?.value ?? 0;
 
                 // Get waveform from keyboard state
                 const currentWaveform = keyboardState?.keyParameters?.[note]?.waveform
                     || keyboardState?.globalWaveform
                     || 'sine';
 
-                // Create note event with timing and synthesis info
+                // Create note event with timing, tuning, and synthesis info
                 const noteEvent: NoteEvent = {
                     id: `note-${Date.now()}-${note}`,
                     note,
-                    timestamp,
+                    timestamp: msTime,
                     velocity: 100,
-                    duration: 0,  // Will be updated when note ends
+                    duration: 0,
+                    tuning: tuningValue,  // Include tuning value in the note event
                     synthesis: {
                         mode: keyboardState?.mode || 'tunable',
                         waveform: currentWaveform,
@@ -56,18 +62,31 @@ export const playerMiddleware: Middleware = store => next => action => {
                     }
                 };
 
-                // Store both timing and synthesis info
+                // Log note recording with tuning
+                logNoteTiming('Note Start', {
+                    note,
+                    tuning: tuningValue,
+                    waveform: currentWaveform,
+                    mode: keyboardState?.mode,
+                    timestamp: msTime
+                });
+
+                // Store both timing and synthesis info, including tuning
                 activeNotes.set(note, {
-                    startTime: timestamp,
+                    startTime: msTime,
                     noteEvent,
-                    // Store complete synthesis info for duration calculation
                     synthesis: {
                         ...noteEvent.synthesis,
-                        originalTimestamp: timestamp
+                        tuning: tuningValue,  // Store tuning in synthesis info
+                        originalTimestamp: msTime
                     }
                 });
 
-                store.dispatch(addNoteEvent(noteEvent));
+                // Add to recording buffer
+                store.dispatch({
+                    type: 'player/addNoteEvent',
+                    payload: noteEvent
+                });
             }
             break;
         }
@@ -80,39 +99,27 @@ export const playerMiddleware: Middleware = store => next => action => {
                     const endTime = Date.now() - (state.player.recordingStartTime || 0);
                     const duration = endTime - noteInfo.startTime;
 
-                    // Important: Log duration calculation
                     logNoteTiming('Note End', {
                         note: action.payload,
                         startTime: noteInfo.startTime,
                         endTime,
                         calculatedDuration: duration,
                         noteId: noteInfo.noteEvent.id,
-                        synthesis: noteInfo.synthesis
+                        tuning: noteInfo.noteEvent.tuning  // Log tuning value
                     });
 
-                    // Update note with both duration and synthesis info
+                    // Update note duration in recording buffer, preserving tuning
                     store.dispatch({
                         type: 'player/updateNoteEvent',
                         payload: {
                             id: noteInfo.noteEvent.id,
                             duration,
-                            // Preserve synthesis parameters during update
+                            tuning: noteInfo.noteEvent.tuning,  // Preserve tuning in update
                             synthesis: {
                                 ...noteInfo.synthesis,
-                                duration  // Include duration in synthesis info
+                                tuning: noteInfo.noteEvent.tuning  // Include tuning in synthesis
                             }
                         }
-                    });
-
-                    // Verify duration update
-                    const updatedNote = state.player.recordingBuffer.find(
-                        note => note.id === noteInfo.noteEvent.id
-                    );
-                    logNoteTiming('Note Duration Update', {
-                        noteId: noteInfo.noteEvent.id,
-                        originalDuration: noteInfo.noteEvent.duration,
-                        newDuration: duration,
-                        noteInBuffer: updatedNote
                     });
 
                     activeNotes.delete(action.payload);
@@ -121,54 +128,47 @@ export const playerMiddleware: Middleware = store => next => action => {
             break;
         }
 
-        case 'player/stopRecording': {
-            if (state.player.recordingBuffer.length > 0) {
-                const endTime = Date.now() - (state.player.recordingStartTime || 0);
+        case 'keyboard/setKeyParameter': {
+            // Handle tuning parameter changes during recording
+            if (state.player.isRecording &&
+                action.payload.parameter === 'tuning' &&
+                activeNotes.has(action.payload.keyNumber)) {
 
-                // Calculate timing-aware clip length
-                const beatsPerSecond = state.player.tempo / 60;
-                const secondsPerBeat = 60 / state.player.tempo;
-                const cellsPerBeat = 4;
-                const durationInBeats = endTime / (secondsPerBeat * 1000);
-                const clipLength = Math.max(1, Math.ceil(durationInBeats * cellsPerBeat));
+                const note = action.payload.keyNumber;
+                const newTuning = action.payload.value;
+                const noteInfo = activeNotes.get(note);
 
-                // Preserve both duration and synthesis info in clip creation
-                store.dispatch(addClip({
-                    id: `clip-${Date.now()}`,
-                    startCell: Math.floor(state.playback.currentTime * beatsPerSecond * cellsPerBeat),
-                    length: clipLength,
-                    track: state.player.currentTrack,
-                    isSelected: false,
-                    notes: state.player.recordingBuffer.map(note => ({
-                        ...note,
-                        // Keep original duration
-                        duration: note.duration,
-                        synthesis: {
-                            ...note.synthesis,
-                            // Ensure waveform is preserved
-                            waveform: note.synthesis.waveform,
-                            mode: note.synthesis.mode,
-                            envelope: {
-                                ...note.synthesis.envelope
-                            }
-                        }
-                    })),
-                    parameters: {
-                        velocity: 100,
-                        pitch: 0,
-                        tuning: 0
-                    }
-                }));
+                if (noteInfo) {
+                    // Update the active note's tuning
+                    noteInfo.noteEvent.tuning = newTuning;
+                    noteInfo.synthesis.tuning = newTuning;
+
+                    logNoteTiming('Tuning Update', {
+                        note,
+                        newTuning,
+                        noteId: noteInfo.noteEvent.id
+                    });
+                }
             }
             break;
         }
+
+        case 'player/stopRecording': {
+            if (state.player.recordingBuffer.length > 0) {
+                const currentTrackId = state.player.tracks[state.player.currentTrack]?.id;
+                if (currentTrackId) {
+                    // Commit recording buffer to current track
+                    store.dispatch(commitRecordingBuffer(currentTrackId));
+                }
+            }
+            break;
+        }
+
         case 'player/setTempo': {
             if (state.player.isRecording) {
                 const timestamp = Date.now() - (state.player.recordingStartTime || 0);
                 const oldTempo = state.player.tempo;
                 const newTempo = action.payload;
-
-                // Calculate how to adjust timings for the tempo change
                 const tempoRatio = oldTempo / newTempo;
 
                 logNoteTiming('Tempo Change', {
@@ -179,9 +179,8 @@ export const playerMiddleware: Middleware = store => next => action => {
                     activeNotes: activeNotes.size
                 });
 
-                // Adjust all currently recording notes
-                activeNotes.forEach((noteInfo, note) => {
-                    // Update the timing while preserving musical position
+                // Adjust timing for active notes
+                activeNotes.forEach((noteInfo) => {
                     noteInfo.startTime = Math.round(noteInfo.startTime * tempoRatio);
                     if (noteInfo.noteEvent.duration) {
                         noteInfo.noteEvent.duration = Math.round(

@@ -1,33 +1,24 @@
-// src/features/player/state/slices/player.slice.ts
-
-import {createSelector, createSlice, PayloadAction} from '@reduxjs/toolkit';
+import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../../../../store';
-import {
-    Clip,
-    NoteEvent,
-    NoteSelection,
-    TimePosition,
-    NoteParameterUpdate,
-} from '../../types';
+import { Track } from '../../types/track';
+import { NoteEvent } from '../../types';
 
-// Our state now uses time-based positioning instead of grid cells
 interface PlayerState {
     // Recording state
     isRecording: boolean;
     recordingStartTime: number | null;
     recordingBuffer: NoteEvent[];
-
-    // Track and clip management
     currentTrack: number;
-    clips: Clip[];
+
+    // Track management
+    tracks: Track[];
 
     // Selection and editing
-    selectedNote: NoteSelection | null;
-    selectedClips: string[];
+    selectedNoteId: string | null;
+    selectedTrackId: string | null;
 
     // Timeline configuration
     tempo: number;
-    numberOfTracks: number;
 
     // Timeline view settings
     timelineZoom: number;     // Pixels per millisecond
@@ -41,11 +32,35 @@ const initialState: PlayerState = {
     recordingStartTime: null,
     recordingBuffer: [],
     currentTrack: 0,
-    clips: [],
-    selectedNote: null,
-    selectedClips: [],
+    tracks: [
+        {
+            id: 'track-1',
+            name: 'Track 1',
+            notes: [],
+            color: '#4a9eff',
+            isMuted: false,
+            isSolo: false
+        },
+        {
+            id: 'track-2',
+            name: 'Track 2',
+            notes: [],
+            color: '#22c55e',
+            isMuted: false,
+            isSolo: false
+        },
+        {
+            id: 'track-3',
+            name: 'Track 3',
+            notes: [],
+            color: '#f59e0b',
+            isMuted: false,
+            isSolo: false
+        }
+    ],
+    selectedNoteId: null,
+    selectedTrackId: null,
     tempo: 120,
-    numberOfTracks: 4,
     timelineZoom: 0.05,
     snapEnabled: true,
     snapResolution: 250,
@@ -56,11 +71,9 @@ const playerSlice = createSlice({
     name: 'player',
     initialState,
     reducers: {
-        // Recording actions
         startRecording: (state) => {
             state.isRecording = true;
             state.recordingStartTime = Date.now();
-            state.recordingBuffer = [];
         },
 
         stopRecording: (state) => {
@@ -74,44 +87,48 @@ const playerSlice = createSlice({
             }
         },
 
-        // Track management
-        setCurrentTrack: (state, action: PayloadAction<number>) => {
-            if (action.payload >= 0 && action.payload < state.numberOfTracks) {
-                state.currentTrack = action.payload;
+        addNoteToTrack: (state, action: PayloadAction<{
+            trackId: string;
+            note: NoteEvent;
+        }>) => {
+            const track = state.tracks.find(t => t.id === action.payload.trackId);
+            if (track) {
+                track.notes.push(action.payload.note);
+                track.notes.sort((a, b) => a.timestamp - b.timestamp);
             }
         },
 
-        // Clip management
-        addClip: (state, action: PayloadAction<Clip>) => {
-            state.clips.push(action.payload);
-        },
-
-        updateClip: (state, action: PayloadAction<{
-            id: string;
-            updates: Partial<Clip>;
+        moveNote: (state, action: PayloadAction<{
+            trackId: string;
+            noteId: string;
+            newTime: number;
+            newTrackId?: string;
         }>) => {
-            const clip = state.clips.find(c => c.id === action.payload.id);
-            if (clip) {
-                Object.assign(clip, action.payload.updates);
-            }
-        },
+            const { trackId, noteId, newTime, newTrackId } = action.payload;
+            const sourceTrack = state.tracks.find(t => t.id === trackId);
+            if (!sourceTrack) return;
 
-        deleteClip: (state, action: PayloadAction<string>) => {
-            state.clips = state.clips.filter(clip => clip.id !== action.payload);
-        },
+            const noteIndex = sourceTrack.notes.findIndex(n => n.id === noteId);
+            if (noteIndex === -1) return;
 
-        // New time-based movement
-        moveClip: (state, action: PayloadAction<{
-            id: string;
-            position: {
-                time: number;
-                track: number;
-            };
-        }>) => {
-            const clip = state.clips.find(c => c.id === action.payload.id);
-            if (clip) {
-                clip.startTime = action.payload.position.time;
-                clip.track = action.payload.position.track;
+            const note = sourceTrack.notes[noteIndex];
+
+            if (newTrackId && newTrackId !== trackId) {
+                const targetTrack = state.tracks.find(t => t.id === newTrackId);
+                if (targetTrack) {
+                    sourceTrack.notes.splice(noteIndex, 1);
+                    targetTrack.notes.push({
+                        ...note,
+                        timestamp: newTime
+                    });
+                    targetTrack.notes.sort((a, b) => a.timestamp - b.timestamp);
+                }
+            } else {
+                sourceTrack.notes[noteIndex] = {
+                    ...note,
+                    timestamp: newTime
+                };
+                sourceTrack.notes.sort((a, b) => a.timestamp - b.timestamp);
             }
         },
 
@@ -122,7 +139,6 @@ const playerSlice = createSlice({
             const noteIndex = state.recordingBuffer.findIndex(
                 note => note.id === action.payload.id
             );
-
             if (noteIndex !== -1) {
                 state.recordingBuffer[noteIndex] = {
                     ...state.recordingBuffer[noteIndex],
@@ -131,58 +147,59 @@ const playerSlice = createSlice({
             }
         },
 
-        // Note selection and editing
-        selectNote: (state, action: PayloadAction<NoteSelection | null>) => {
-            state.selectedNote = action.payload;
-            if (action.payload) {
-                state.selectedClips = [action.payload.clipId];
-            }
-        },
+        updateNoteParameters: (state, action: PayloadAction<{
+            trackId: string;
+            noteId: string;
+            updates: Partial<NoteEvent>;
+        }>) => {
+            const track = state.tracks.find(t => t.id === action.payload.trackId);
+            if (!track) return;
 
-        updateSelectedNote: (state, action: PayloadAction<Partial<NoteEvent>>) => {
-            if (!state.selectedNote) return;
+            const noteIndex = track.notes.findIndex(n => n.id === action.payload.noteId);
+            if (noteIndex === -1) return;
 
-            const clip = state.clips.find(c => c.id === state.selectedNote.clipId);
-            if (!clip) return;
-
-            const note = clip.notes[state.selectedNote.noteIndex];
-            if (!note) return;
-
-            clip.notes[state.selectedNote.noteIndex] = {
-                ...note,
-                ...action.payload
+            track.notes[noteIndex] = {
+                ...track.notes[noteIndex],
+                ...action.payload.updates
             };
         },
 
-        updateNoteParameters: (state, action: PayloadAction<NoteParameterUpdate>) => {
-            const { clipId, noteIndex, parameters } = action.payload;
-
-            const clip = state.clips.find(c => c.id === clipId);
-            if (!clip) return;
-
-            const note = clip.notes[noteIndex];
-            if (!note) return;
-
-            if (parameters.synthesis?.envelope) {
-                note.synthesis = {
-                    ...note.synthesis,
-                    envelope: {
-                        ...note.synthesis.envelope,
-                        ...parameters.synthesis.envelope
-                    }
-                };
-            }
-
-            if (parameters.tuning !== undefined) {
-                note.tuning = parameters.tuning;
-            }
-
-            if (parameters.velocity !== undefined) {
-                note.velocity = parameters.velocity;
+        deleteNote: (state, action: PayloadAction<{
+            trackId: string;
+            noteId: string;
+        }>) => {
+            const track = state.tracks.find(t => t.id === action.payload.trackId);
+            if (track) {
+                track.notes = track.notes.filter(n => n.id !== action.payload.noteId);
             }
         },
 
-        // Timeline view controls
+        setSelectedNoteId: (state, action: PayloadAction<string | null>) => {
+            state.selectedNoteId = action.payload;
+        },
+
+        selectNote: (state, action: PayloadAction<{
+            trackId: string;
+            noteId: string;
+        } | null>) => {
+            if (action.payload) {
+                state.selectedNoteId = action.payload.noteId;
+                state.selectedTrackId = action.payload.trackId;
+            } else {
+                state.selectedNoteId = null;
+                state.selectedTrackId = null;
+            }
+        },
+
+        commitRecordingBuffer: (state, action: PayloadAction<string>) => {
+            const track = state.tracks.find(t => t.id === action.payload);
+            if (track && state.recordingBuffer.length > 0) {
+                track.notes.push(...state.recordingBuffer);
+                track.notes.sort((a, b) => a.timestamp - b.timestamp);
+                state.recordingBuffer = [];
+            }
+        },
+
         setTimelineZoom: (state, action: PayloadAction<number>) => {
             state.timelineZoom = action.payload;
         },
@@ -200,35 +217,66 @@ const playerSlice = createSlice({
 
         setTempo: (state, action: PayloadAction<number>) => {
             state.tempo = Math.max(20, Math.min(300, action.payload));
+        },
+
+        addTrack: (state) => {
+            const newTrackNumber = state.tracks.length + 1;
+            state.tracks.push({
+                id: `track-${newTrackNumber}`,
+                name: `Track ${newTrackNumber}`,
+                notes: [],
+                color: '#4a9eff',
+                isMuted: false,
+                isSolo: false
+            });
+        },
+
+        deleteTrack: (state, action: PayloadAction<string>) => {
+            state.tracks = state.tracks.filter(track => track.id !== action.payload);
+        },
+
+        setTrackSettings: (state, action: PayloadAction<{
+            trackId: string;
+            updates: Partial<Track>;
+        }>) => {
+            const track = state.tracks.find(t => t.id === action.payload.trackId);
+            if (track) {
+                Object.assign(track, action.payload.updates);
+            }
+        },
+
+        setCurrentTrack: (state, action: PayloadAction<number>) => {
+            if (action.payload >= 0 && action.payload < state.tracks.length) {
+                state.currentTrack = action.payload;
+            }
         }
     }
 });
 
-// Export actions
 export const {
     startRecording,
     stopRecording,
     addNoteEvent,
-    setCurrentTrack,
-    addClip,
-    updateClip,
-    moveClip,
-    deleteClip,
-    quantizeClip,
-    setClipTiming,
+    addNoteToTrack,
+    moveNote,
+    updateNoteEvent,
+    updateNoteParameters,
+    deleteNote,
+    setSelectedNoteId,
+    selectNote,
+    commitRecordingBuffer,
     setTimelineZoom,
     setSnapSettings,
-    updateNoteEvent,
-    selectNote,
-    updateSelectedNote,
-    updateNoteParameters,
-    setTempo
+    setTempo,
+    addTrack,
+    deleteTrack,
+    setTrackSettings,
+    setCurrentTrack
 } = playerSlice.actions;
 
-// Enhanced selectors
+export const selectTracks = (state: RootState) => state.player.tracks;
 export const selectIsRecording = (state: RootState) => state.player.isRecording;
 export const selectCurrentTrack = (state: RootState) => state.player.currentTrack;
-export const selectClips = (state: RootState) => state.player.clips;
 export const selectTimelineSettings = createSelector(
     (state: RootState) => state.player,
     (player) => ({
@@ -241,40 +289,26 @@ export const selectTimelineSettings = createSelector(
     })
 );
 
-export const selectTempo = (state: RootState) => state.player.tempo;
+export const selectRecordingBuffer = (state: RootState) => state.player.recordingBuffer;
 
-// Add the selectSelectedNote selector
+export const selectTrackNotes = createSelector(
+    [selectTracks, (_: RootState, trackId: string) => trackId],
+    (tracks, trackId) => tracks.find(t => t.id === trackId)?.notes ?? []
+);
+
 export const selectSelectedNote = (state: RootState) => {
-    const selection = state.player.selectedNote;
-    if (!selection) return null;
+    if (!state.player.selectedNoteId) return null;
 
-    const clip = state.player.clips.find(c => c.id === selection.clipId);
-    if (!clip) return null;
-
-    const note = clip.notes[selection.noteIndex];
-    if (!note) return null;
-
-    console.log('Selected note in selector:', note);
-
-    // Normalize note data to ensure all required properties exist
-    const normalizedNote = {
-        ...note,
-        tuning: note.tuning ?? 0,
-        synthesis: note.synthesis ?? {
-            envelope: {
-                attack: 0.05,
-                decay: 0.1,
-                sustain: 0.7,
-                release: 0.15
-            }
+    for (const track of state.player.tracks) {
+        const note = track.notes.find(n => n.id === state.player.selectedNoteId);
+        if (note) {
+            return {
+                note,
+                trackId: track.id
+            };
         }
-    };
-
-    return {
-        note: normalizedNote,
-        clipId: selection.clipId,
-        noteIndex: selection.noteIndex
-    };
+    }
+    return null;
 };
 
 export default playerSlice.reducer;

@@ -1,63 +1,51 @@
-// src/components/PlaybackCoordinator.tsx
-
 import React, { useEffect, useRef } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
     selectIsPlaying,
     selectTempo,
     selectCurrentTime,
-    updatePlaybackPosition,
-    stopPlayback
 } from '../features/player/state/slices/playback.slice';
-import { useClips } from '../features/player/hooks';
-import {
-    // selectIsPlaying,
-    selectClips,
-    // selectTempo,
-    // selectCurrentTime,
-    // updatePlaybackPosition,
-    // stopPlayback
-} from '../store/slices/arrangement/arrangement.slice';
+import { selectClips } from '../store/slices/arrangement/arrangement.slice';
 import keyboardAudioManager from '../audio/context/keyboard/keyboardAudioManager';
 
-const DEBUG = true;
+interface DebugLogData {
+    note?: number;
+    start?: string;
+    duration?: string;
+    startTime?: number;
+    currentTime?: number;
+    error?: Error;
+    noteEvent?: unknown;
+}
 
 const PlaybackCoordinator: React.FC = () => {
-    const dispatch = useDispatch();
     const isPlaying = useSelector(selectIsPlaying);
     const clips = useSelector(selectClips);
     const tempo = useSelector(selectTempo);
     const currentTime = useSelector(selectCurrentTime);
 
+    // Refs for note scheduling
     const schedulerIntervalRef = useRef<number | null>(null);
-    const animationFrameRef = useRef<number | null>(null);
     const lastScheduleTimeRef = useRef<number>(0);
-    const playbackStartTimeRef = useRef<number>(0);
 
     const SCHEDULE_AHEAD_TIME = 0.1;
     const SCHEDULER_INTERVAL = 25;
 
-    const debugLog = (message: string, data?: any) => {
-        if (DEBUG) {
-            let timestamp = 0;
-            try {
-                const audioContext = keyboardAudioManager.getContext();
-                if (audioContext) {
-                    timestamp = audioContext.currentTime;
-                }
-            } catch (e) {
-                // Handle safely
-            }
+    // Debug logging
+    const debugLog = (message: string, data?: DebugLogData) => {
+        if (process.env.NODE_ENV === 'development') {
+            const audioContext = keyboardAudioManager.getContext();
+            const timestamp = audioContext?.currentTime ?? 0;
             console.log(`[Playback ${timestamp.toFixed(3)}s] ${message}`, data || '');
         }
     };
 
-    // Only initialize when user interacts
+    // Initialize audio system
     const initializeAudio = async () => {
         if (isPlaying) {
             try {
                 await keyboardAudioManager.initialize();
-                debugLog('Audio system initialized successfully');
+                debugLog('Audio system initialized');
                 return true;
             } catch (error) {
                 console.error('Failed to initialize audio system:', error);
@@ -67,51 +55,50 @@ const PlaybackCoordinator: React.FC = () => {
         return false;
     };
 
+    // Clean up scheduling system
+    const cleanup = () => {
+        if (schedulerIntervalRef.current !== null) {
+            clearInterval(schedulerIntervalRef.current);
+            schedulerIntervalRef.current = null;
+        }
+        lastScheduleTimeRef.current = 0;
+    };
+
+    // Main playback effect
     useEffect(() => {
-        const getTimeInSeconds = (cell: number) => {
-            const beatsPerSecond = tempo / 60;
-            return cell / beatsPerSecond;
-        };
-
         const scheduleNotes = () => {
-            if (!keyboardAudioManager.getContext()) {
-                debugLog('Audio context not yet available');
-                return;
-            }
-
             const audioContext = keyboardAudioManager.getContext();
+            if (!audioContext) return;
+
             const now = audioContext.currentTime;
             const scheduleEnd = now + SCHEDULE_AHEAD_TIME;
-            const playbackPosition = now - playbackStartTimeRef.current;
 
-            // Process each clip
             clips.forEach(clip => {
-                // Calculate clip start time in seconds
-                const clipStartTime = (clip.startCell * 60) / (tempo * 4); // Convert grid cells to seconds
+                const clipStartTime = (clip.startCell * 60) / (tempo * 4);
 
                 clip.notes.forEach(noteEvent => {
-                    // Calculate absolute start time including the note's timestamp within the clip
-                    const absoluteStartTime = playbackStartTimeRef.current +
-                        clipStartTime + (noteEvent.timestamp / 1000);
+                    const duration = noteEvent.duration ?? 0.1;
+                    const noteStartTime = clipStartTime + (noteEvent.timestamp / 1000);
 
-                    // Only schedule notes in our looking-ahead window
-                    if (absoluteStartTime >= lastScheduleTimeRef.current &&
-                        absoluteStartTime < scheduleEnd) {
+                    // Only schedule notes within our look-ahead window
+                    if (noteStartTime >= lastScheduleTimeRef.current &&
+                        noteStartTime < scheduleEnd) {
                         try {
-                            // Use the actual recorded duration
                             keyboardAudioManager.playExactNote({
                                 ...noteEvent,
-                                timestamp: absoluteStartTime,
-                                duration: noteEvent.duration / 1000  // Convert ms to seconds
-                            }, absoluteStartTime);
+                                timestamp: noteStartTime,
+                                duration: duration / 1000
+                            }, noteStartTime);
 
-                            debugLog('Scheduling note:', {
+                            debugLog('Note scheduled', {
                                 note: noteEvent.note,
-                                start: absoluteStartTime.toFixed(3),
-                                duration: (noteEvent.duration / 1000).toFixed(3)
+                                start: noteStartTime.toFixed(3),
+                                duration: (duration / 1000).toFixed(3)
                             });
                         } catch (error) {
-                            debugLog('Failed to schedule note:', { error, noteEvent });
+                            if (error instanceof Error) {
+                                debugLog('Note scheduling failed', { error });
+                            }
                         }
                     }
                 });
@@ -120,49 +107,23 @@ const PlaybackCoordinator: React.FC = () => {
             lastScheduleTimeRef.current = scheduleEnd;
         };
 
-        const updatePlaybackTime = () => {
-            const audioContext = keyboardAudioManager.getContext();
-            if (audioContext) {
-                const position = audioContext.currentTime - playbackStartTimeRef.current;
-                dispatch(updatePlaybackPosition(position));
-                animationFrameRef.current = requestAnimationFrame(updatePlaybackTime);
-            }
-        };
-
+        // Handle playback state changes
         if (isPlaying) {
-            debugLog('Starting playback');
+            debugLog('Starting playback system');
             initializeAudio().then(initialized => {
                 if (initialized) {
-                    const audioContext = keyboardAudioManager.getContext();
-                    playbackStartTimeRef.current = audioContext.currentTime;
-                    lastScheduleTimeRef.current = audioContext.currentTime;
+                    // Start note scheduling
                     schedulerIntervalRef.current = window.setInterval(scheduleNotes, SCHEDULER_INTERVAL);
-                    updatePlaybackTime();
+                    lastScheduleTimeRef.current = keyboardAudioManager.getContext()?.currentTime ?? 0;
                 }
             });
         } else {
-            debugLog('Stopping playback');
-            if (schedulerIntervalRef.current) {
-                clearInterval(schedulerIntervalRef.current);
-                schedulerIntervalRef.current = null;
-            }
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-                animationFrameRef.current = null;
-            }
-            lastScheduleTimeRef.current = 0;
-            playbackStartTimeRef.current = 0;
+            debugLog('Stopping playback system');
+            cleanup();
         }
 
-        return () => {
-            if (schedulerIntervalRef.current) {
-                clearInterval(schedulerIntervalRef.current);
-            }
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-        };
-    }, [isPlaying, clips, tempo, dispatch]);
+        return cleanup;
+    }, [isPlaying, clips, tempo, currentTime]);
 
     return null;
 };

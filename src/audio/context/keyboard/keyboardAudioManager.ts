@@ -1,8 +1,6 @@
 import { SynthesisParameters, CompleteNoteEvent } from '../../types/audioTypes';
 import { drumSoundManager } from '../drums/drumSoundManager';
-import { Waveform } from '../../store/slices/keyboard/keyboard.slice';
-
-
+import { Waveform } from '../../../store/slices/keyboard/keyboard.slice';
 
 class KeyboardAudioManager {
     // Core audio settings
@@ -35,9 +33,16 @@ class KeyboardAudioManager {
     private waveforms = new Map<number, Waveform>();
     private globalWaveform: Waveform = 'sine';
 
-    // Active voice tracking
+    // Add new filter parameter storage
+    private filterParams = new Map<number, {
+        cutoff: number;
+        resonance: number;
+    }>();
+
+    // Add filter node storage to active voices
     private activeVoices = new Map<number, {
         oscillator: OscillatorNode;
+        filterNode: BiquadFilterNode;  // Add this
         gainNode: GainNode;
         baseFrequency: number;
         currentTuning: number;
@@ -50,10 +55,174 @@ class KeyboardAudioManager {
             sustain: number;
             release: number;
         };
-
         waveform: Waveform;
-
+        filter: {
+            cutoff: number;
+            resonance: number;
+        };
     }>();
+
+
+    // Default filter settings
+    private readonly DEFAULT_FILTER_CUTOFF = 20000;  // Hz
+    private readonly DEFAULT_FILTER_RESONANCE = 0.707;  // Q value
+
+    // Modify playTunableNoteRT to include filter
+    private async playTunableNoteRT(note: number, velocity: number): Promise<CompleteNoteEvent> {
+        if (!this.audioContext) throw new Error('Audio context not initialized');
+
+        const now = this.audioContext.currentTime;
+        const oscillator = this.audioContext.createOscillator();
+        const filterNode = this.audioContext.createBiquadFilter();
+        const gainNode = this.audioContext.createGain();
+
+        // Get all parameters
+        const baseFrequency = this.getFrequency(note);
+        const envelope = this.getEnvelopeParams(note);
+        const synthesis = this.getCurrentSynthesis(note);
+        const waveform = this.getWaveformForNote(note);
+        const filterParams = this.filterParams.get(note) ?? {
+            cutoff: this.DEFAULT_FILTER_CUTOFF,
+            resonance: this.DEFAULT_FILTER_RESONANCE
+        };
+
+        // Configure oscillator
+        oscillator.type = waveform;
+        oscillator.frequency.setValueAtTime(baseFrequency, now);
+
+        // Configure filter
+        filterNode.type = 'lowpass';
+        filterNode.frequency.setValueAtTime(filterParams.cutoff, now);
+        filterNode.Q.setValueAtTime(filterParams.resonance, now);
+
+        // Configure envelope
+        const maxGain = this.velocityToGain(velocity);
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(maxGain, now + envelope.attack);
+        gainNode.gain.linearRampToValueAtTime(
+            maxGain * envelope.sustain,
+            now + envelope.attack + envelope.decay
+        );
+
+        // Connect audio path: oscillator -> filter -> gain -> output
+        oscillator.connect(filterNode);
+        filterNode.connect(gainNode);
+        gainNode.connect(this.mainGain!);
+        oscillator.start(now);
+
+        // Store voice information
+        this.activeVoices.set(note, {
+            oscillator,
+            filterNode,
+            gainNode,
+            baseFrequency,
+            currentTuning: this.tunings.get(note) || 0,
+            currentVelocity: velocity,
+            startTime: now,
+            noteStartTime: now,
+            envelope,
+            waveform,
+            filter: filterParams
+        });
+
+        return {
+            note,
+            timestamp: now,
+            velocity,
+            duration: 0,
+            synthesis
+        };
+    }
+
+    // Add filter parameter setters
+    setNoteParameter(note: number, parameter: string, value: number): void {
+        if (this.currentMode === 'drums') return;
+
+        // console.log(`Setting parameter: ${parameter} = ${value} for note ${note}`); // Debug log
+
+        switch (parameter) {
+            case 'tuning':
+                this.setNoteTuning(note, value);
+                break;
+            case 'velocity':
+                this.setNoteVelocity(note, value);
+                break;
+            case 'filterCutoff':
+                this.setFilterCutoff(note, value);
+                break;
+            case 'filterResonance':
+                this.setFilterResonance(note, value);
+                break;
+            case 'attack':
+            case 'decay':
+            case 'sustain':
+            case 'release': {
+                const currentParams = this.envelopeParams.get(note) ?? {
+                    attack: this.DEFAULT_ATTACK,
+                    decay: this.DEFAULT_DECAY,
+                    sustain: this.DEFAULT_SUSTAIN,
+                    release: this.DEFAULT_RELEASE
+                };
+                this.envelopeParams.set(note, {
+                    ...currentParams,
+                    [parameter]: value
+                });
+                break;
+            }
+        }
+    }
+
+    private setFilterCutoff(note: number, frequency: number): void {
+        console.log('Setting filter cutoff:', frequency); // Debug log
+
+        const currentParams = this.filterParams.get(note) ?? {
+            cutoff: this.DEFAULT_FILTER_CUTOFF,
+            resonance: this.DEFAULT_FILTER_RESONANCE
+        };
+
+        this.filterParams.set(note, {
+            ...currentParams,
+            cutoff: frequency
+        });
+
+        const voice = this.activeVoices.get(note);
+        if (voice && this.audioContext) {
+            console.log('Applying cutoff to active voice:', frequency);
+            // Use exponential ramp for smoother changes
+            const now = this.audioContext.currentTime;
+            voice.filterNode.frequency.cancelScheduledValues(now);
+            voice.filterNode.frequency.exponentialRampToValueAtTime(
+                Math.max(20, frequency), // Ensure we don't go below 20Hz
+                now + 0.01
+            );
+        }
+    }
+
+    private setFilterResonance(note: number, resonance: number): void {
+        console.log('Setting filter resonance:', resonance); // Debug log
+
+        const currentParams = this.filterParams.get(note) ?? {
+            cutoff: this.DEFAULT_FILTER_CUTOFF,
+            resonance: this.DEFAULT_FILTER_RESONANCE
+        };
+
+        this.filterParams.set(note, {
+            ...currentParams,
+            resonance: resonance
+        });
+
+        const voice = this.activeVoices.get(note);
+        if (voice && this.audioContext) {
+            console.log('Applying resonance to active voice:', resonance);
+            // Use linear ramp for smoother changes
+            const now = this.audioContext.currentTime;
+            voice.filterNode.Q.cancelScheduledValues(now);
+            voice.filterNode.Q.linearRampToValueAtTime(
+                resonance,
+                now + 0.01
+            );
+        }
+    }
 
     // Required context getter for playback system
     getContext(): AudioContext | null {
@@ -62,12 +231,6 @@ class KeyboardAudioManager {
 
     getCurrentTime(): number {
         return this.audioContext?.currentTime ?? 0;
-    }
-
-    // Utility function to convert velocity to gain
-    private velocityToGain(velocity: number): number {
-        const normalizedVelocity = velocity / 127;
-        return Math.pow(normalizedVelocity, 1.5) * this.DEFAULT_GAIN;
     }
 
     // Get envelope parameters for a note, with conversion to proper units
@@ -195,7 +358,6 @@ class KeyboardAudioManager {
 
                 // Calculate envelope timings
                 const attackEndTime = time + envelope.attack;
-                const decayEndTime = attackEndTime + envelope.decay;
                 const releaseStartTime = time + noteEvent.duration;
                 const releaseEndTime = releaseStartTime + envelope.release;
 
@@ -268,65 +430,6 @@ class KeyboardAudioManager {
         return curve;
     }
 
-// Update velocityToGain for smoother dynamics
-    private velocityToGain(velocity: number): number {
-        const normalizedVelocity = velocity / 127;
-        // Use cubic curve for more natural velocity response
-        return Math.pow(normalizedVelocity, 3) * this.DEFAULT_GAIN;
-    }
-
-    // Create and configure a new note
-    private async playTunableNoteRT(note: number, velocity: number): Promise<CompleteNoteEvent> {
-        if (!this.audioContext) throw new Error('Audio context not initialized');
-
-        const now = this.audioContext.currentTime;
-        const oscillator = this.audioContext.createOscillator();
-        const gainNode = this.audioContext.createGain();
-        const baseFrequency = this.getFrequency(note);
-        const envelope = this.getEnvelopeParams(note);
-        const synthesis = this.getCurrentSynthesis(note);
-        const waveform = this.getWaveformForNote(note);
-
-        // Configure oscillator with waveform
-        oscillator.type = waveform;
-        oscillator.frequency.setValueAtTime(baseFrequency, now);
-
-        // Configure envelope
-        const maxGain = this.velocityToGain(velocity);
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(maxGain, now + envelope.attack);
-        gainNode.gain.linearRampToValueAtTime(
-            maxGain * envelope.sustain,
-            now + envelope.attack + envelope.decay
-        );
-
-        // Connect audio path
-        oscillator.connect(gainNode);
-        gainNode.connect(this.mainGain!);
-        oscillator.start(now);
-
-        // Store voice information
-        this.activeVoices.set(note, {
-            oscillator,
-            gainNode,
-            baseFrequency,
-            currentTuning: this.tunings.get(note) || 0,
-            currentVelocity: velocity,
-            startTime: now,
-            noteStartTime: now,
-            envelope,
-            waveform
-        });
-
-        return {
-            note,
-            timestamp: now,
-            velocity,
-            duration: 0,
-            synthesis
-        };
-    }
-
     // Stop a playing note
     stopNote(note: number): void {
         if (this.currentMode === 'drums') return;
@@ -363,36 +466,6 @@ class KeyboardAudioManager {
         }
     }
 
-    // Set any parameter for a note
-    setNoteParameter(note: number, parameter: string, value: number): void {
-        if (this.currentMode === 'drums') return;
-
-        switch (parameter) {
-            case 'tuning':
-                this.setNoteTuning(note, value);
-                break;
-            case 'velocity':
-                this.setNoteVelocity(note, value);
-                break;
-            case 'attack':
-            case 'decay':
-            case 'sustain':
-            case 'release': {
-                const currentParams = this.envelopeParams.get(note) ?? {
-                    attack: this.DEFAULT_ATTACK,
-                    decay: this.DEFAULT_DECAY,
-                    sustain: this.DEFAULT_SUSTAIN,
-                    release: this.DEFAULT_RELEASE
-                };
-                this.envelopeParams.set(note, {
-                    ...currentParams,
-                    [parameter]: value
-                });
-                break;
-            }
-        }
-    }
-
     // Update tuning for a note
     setNoteTuning(note: number, cents: number): void {
         this.tunings.set(note, cents);
@@ -421,11 +494,14 @@ class KeyboardAudioManager {
             );
         }
     }
-
-    // Get current synthesis parameters
+    // Update getCurrentSynthesis to include filter parameters
     getCurrentSynthesis(note: number): SynthesisParameters {
         const velocity = this.velocities.get(note) ?? this.DEFAULT_VELOCITY;
         const envelope = this.getEnvelopeParams(note);
+        const filterParams = this.filterParams.get(note) ?? {
+            cutoff: this.DEFAULT_FILTER_CUTOFF,
+            resonance: this.DEFAULT_FILTER_RESONANCE
+        };
 
         if (this.currentMode === 'drums') {
             return {
@@ -457,7 +533,13 @@ class KeyboardAudioManager {
                     release: envelope.release
                 },
                 gain: this.velocityToGain(velocity),
-                effects: {}
+                effects: {
+                    filter: {
+                        type: 'lowpass',
+                        frequency: filterParams.cutoff,
+                        Q: filterParams.resonance
+                    }
+                }
             };
         }
     }
@@ -475,13 +557,14 @@ class KeyboardAudioManager {
     }
 
     // Clean up resources
+    // Update cleanup to include filter parameters
     cleanup(): void {
         Array.from(this.activeVoices.keys()).forEach(note => this.stopNote(note));
         this.activeVoices.clear();
         this.tunings.clear();
         this.velocities.clear();
         this.envelopeParams.clear();
-        // NEW - Add these lines
+        this.filterParams.clear();  // Add this
         this.waveforms.clear();
         this.globalWaveform = 'sine';
 
@@ -491,6 +574,12 @@ class KeyboardAudioManager {
             this.mainGain = null;
             this.isInitialized = false;
         }
+    }
+
+    private velocityToGain(velocity: number): number {
+        const normalizedVelocity = velocity / 127;
+        // Use cubic curve for more natural velocity response
+        return Math.pow(normalizedVelocity, 3) * this.DEFAULT_GAIN;
     }
 }
 
