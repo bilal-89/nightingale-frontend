@@ -1,35 +1,63 @@
+// src/store/middleware/keyboard.middleware.ts
+
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
+import { RootState } from '../../store';
 import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
 import { drumSoundManager } from '../../audio/context/drums/drumSoundManager';
+import { audioServices} from '../../features/audio/services';
+import {AUDIO_CONFIG} from '../../features/audio/config';
 import {
     KeyboardState,
-    KeyboardActionTypes,
     selectKeyWaveform,
-    selectGlobalWaveform
-} from '../slices/keyboard/keyboard.slice';
+} from '../slices/keyboard/keyboard.slice.ts';
 
-// Enhanced debug utilities to include parameter information
-const debug = {
-    log: (...args: any[]) => console.log('[Audio Middleware]', ...args),
-    state: (label: string, state: Partial<KeyboardState>) => {
-        debug.log(`${label}:`, {
-            mode: state.mode,
-            activeNotes: state.activeNotes?.length,
-            parameters: state.keyParameters ? Object.keys(state.keyParameters).length : 0
-        });
-    },
-    parameter: (note: number, parameter: string, value: any) => {
-        debug.log(`Parameter Change - Note: ${note}, ${parameter}: ${value}`);
-    }
-};
 
-// Action creator for initializing audio context
+// At the top of your current keyboard.middleware.ts file, add this export:
 export const initializeAudioContext = () => ({
     type: 'keyboard/initializeAudio' as const
 });
 
-// Type guard for keyboard actions
-const isKeyboardAction = (action: unknown): action is AnyAction & { payload?: any } => {
+// Define action types
+type KeyboardActionTypes =
+    | 'keyboard/initializeAudio'
+    | 'keyboard/noteOn'
+    | 'keyboard/noteOff'
+    | 'keyboard/setKeyParameter'
+    | 'keyboard/setGlobalWaveform'
+    | 'keyboard/setKeyWaveform'
+    | 'keyboard/setTuning'
+    | 'keyboard/setMode'
+    | 'keyboard/cleanup';
+
+// Define store type
+type Store = {
+    getState: () => RootState;
+    dispatch: (action: AnyAction) => void;
+};
+
+const debug = {
+    log: (...args: unknown[]) => {
+        if (AUDIO_CONFIG.DEBUG) {
+            console.log('[Audio Middleware]', ...args);
+        }
+    },
+    state: (label: string, state: Partial<KeyboardState>) => {
+        if (AUDIO_CONFIG.DEBUG) {
+            debug.log(`${label}:`, {
+                mode: state.mode,
+                activeNotes: state.activeNotes?.length,
+                parameters: state.keyParameters ? Object.keys(state.keyParameters).length : 0
+            });
+        }
+    },
+    parameter: (note: number, parameter: string, value: unknown) => {
+        if (AUDIO_CONFIG.DEBUG) {
+            debug.log(`Parameter Change - Note: ${note}, ${parameter}: ${value}`);
+        }
+    }
+};
+
+const isKeyboardAction = (action: unknown): action is AnyAction & { payload?: unknown } => {
     return typeof action === 'object' && action !== null && 'type' in action;
 };
 
@@ -40,156 +68,241 @@ export const keyboardAudioMiddleware: Middleware = store => next => action => {
     debug.log('Action received:', action);
     debug.state('Previous state', prevState);
 
-    // Process the action first to ensure state updates
     const result = next(action);
-
-    // Get updated state after action
     const currentState = store.getState().keyboard;
     debug.state('Current state', currentState);
+    debug.log('Using', AUDIO_CONFIG.USE_NEW_AUDIO_SYSTEM ? 'new' : 'legacy', 'audio system');
 
     try {
-        switch (action.type as KeyboardActionTypes) {
-            case 'keyboard/initializeAudio': {
-                debug.log('Initializing audio context');
-                try {
-                    Promise.all([
-                        keyboardAudioManager.initialize(),
-                        drumSoundManager.initialize()
-                    ]).then(() => {
-                        debug.log('Audio context initialized successfully');
-                    });
-                } catch (error) {
-                    debug.log('Audio context initialization failed:', error);
-                }
-                break;
-            }
-
-            case 'keyboard/noteOn': {
-                const note = action.payload;
-                const mode = currentState.mode;
-                const waveform = selectKeyWaveform(store.getState(), note);
-                debug.log(`Note on: ${note}, Mode: ${mode}, Waveform: ${waveform}`);
-
-                try {
-                    if (mode === 'drums') {
-                        debug.log('Playing drum sound');
-                        drumSoundManager.playDrumSound(note);
-                    } else {
-                        const parameters = currentState.keyParameters[note] || {};
-                        const velocity = parameters.velocity?.value ?? 100;
-                        debug.log('Playing tunable note', { velocity, waveform });
-                        keyboardAudioManager.playNote(note);
-                    }
-                } catch (error) {
-                    debug.log('Error playing note:', error);
-                }
-                break;
-            }
-
-            case 'keyboard/noteOff': {
-                const note = action.payload;
-                const mode = currentState.mode;
-                debug.log(`Note off: ${note}, Mode: ${mode}`);
-
-                try {
-                    if (mode !== 'drums') {
-                        keyboardAudioManager.stopNote(note);
-                    }
-                } catch (error) {
-                    debug.log('Error stopping note:', error);
-                }
-                break;
-            }
-
-            case 'keyboard/setKeyParameter': {
-                const { keyNumber, parameter, value } = action.payload;
-                const mode = currentState.mode;
-                debug.parameter(keyNumber, parameter, value);
-
-                try {
-                    if (mode !== 'drums') {
-                        keyboardAudioManager.setNoteParameter(keyNumber, parameter, value);
-                    }
-                } catch (error) {
-                    debug.log('Error setting parameter:', error);
-                }
-                break;
-            }
-
-            case 'keyboard/setGlobalWaveform': {
-                const waveform = action.payload;
-                debug.log(`Setting global waveform: ${waveform}`);
-
-                try {
-                    keyboardAudioManager.setGlobalWaveform(waveform);
-                } catch (error) {
-                    debug.log('Error setting global waveform:', error);
-                }
-                break;
-            }
-
-            case 'keyboard/setKeyWaveform': {
-                const { keyNumber, waveform } = action.payload;
-                debug.log(`Setting waveform for key ${keyNumber}: ${waveform}`);
-
-                try {
-                    keyboardAudioManager.setNoteWaveform(keyNumber, waveform);
-                } catch (error) {
-                    debug.log('Error setting key waveform:', error);
-                }
-                break;
-            }
-
-            case 'keyboard/setTuning': {
-                const { note: tuningNote, cents } = action.payload;
-                const mode = currentState.mode;
-                debug.parameter(tuningNote, 'tuning', cents);
-
-                try {
-                    if (mode !== 'drums') {
-                        keyboardAudioManager.setNoteParameter(tuningNote, 'tuning', cents);
-                    }
-                } catch (error) {
-                    debug.log('Error setting tuning:', error);
-                }
-                break;
-            }
-
-            case 'keyboard/setMode': {
-                const newMode = action.payload;
-                debug.log(`Setting mode to: ${newMode}`);
-
-                try {
-                    // Clean up active notes before mode switch
-                    currentState.activeNotes.forEach(note => {
-                        if (prevState.mode !== 'drums') {
-                            keyboardAudioManager.stopNote(note);
-                        }
-                    });
-
-                    keyboardAudioManager.setMode(newMode);
-                } catch (error) {
-                    debug.log('Error setting mode:', error);
-                }
-                break;
-            }
-
-            case 'keyboard/cleanup': {
-                debug.log('Cleaning up audio system');
-                try {
-                    keyboardAudioManager.cleanup();
-                    drumSoundManager.cleanup();
-                } catch (error) {
-                    debug.log('Error during cleanup:', error);
-                }
-                break;
-            }
+        if (AUDIO_CONFIG.USE_NEW_AUDIO_SYSTEM) {
+            handleNewSystem(action, store as Store, currentState, prevState);
+        } else {
+            handleLegacySystem(action, store as Store, currentState, prevState);
         }
     } catch (error) {
-        debug.log('Unhandled error in audio middleware:', error);
+        debug.log('Error in audio middleware:', error);
     }
 
     return result;
 };
+
+function handleNewSystem(
+    action: AnyAction,
+    store: Store,
+    currentState: KeyboardState,
+    prevState: KeyboardState
+) {
+    switch (action.type as KeyboardActionTypes) {
+        case 'keyboard/initializeAudio': {
+            debug.log('Initializing new audio system');
+            audioServices.initialize().catch(error => {
+                debug.log('Error initializing new audio system:', error);
+            });
+            break;
+        }
+
+        case 'keyboard/noteOn': {
+            const note = action.payload as number;
+            const parameters = currentState.keyParameters[note] || {};
+            const velocity = parameters.velocity?.value ?? 100;
+            const waveform = selectKeyWaveform(store.getState(), note);
+            debug.log(`Note on: ${note}, Mode: ${currentState.mode}, Waveform: ${waveform}`);
+
+            audioServices.voices.handleNoteOn(note, currentState.mode, velocity);
+            break;
+        }
+
+        case 'keyboard/noteOff': {
+            const note = action.payload as number;
+            debug.log(`Note off: ${note}, Mode: ${currentState.mode}`);
+            audioServices.voices.handleNoteOff(note, currentState.mode);
+            break;
+        }
+
+        case 'keyboard/setKeyParameter': {
+            const { keyNumber, parameter, value } = action.payload as {
+                keyNumber: number;
+                parameter: string;
+                value: number;
+            };
+            debug.log('setKeyParameter called:', { keyNumber, parameter, value });
+            debug.log('Current mode:', currentState.mode);
+            debug.log('Current context:', currentState.parameterContext); // Add this
+
+            // Remove this condition to allow parameter updates in any mode
+            audioServices.voices.setParameter(keyNumber, parameter, value);
+            break;
+        }
+
+        case 'keyboard/setGlobalWaveform': {
+            const waveform = action.payload;
+            debug.log(`Setting global waveform: ${waveform}`);
+            audioServices.voices.setGlobalWaveform(waveform); // Add this method to VoiceService
+            break;
+        }
+
+        case 'keyboard/setKeyWaveform': {
+            const { keyNumber, waveform } = action.payload as {
+                keyNumber: number;
+                waveform: OscillatorType;
+            };
+            debug.log(`Setting waveform for key ${keyNumber}: ${waveform}`);
+            audioServices.voices.setKeyWaveform(keyNumber, waveform); // Add this method to VoiceService
+            break;
+        }
+
+        case 'keyboard/setTuning': {
+            const { note: tuningNote, cents } = action.payload as {
+                note: number;
+                cents: number;
+            };
+            debug.parameter(tuningNote, 'tuning', cents);
+            if (currentState.mode !== 'drums') {
+                audioServices.voices.setParameter(tuningNote, 'tuning', cents);
+            }
+            break;
+        }
+
+        case 'keyboard/setMode': {
+            const newMode = action.payload;
+            debug.log(`Setting mode to: ${newMode}`);
+
+            // Clean up active notes before mode switch
+            currentState.activeNotes.forEach(note => {
+                if (prevState.mode !== 'drums') {
+                    audioServices.voices.handleNoteOff(note, prevState.mode);
+                }
+            });
+            break;
+        }
+
+        case 'keyboard/cleanup': {
+            debug.log('Cleaning up new audio system');
+            audioServices.cleanup();
+            break;
+        }
+    }
+}
+
+function handleLegacySystem(
+    action: AnyAction,
+    store: Store,
+    currentState: KeyboardState,
+    prevState: KeyboardState
+) {
+    switch (action.type as KeyboardActionTypes) {
+        case 'keyboard/initializeAudio': {
+            debug.log('Initializing legacy audio system');
+            Promise.all([
+                keyboardAudioManager.initialize(),
+                drumSoundManager.initialize()
+            ]).then(() => {
+                debug.log('Legacy audio system initialized successfully');
+            }).catch(error => {
+                debug.log('Legacy audio system initialization failed:', error);
+            });
+            break;
+        }
+
+        case 'keyboard/noteOn': {
+            const note = action.payload as number;
+            const mode = currentState.mode;
+            const waveform = selectKeyWaveform(store.getState(), note);
+            debug.log(`Note on: ${note}, Mode: ${mode}, Waveform: ${waveform}`);
+
+            if (mode === 'drums') {
+                debug.log('Playing drum sound');
+                drumSoundManager.playDrumSound(note);
+            } else {
+                const parameters = currentState.keyParameters[note] || {};
+                const velocity = parameters.velocity?.value ?? 100;
+                debug.log('Playing tunable note', { velocity, waveform });
+                keyboardAudioManager.playNote(note);
+            }
+            break;
+        }
+
+        case 'keyboard/noteOff': {
+            const note = action.payload as number;
+            const mode = currentState.mode;
+            debug.log(`Note off: ${note}, Mode: ${mode}`);
+
+            if (mode !== 'drums') {
+                keyboardAudioManager.stopNote(note);
+            }
+            break;
+        }
+
+        case 'keyboard/setKeyParameter': {
+            const { keyNumber, parameter, value } = action.payload as {
+                keyNumber: number;
+                parameter: string;
+                value: number;
+            };
+            const mode = currentState.mode;
+            debug.parameter(keyNumber, parameter, value);
+
+            if (mode !== 'drums') {
+                keyboardAudioManager.setNoteParameter(keyNumber, parameter, value);
+            }
+            break;
+        }
+
+        case 'keyboard/setGlobalWaveform': {
+            const waveform = action.payload as OscillatorType;
+            debug.log(`Setting global waveform: ${waveform}`);
+            keyboardAudioManager.setGlobalWaveform(waveform);
+            break;
+        }
+
+        case 'keyboard/setKeyWaveform': {
+            const { keyNumber, waveform } = action.payload as {
+                keyNumber: number;
+                waveform: OscillatorType;
+            };
+            debug.log(`Setting waveform for key ${keyNumber}: ${waveform}`);
+            keyboardAudioManager.setNoteWaveform(keyNumber, waveform);
+            break;
+        }
+
+        case 'keyboard/setTuning': {
+            const { note: tuningNote, cents } = action.payload as {
+                note: number;
+                cents: number;
+            };
+            const mode = currentState.mode;
+            debug.parameter(tuningNote, 'tuning', cents);
+
+            if (mode !== 'drums') {
+                keyboardAudioManager.setNoteParameter(tuningNote, 'tuning', cents);
+            }
+            break;
+        }
+
+        case 'keyboard/setMode': {
+            const newMode = action.payload;
+            debug.log(`Setting mode to: ${newMode}`);
+
+            // Clean up active notes before mode switch
+            currentState.activeNotes.forEach(note => {
+                if (prevState.mode !== 'drums') {
+                    keyboardAudioManager.stopNote(note);
+                }
+            });
+
+            keyboardAudioManager.setMode(newMode);
+            break;
+        }
+
+        case 'keyboard/cleanup': {
+            debug.log('Cleaning up legacy audio system');
+            keyboardAudioManager.cleanup();
+            if ('cleanup' in drumSoundManager) {
+                drumSoundManager.cleanup();
+            }
+            break;
+        }
+    }
+}
 
 export default keyboardAudioMiddleware;

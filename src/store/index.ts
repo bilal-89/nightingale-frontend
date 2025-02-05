@@ -2,17 +2,14 @@
 
 import { configureStore, Middleware } from '@reduxjs/toolkit';
 import keyboardReducer from './slices/keyboard/keyboard.slice';
-// import arrangementReducer from './slices/arrangement/arrangement.slice';
 import playerReducer from '../features/player/state/slices/player.slice';
 import playbackReducer from '../features/player/state/slices/playback.slice';
 
-import { keyboardAudioMiddleware } from './middleware/keyboardAudio.middleware';
-import { drumAudioMiddleware } from './middleware/drumAudio.middleware';
-// import { arrangementMiddleware } from './middleware/arrangement.middleware';
+// Import our new middleware instead of the old ones
+import { keyboardAudioMiddleware } from './middleware/keyboardAudio.middleware.ts';
 import { playbackMiddleware } from './middleware/playback.middleware';
 import { playerMiddleware } from './middleware/player.middleware';
 
-// We extend our ignored actions to include our new player-related actions
 const IGNORED_ACTIONS = {
     KEYBOARD: [
         'keyboard/initializeAudio',
@@ -31,7 +28,6 @@ const IGNORED_ACTIONS = {
         'arrangement/updatePlaybackPosition',
         'arrangement/setPlaybackPosition'
     ],
-    // Add our new player actions to ignore
     PLAYER: [
         'player/startRecording',
         'player/stopRecording',
@@ -40,30 +36,23 @@ const IGNORED_ACTIONS = {
     ]
 } as const;
 
-// Paths that might contain non-serializable values
 const IGNORED_PATHS = [
     'keyboard.audioContext',
     'arrangement.playback.scheduler',
-    'player.recordingBuffer',  // Add this to ignore the recording buffer
+    'player.recordingBuffer',
     'playback.schedulingConfig'
 ] as const;
 
-// Add our new middleware to the custom middleware array
+// Replace the old middleware with our new one
 const customMiddleware: Middleware[] = [
-    keyboardAudioMiddleware,
-    drumAudioMiddleware,
-    // arrangementMiddleware,
+    keyboardAudioMiddleware,  // This now handles both keyboard and drum audio
     playbackMiddleware,
-    playerMiddleware  // Add our new player middleware
+    playerMiddleware
 ];
 
 export const store = configureStore({
     reducer: {
-        // Keep existing reducers
         keyboard: keyboardReducer,
-        // arrangement: arrangementReducer,
-
-        // Add our new reducers
         player: playerReducer,
         playback: playbackReducer
     },
@@ -74,7 +63,7 @@ export const store = configureStore({
                     ...IGNORED_ACTIONS.KEYBOARD,
                     ...IGNORED_ACTIONS.ARRANGEMENT,
                     ...IGNORED_ACTIONS.PLAYBACK,
-                    ...IGNORED_ACTIONS.PLAYER  // Include our new ignored actions
+                    ...IGNORED_ACTIONS.PLAYER
                 ],
                 ignoredPaths: IGNORED_PATHS
             }
@@ -82,9 +71,6 @@ export const store = configureStore({
     devTools: process.env.NODE_ENV !== 'production'
 });
 
-// Infer types from store
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
-
-// Export ignored actions and paths for reuse
 export { IGNORED_ACTIONS, IGNORED_PATHS };

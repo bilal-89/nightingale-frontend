@@ -262,7 +262,7 @@ class KeyboardAudioManager {
         return this.waveforms.get(note) ?? this.globalWaveform;
     }
 
-    setGlobalWaveform(waveform: Waveform): void {
+    setGlobalWaveform(waveform: "custom" | "sawtooth" | "sine" | "square" | "triangle"): void {
         this.globalWaveform = waveform;
         // Update all active voices that use global waveform
         this.activeVoices.forEach((voice, note) => {
