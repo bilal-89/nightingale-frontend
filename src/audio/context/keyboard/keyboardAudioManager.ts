@@ -1,4 +1,4 @@
-import { SynthesisParameters, CompleteNoteEvent } from '../../types/audioTypes';
+import { SynthesisParameters, CompleteNoteEvent } from '../../../features/audio/types/audioTypes';
 import { drumSoundManager } from '../drums/drumSoundManager';
 import { Waveform } from '../../../store/slices/keyboard/keyboard.slice';
 

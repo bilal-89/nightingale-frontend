@@ -1,4 +1,4 @@
-import { SynthesisParameters } from '../../../audio/types/audioTypes';
+import { SynthesisParameters } from '../../audio/types/audioTypes.ts';
 
 // src/features/player/types/note.ts
 export interface NoteEvent {
