@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { KeyProps } from './keyboard.types';
-import { drumSounds } from '../../../audio/constants/drumSounds';
+import { drumSounds } from '../../../../src/features/audio/constants/drumSounds';
 
 // Extending the key props to include necessary properties while omitting 'isBirdsong'
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {

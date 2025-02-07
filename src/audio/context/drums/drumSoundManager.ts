@@ -1,7 +1,8 @@
 // src/audio/managers/drumManager.ts
 
-import { DrumType } from '../../types/drumTypes';
-import { drumSounds } from '../../constants/drumSounds';
+import { DrumType } from '../../../features/audio/types/drumTypes';
+import { drumSounds } from '../../../features/audio/constants/drumSounds';
+
 
 export class DrumSoundManager {
     private context: AudioContext | null = null;
