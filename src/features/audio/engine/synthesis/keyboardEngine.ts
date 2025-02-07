@@ -1,6 +1,6 @@
-import { SynthesisParameters, CompleteNoteEvent } from '../../../features/audio/types/audioTypes';
-import { drumSoundManager } from '../drums/drumSoundManager';
-import { Waveform } from '../../../store/slices/keyboard/keyboard.slice';
+import { SynthesisParameters, CompleteNoteEvent } from '../../types/audioTypes';
+import { drumSoundManager } from './drumEngine';
+import { Waveform } from '../../../../store/slices/keyboard/keyboard.slice';
 
 class KeyboardAudioManager {
     // Core audio settings

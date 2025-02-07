@@ -2,7 +2,7 @@
 
 import { Middleware } from '@reduxjs/toolkit';
 import { TimingService } from '../../features/player/services/timing.service';
-import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
+import keyboardAudioManager from '../../features/audio/engine/synthesis/keyboardEngine';
 import {
     selectClips,
     selectTempo,

@@ -1,7 +1,7 @@
 // src/features/player/services/playback.service.ts
 
 import { TIMING } from '../utils/time.utils';
-import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
+import keyboardAudioManager from '../../../features/audio/engine/synthesis/keyboardEngine';
 import type { NoteEvent } from '../types';
 
 export interface PlaybackEvents {

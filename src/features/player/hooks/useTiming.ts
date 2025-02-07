@@ -11,7 +11,7 @@ import {
     selectCurrentTime
 } from '../state/slices/playback.slice';
 import { selectTracks } from '../state/slices/player.slice';
-import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
+import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
 
 export const useTiming = () => {
     const dispatch = useAppDispatch();

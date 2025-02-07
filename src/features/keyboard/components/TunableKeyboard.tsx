@@ -22,7 +22,8 @@ import {
 import { initializeAudioContext } from '../../../store/middleware/keyboardAudio.middleware';
 import { RootState } from '../../../store';
 import { useTiming } from '../../../features/player/hooks/useTiming';
-import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
+import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
+
 
 const modeLabels: Record<SynthMode, string> = {
     tunable: "Tones",

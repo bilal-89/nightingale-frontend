@@ -1,6 +1,6 @@
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
-import keyboardAudioManager from '../../audio/context/keyboard/keyboardAudioManager';
-import { drumSoundManager } from '../../audio/context/drums/drumSoundManager';
+import keyboardAudioManager from '../../features/audio/engine/synthesis/keyboardEngine';
+import { drumSoundManager } from '../../features/audio/engine/synthesis/drumEngine';
 import {
     KeyboardState,
     KeyboardActionTypes,

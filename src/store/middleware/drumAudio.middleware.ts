@@ -1,5 +1,6 @@
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
-import { drumSoundManager } from '../../audio/context/drums/drumSoundManager';
+import { drumSoundManager } from '../../features/audio/engine/synthesis/drumEngine';
+
 import { RootState } from '../index';
 
 const isKeyboardAction = (action: unknown): action is AnyAction & { payload: number } => {

@@ -1,6 +1,7 @@
 // src/features/player/services/timing.service.ts
 
-import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
+import keyboardAudioManager from '../../../features/audio/engine/synthesis/keyboardEngine';
+
 
 /**
  * TimingService coordinates audio playback timing and visual updates.

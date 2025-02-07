@@ -1,7 +1,7 @@
 // src/audio/managers/drumManager.ts
 
-import { DrumType } from '../../../features/audio/types/drumTypes';
-import { drumSounds } from '../../../features/audio/constants/drumSounds';
+import { DrumType } from '../../types/drumTypes';
+import { drumSounds } from '../../constants/drumSounds';
 
 
 export class DrumSoundManager {
@@ -15,9 +15,11 @@ export class DrumSoundManager {
         return this.context;
     }
 
-    public initialize(): this {
+    private initialize(): this {
         if (!this.context) {
-            this.context = new (window.AudioContext || window.webkitAudioContext)();
+            // Instead of checking for webkitAudioContext, we can simply use AudioContext
+            // Modern browsers all support this standard version
+            this.context = new AudioContext();
         }
         return this;
     }

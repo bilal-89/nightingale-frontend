@@ -6,7 +6,8 @@ import {
     selectCurrentTime,
 } from '../features/player/state/slices/playback.slice';
 import { selectClips } from '../store/slices/arrangement/arrangement.slice';
-import keyboardAudioManager from '../audio/context/keyboard/keyboardAudioManager';
+import keyboardAudioManager from '../features/audio/engine/synthesis/keyboardEngine';
+
 
 interface DebugLogData {
     note?: number;
