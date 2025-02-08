@@ -1,4 +1,4 @@
-// src/features/keyboard/types/keyboard.types.ts
+// src/features/keyboard/types/keyboard.arrangement.types.ts
 
 export interface KeyProps {
     note: number;

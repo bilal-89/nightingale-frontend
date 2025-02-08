@@ -4,11 +4,13 @@ import { configureStore, Middleware } from '@reduxjs/toolkit';
 import keyboardReducer from '../features/keyboard/store/slices/keyboard.slice';
 import playerReducer from '../features/player/state/slices/player.slice';
 import playbackReducer from '../features/player/state/slices/playback.slice';
+import arrangementReducer from '../features/player/store/slices/arrangement/slice';
 
 import { keyboardAudioMiddleware } from '../features/audio/store/middleware/keyboardAudio.middleware.ts';
 import { drumAudioMiddleware } from '../features/audio/store/middleware/drumAudio.middleware';
 import { playerMiddleware } from '../features/player/store/middleware/player.middleware';
 import { playbackMiddleware } from '../features/player/store/middleware/playback.middleware';
+import { arrangementMiddleware } from '../features/player/store/middleware/arrangement.middleware';
 
 // We extend our ignored actions to include our new player-related actions
 const IGNORED_ACTIONS = {
@@ -50,18 +52,15 @@ const IGNORED_PATHS = [
 const customMiddleware: Middleware[] = [
     keyboardAudioMiddleware,
     drumAudioMiddleware,
-    // arrangementMiddleware,
+    arrangementMiddleware,
     playbackMiddleware,
     playerMiddleware  // Add our new player middleware
 ];
 
 export const store = configureStore({
     reducer: {
-        // Keep existing reducers
         keyboard: keyboardReducer,
-        // arrangement: arrangementReducer,
-
-        // Add our new reducers
+        arrangement: arrangementReducer,
         player: playerReducer,
         playback: playbackReducer
     },

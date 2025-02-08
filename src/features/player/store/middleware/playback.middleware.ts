@@ -10,7 +10,8 @@ import {
     selectCurrentTime,
     updatePlaybackPosition,
     stopPlayback
-} from '../slices/arrangement.slice';
+} from '../../store/slices/arrangement/slice';
+
 import {
     selectLoopRegion,
     selectIsLoopEnabled,
