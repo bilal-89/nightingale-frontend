@@ -1,16 +1,14 @@
 // src/store/index.ts
 
 import { configureStore, Middleware } from '@reduxjs/toolkit';
-import keyboardReducer from './slices/keyboard/keyboard.slice';
-// import arrangementReducer from './slices/arrangement/arrangement.slice';
+import keyboardReducer from '../features/keyboard/store/slices/keyboard.slice';
 import playerReducer from '../features/player/state/slices/player.slice';
 import playbackReducer from '../features/player/state/slices/playback.slice';
 
-import { keyboardAudioMiddleware } from './middleware/keyboardAudio.middleware';
-import { drumAudioMiddleware } from './middleware/drumAudio.middleware';
-// import { arrangementMiddleware } from './middleware/arrangement.middleware';
-import { playbackMiddleware } from './middleware/playback.middleware';
-import { playerMiddleware } from './middleware/player.middleware';
+import { keyboardAudioMiddleware } from '../features/audio/store/middleware/keyboardAudio.middleware.ts';
+import { drumAudioMiddleware } from '../features/audio/store/middleware/drumAudio.middleware';
+import { playerMiddleware } from '../features/player/store/middleware/player.middleware';
+import { playbackMiddleware } from '../features/player/store/middleware/playback.middleware';
 
 // We extend our ignored actions to include our new player-related actions
 const IGNORED_ACTIONS = {

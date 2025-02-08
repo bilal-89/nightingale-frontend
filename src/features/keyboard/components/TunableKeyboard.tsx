@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { useAppDispatch } from '../../../store/hooks';
-import { Card } from '../../../components/ui/card';
+import { Card } from '../../../shared/components/ui/card';
 import TunableKey from './TunableKey';
 import {
     noteOn,
@@ -18,10 +18,10 @@ import {
     selectGlobalWaveform,
     SynthMode,
     Waveform
-} from '../../../store/slices/keyboard/keyboard.slice';
-import { initializeAudioContext } from '../../../store/middleware/keyboardAudio.middleware';
+} from '../store/slices/keyboard.slice';
+import { initializeAudioContext } from '../../audio/store/middleware/keyboardAudio.middleware.ts';
 import { RootState } from '../../../store';
-import { useTiming } from '../../../features/player/hooks/useTiming';
+import { useTiming } from '../../player/hooks/useTiming.ts';
 import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
 
 

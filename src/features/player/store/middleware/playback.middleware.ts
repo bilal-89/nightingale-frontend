@@ -1,8 +1,8 @@
 // src/store/middleware/playback.middleware.ts
 
 import { Middleware } from '@reduxjs/toolkit';
-import { TimingService } from '../../features/player/services/timing.service';
-import keyboardAudioManager from '../../features/audio/engine/synthesis/keyboardEngine';
+import { TimingService } from '../../services/timing.service';
+import keyboardAudioManager from '../../../audio/engine/synthesis/keyboardEngine';
 import {
     selectClips,
     selectTempo,
@@ -10,12 +10,11 @@ import {
     selectCurrentTime,
     updatePlaybackPosition,
     stopPlayback
-} from '../slices/arrangement/arrangement.slice';
+} from '../slices/arrangement.slice';
 import {
     selectLoopRegion,
     selectIsLoopEnabled,
-    // selectSchedulingConfig
-} from '../../features/player/state/slices/playback.slice';
+} from '../../state/slices/playback.slice';
 
 let timingService: TimingService | null = null;
 

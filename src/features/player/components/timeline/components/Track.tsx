@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from '../../../../../store/hooks';
 import { setCurrentTrack } from '../../../state/slices/player.slice';
 import { Track as TrackType } from '../../../types/track';
 import Note from '../../notes/Note';
-import { cn } from '../../../../../lib/utils';
+import { cn } from '../../../../../core/utils/styles.utils';
 
 interface TrackProps {
     track: TrackType;

@@ -1,4 +1,4 @@
-import { KeyParameters } from '../../../store/slices/keyboard/keyboard.slice';
+import { KeyParameters } from '../../keyboard/store/slices/keyboard.slice';
 
 export type ParameterContext = 'keyboard' | 'note';
 export type ParameterGroup = 'envelope' | 'note' | 'filter';

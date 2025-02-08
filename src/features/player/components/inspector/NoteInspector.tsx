@@ -1,7 +1,7 @@
 // src/features/player/components/inspector/NoteInspector.tsx
 
 import React, { useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { ParameterControls } from './ParameterControls';
 import { useAppSelector } from '../../hooks';
 import { selectSelectedNote } from '../../state/slices/player.slice';

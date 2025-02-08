@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { RootState } from '../../index';
-import { SynthesisParameters } from '../../../features/audio/types/audioTypes';
+import type { RootState } from '../../../../store';
+import { SynthesisParameters } from '../../../audio/types/audioTypes';
 
 export interface NoteEvent {
     note: number;

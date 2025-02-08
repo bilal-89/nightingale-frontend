@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { selectIsPanelVisible, togglePanel } from '../../../store/slices/keyboard/keyboard.slice';
+import { selectIsPanelVisible, togglePanel } from '../../keyboard/store/slices/keyboard.slice';
 import { useParameterValues } from '../hooks/useParameterValues';
 import { parameters } from '../constants/parameters';
 import { ParameterContext } from '../types/types';

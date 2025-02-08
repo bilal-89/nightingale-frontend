@@ -11,7 +11,7 @@ import {
 import { selectIsPlaying } from '../../../state/slices/playback.slice';
 import Note from '../../notes/Note';
 import { TIMING } from '../../../utils/time.utils';
-import { cn } from '../../../../../lib/utils';
+import { cn } from '../../../../../core/utils/styles.utils';
 
 // These constants define our grid layout and dimensions
 const GRID_CONSTANTS = {

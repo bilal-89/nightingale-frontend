@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { selectSelectedNote } from '../../player/state/slices/player.slice';
-import { setKeyParameter } from '../../../store/slices/keyboard/keyboard.slice';
+import { setKeyParameter } from '../../keyboard/store/slices/keyboard.slice';
 import { useParameters } from '../../player/hooks/useParameters';
 import { parameters } from '../constants/parameters';
 import {

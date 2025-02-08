@@ -1,7 +1,7 @@
+// src/features/audio/store/middleware/drumAudio.middleware.ts
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
-import { drumSoundManager } from '../../features/audio/engine/synthesis/drumEngine';
-
-import { RootState } from '../index';
+import { drumSoundManager } from '../../engine/synthesis/drumEngine';
+import { RootState } from '../../../../store';
 
 const isKeyboardAction = (action: unknown): action is AnyAction & { payload: number } => {
     return typeof action === 'object' && action !== null && 'type' in action && 'payload' in action;

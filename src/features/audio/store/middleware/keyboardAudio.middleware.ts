@@ -1,12 +1,11 @@
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
-import keyboardAudioManager from '../../features/audio/engine/synthesis/keyboardEngine';
-import { drumSoundManager } from '../../features/audio/engine/synthesis/drumEngine';
+import keyboardAudioManager from '../../engine/synthesis/keyboardEngine';
+import { drumSoundManager } from '../../engine/synthesis/drumEngine';
 import {
     KeyboardState,
     KeyboardActionTypes,
     selectKeyWaveform,
-    selectGlobalWaveform
-} from '../slices/keyboard/keyboard.slice';
+} from '../../../keyboard/store/slices/keyboard.slice';
 
 // Enhanced debug utilities to include parameter information
 const debug = {
