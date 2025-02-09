@@ -1,6 +1,6 @@
 // src/features/player/store/slices/arrangement/reducers/clips.ts
 import { PayloadAction } from '@reduxjs/toolkit';
-import type { ArrangementState, Clip } from '../types.ts';
+import {ArrangementState, Clip, NoteColor} from '../types.ts';
 
 export const clipReducers = {
     setCurrentTrack: (state: ArrangementState, action: PayloadAction<number>) => {
@@ -51,5 +51,34 @@ export const clipReducers = {
                 ...action.payload.parameters
             };
         }
+    },
+
+    setTrackColor: (state: ArrangementState, action: PayloadAction<{
+        trackId: number;
+        color: NoteColor;
+    }>) => {
+        console.log('Setting track color:', {
+            payload: action.payload,
+            currentState: state
+        });
+
+        const track = state.tracks.find(t => t.id === action.payload.trackId);
+        if (track) {
+            track.color = action.payload.color;
+
+            // Update existing notes
+            state.clips.forEach(clip => {
+                if (clip.track === action.payload.trackId) {
+                    clip.notes.forEach(note => {
+                        console.log('Updating note color:', {
+                            before: note.color,
+                            after: action.payload.color
+                        });
+                        note.color = action.payload.color;
+                    });
+                }
+            });
+        }
     }
+
 };

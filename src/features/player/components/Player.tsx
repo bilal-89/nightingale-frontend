@@ -5,6 +5,7 @@ import { Circle } from 'lucide-react';
 import TimelineGrid from './timeline/components/TimelineGrid';
 import TransportControls from './transport/TransportControls';
 import { startRecording, stopRecording } from '../state/slices/player.slice';
+import { ColorPickerPanel } from './ColorPickerPanel';
 
 // Memoized Record Button Component
 const RecordButton = memo(({ isRecording, onRecordToggle }) => (
@@ -46,6 +47,8 @@ export const Player = () => {
             </div>
 
             <TimelineGrid />
+            <ColorPickerPanel/>
+
         </Card>
     );
 };

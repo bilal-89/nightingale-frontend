@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useAppDispatch } from '../../../store/hooks';
 import { Card } from '../../../shared/components/ui/card';
@@ -23,7 +23,6 @@ import { initializeAudioContext } from '../../audio/store/middleware/keyboardAud
 import { RootState } from '../../../store';
 import { useTiming } from '../../player/hooks/useTiming.ts';
 import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
-
 
 const modeLabels: Record<SynthMode, string> = {
     tunable: "Tones",
@@ -72,6 +71,10 @@ const TunableKeyboard: React.FC = () => {
     const currentWaveform = useSelector(selectGlobalWaveform);
     const isPanelVisible = useSelector(selectIsPanelVisible);
 
+    // Container press state
+    const [isPressed, setIsPressed] = useState(false);
+    const [clickedContainer, setClickedContainer] = useState(false);
+
     const initializeAudio = useCallback(() => {
         if (!isInitialized) {
             dispatch(initializeAudioContext());
@@ -80,10 +83,7 @@ const TunableKeyboard: React.FC = () => {
 
     const handleNoteOn = useCallback((note: number) => {
         initializeAudio();
-
-        // Just play the note - it will use whatever tuning is currently set
         dispatch(noteOn(note));
-
     }, [dispatch, initializeAudio]);
 
     const handleNoteOff = useCallback((note: number) => {
@@ -91,25 +91,14 @@ const TunableKeyboard: React.FC = () => {
     }, [dispatch]);
 
     const handleTuningChange = useCallback((note: number, cents: number) => {
-        // Update audio engine first for immediate feedback
         keyboardAudioManager.setNoteParameter(note, 'tuning', cents);
-
-        // Save tuning state in timing service for playback
         timing.saveTuningState(note, cents);
-
-        // Update Redux state to persist the tuning value
         dispatch(setKeyParameter({
             keyNumber: note,
             parameter: 'tuning',
             value: cents
         }));
-
-        console.log('Tuning updated:', { note, cents });
     }, [dispatch, timing]);
-
-    const handleModeChange = useCallback((newMode: SynthMode) => {
-        dispatch(setMode(newMode));
-    }, [dispatch]);
 
     const handleWaveformChange = useCallback((newWaveform: Waveform) => {
         dispatch(setGlobalWaveform(newWaveform));
@@ -118,6 +107,27 @@ const TunableKeyboard: React.FC = () => {
     const handlePanelClick = useCallback(() => {
         dispatch(togglePanel());
     }, [dispatch]);
+
+    // Container press handlers
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+        if (e.target === e.currentTarget) {
+            setIsPressed(true);
+            setClickedContainer(true);
+        }
+    }, []);
+
+    const handleMouseUp = useCallback(() => {
+        if (isPressed && clickedContainer) {
+            dispatch(setMode(currentMode === 'tunable' ? 'drums' : 'tunable'));
+        }
+        setIsPressed(false);
+        setClickedContainer(false);
+    }, [isPressed, clickedContainer, currentMode, dispatch]);
+
+    const handleMouseLeave = useCallback(() => {
+        setIsPressed(false);
+        setClickedContainer(false);
+    }, []);
 
     useEffect(() => {
         const keyMap: Record<string, number> = {
@@ -166,41 +176,25 @@ const TunableKeyboard: React.FC = () => {
 
     const currentStyle = modeStyles[currentMode];
 
+    const getContainerStyle = () => ({
+        transition: 'all 200ms ease-in-out',
+        boxShadow: isPressed ? currentStyle.innerShadow : currentStyle.shadow,
+        transform: isPressed ? 'translateY(1px)' : 'translateY(0)'
+    });
+
     return (
         <Card className={`p-8 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background}`}>
             <div className="flex flex-col gap-6">
-                <div className="flex justify-center gap-4">
-                    {(['tunable', 'drums'] as const).map((mode) => (
-                        <button
-                            key={mode}
-                            onClick={() => handleModeChange(mode)}
-                            className={`
-                                px-6 py-3 rounded-xl
-                                transition-all duration-300 ease-in-out
-                                ${currentMode === mode ? modeStyles[mode].buttonBg : 'bg-opacity-50'}
-                                ${modeStyles[mode].textColor}
-                                ${currentMode === mode ? 'scale-105' : 'scale-100'}
-                            `}
-                            style={{
-                                boxShadow: currentMode === mode ? modeStyles[mode].shadow : 'none'
-                            }}
-                        >
-                            {modeLabels[mode]}
-                        </button>
-                    ))}
-                </div>
-
                 <div
                     className={`
-                        grid grid-cols-6 gap-x-6 gap-y-6 p-8 rounded-xl 
+                        grid grid-cols-6 gap-x-6 gap-y-6 p-8 rounded-xl cursor-pointer
                         transition-all duration-300 ease-in-out
                         ${currentStyle.containerBg}
                     `}
-                    style={{
-                        boxShadow: currentStyle.innerShadow,
-                        width: 'fit-content',
-                        margin: '0 auto'
-                    }}
+                    style={getContainerStyle()}
+                    onMouseDown={handleMouseDown}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseLeave}
                 >
                     <div className="contents transition-all duration-300 ease-in-out">
                         {notes.slice(0, 6).map(({note}) => (

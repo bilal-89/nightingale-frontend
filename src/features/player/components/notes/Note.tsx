@@ -4,6 +4,7 @@ import { selectNote } from '../../state/slices/player.slice';
 import { NoteEvent } from '../../types';
 import { LAYOUT } from '../../constants';
 import { useNoteDrag } from '../../hooks/useNoteDrag';
+import { NoteColor } from '../../store/slices/arrangement/types';
 
 interface NoteProps {
     note: NoteEvent;
@@ -14,6 +15,8 @@ interface NoteProps {
     availableTracks: string[];
     lowestNote: number;
     highestNote: number;
+    trackColor: string;  // Add this prop
+
 }
 
 const Note: React.FC<NoteProps> = ({
@@ -24,7 +27,9 @@ const Note: React.FC<NoteProps> = ({
                                        timelineZoom,
                                        availableTracks,
                                        lowestNote,
-                                       highestNote
+                                       highestNote,
+                                       trackColor  // Add this here
+
                                    }) => {
     const dispatch = useAppDispatch();
     const { handleDragStart, handleDrag, handleDragEnd, handleKeyboardMove } = useNoteDrag();
@@ -93,16 +98,16 @@ const Note: React.FC<NoteProps> = ({
     const baseOpacity = note.velocity / 127;
     const verticalPosition = calculateVerticalPosition();
 
-    const getAttackGradient = (baseColor: string) => {
+    const getAttackGradient = () => {
         const attackTime = note.synthesis?.envelope?.attack ?? 0.05;
         const maxAttackPercent = 25;
         const attackPercent = Math.min(attackTime * 100 * 2, maxAttackPercent);
         const opacityHex = Math.round(baseOpacity * 255).toString(16).padStart(2, '0');
 
         return `linear-gradient(90deg, 
-            ${baseColor}00 0%,
-            ${baseColor}${opacityHex} ${attackPercent}%,
-            ${baseColor}${opacityHex} 100%)
+            ${trackColor}00 0%,
+            ${trackColor}${opacityHex} ${attackPercent}%,
+            ${trackColor}${opacityHex} 100%)
         `;
     };
 
@@ -118,7 +123,7 @@ const Note: React.FC<NoteProps> = ({
                     Math.max(PADDING, verticalPosition))}px`,
                 width: `${Math.max(4, width)}px`,
                 height: `${LAYOUT.NOTE_HEIGHT}px`,
-                background: getAttackGradient('#968c7d'),
+                background: getAttackGradient(),
                 transform: 'translateZ(0)',
                 transition: isLocalDragging ? 'none' : 'top 0.1s ease-out', // Disable transition during drag
                 boxShadow: isSelected || isLocalDragging

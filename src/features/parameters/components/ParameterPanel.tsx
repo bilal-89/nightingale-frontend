@@ -88,7 +88,7 @@ const ParameterPanel: React.FC = () => {
                 {/* Rest of the component remains unchanged */}
                 <div className="flex justify-between items-center mb-4">
                     <div className="text-sm font-medium text-gray-700">
-                        {context === 'note' ? 'Note Parameters' : 'Keyboard Parameters'}
+                        {context === 'note' ? 'Note' : 'Key'}
                     </div>
                 </div>
 

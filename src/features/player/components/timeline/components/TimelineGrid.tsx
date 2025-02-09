@@ -214,6 +214,7 @@ export const TimelineGrid: React.FC = () => {
                                         isSelected={selectedNoteId === note.id}
                                         lowestNote={trackRanges[trackIndex].lowestNote}
                                         highestNote={trackRanges[trackIndex].highestNote}
+                                        trackColor={track.color}
                                     />
                                 ))}
                             </div>

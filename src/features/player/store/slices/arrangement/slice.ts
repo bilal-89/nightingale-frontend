@@ -1,11 +1,12 @@
 // src/features/player/store/slices/arrangement.slice.ts
 import { createSlice } from '@reduxjs/toolkit';
-import type { ArrangementState } from './types';
+import {ArrangementState, NoteColor} from './types';
 import { recordingReducers } from "./reducers/recording";
 import { playbackReducers } from './reducers/playback';
 import { noteReducers } from './reducers/notes';
 import { clipReducers } from "./reducers/clips.ts";
 
+// src/features/player/store/slices/arrangement/slice.ts
 const initialState: ArrangementState = {
     isRecording: false,
     recordingStartTime: null,
@@ -17,7 +18,16 @@ const initialState: ArrangementState = {
         isPlaying: false,
         currentTime: 0
     },
-    selectedNote: null
+    selectedNote: null,
+    tracks: [  // Add this initialization
+        { id: 0, color: NoteColor.Red },
+        { id: 1, color: NoteColor.Orange },
+        { id: 2, color: NoteColor.Yellow },
+        { id: 3, color: NoteColor.Green },
+        { id: 4, color: NoteColor.Blue },
+        { id: 5, color: NoteColor.Indigo },
+        { id: 6, color: NoteColor.Violet }
+    ]
 };
 
 const arrangementSlice = createSlice({
@@ -54,7 +64,8 @@ export const {
     clearLoopRegion,
     // Note actions
     selectNote,
-    updateSelectedNoteParameters
+    updateSelectedNoteParameters,
+    setTrackColor,
 } = arrangementSlice.actions;
 
 export {

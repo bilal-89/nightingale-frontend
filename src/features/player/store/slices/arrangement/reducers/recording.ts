@@ -1,6 +1,6 @@
 // src/features/player/store/slices/arrangement/reducers/recording.ts
 import { PayloadAction } from '@reduxjs/toolkit';
-import type { ArrangementState, NoteEvent } from '../types.ts';
+import {ArrangementState, NoteColor, NoteEvent} from '../types.ts';
 
 export const recordingReducers = {
     startRecording: (state: ArrangementState) => {
@@ -14,9 +14,16 @@ export const recordingReducers = {
         state.recordingStartTime = null;
     },
 
-    addNoteEvent: (state: ArrangementState, action: PayloadAction<NoteEvent>) => {
+    // src/features/player/store/slices/arrangement/reducers/recording.ts
+    addNoteEvent: (state: ArrangementState, action: PayloadAction<Omit<NoteEvent, 'color'>>) => {
         if (state.isRecording) {
-            state.recordingBuffer.push(action.payload);
+            // Get current track's color
+            const currentTrack = state.tracks.find(t => t.id === state.currentTrack);
+            const noteWithColor = {
+                ...action.payload,
+                color: currentTrack?.color || NoteColor.Red // Add the track's color to new notes
+            };
+            state.recordingBuffer.push(noteWithColor);
         }
     },
 

@@ -20,5 +20,18 @@ export const noteReducers = {
             ...note,
             ...action.payload
         };
+    },
+    addNoteWithCurrentTrackColor: (state: ArrangementState, action: PayloadAction<Omit<NoteEvent, 'color'>>) => {
+        const currentTrack = state.tracks.find(t => t.id === state.currentTrack);
+        if (currentTrack) {
+            const noteWithColor = {
+                ...action.payload,
+                color: currentTrack.color
+            };
+            // Add note to current clip or recording buffer as needed
+            if (state.isRecording) {
+                state.recordingBuffer.push(noteWithColor);
+            }
+        }
     }
 };
