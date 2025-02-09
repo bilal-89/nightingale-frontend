@@ -21,7 +21,7 @@ export const ColorStrip: React.FC<ColorStripProps> = ({ selectedColor, onColorSe
                 <button
                     key={color}
                     onClick={() => onColorSelect(color)}
-                    className={`w-6 h-6 rounded-full transition-all ${
+                    className={`w-6 h-6 rounded-md transition-all ${
                         selectedColor === color ? 'scale-110' : 'hover:scale-105'
                     }`}
                     style={{
