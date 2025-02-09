@@ -13,13 +13,13 @@ export interface NoteEvent {
 
 // Add this enum for our ROYGBIV colors
 export enum NoteColor {
-    Red = '#ffb3b3',     // Soft red
-    Orange = '#ffd4a3',  // Soft orange
-    Yellow = '#fff0b3',  // Soft yellow
-    Green = '#b8e6c1',   // Soft green
-    Blue = '#b3d1ff',    // Soft blue
-    Indigo = '#c6b3e6',  // Soft indigo
-    Violet = '#e6b3d4'   // Soft violet
+    Yellow = '#9e4206',  // Soft yellow
+    Red = '#bd0000',     // Soft red
+    Orange = '#ff6a1b',  // Soft orange
+    Green = '#9fc102',   // Soft green
+    Blue = '#297dff',    // Soft blue
+    Indigo = '#9332f6',  // Soft indigo
+    Violet = '#ff4f9e'   // Soft violet
 }
 
 
