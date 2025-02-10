@@ -15,7 +15,7 @@ import {
 import {
     selectLoopRegion,
     selectIsLoopEnabled,
-} from '../../state/slices/playback.slice';
+} from '../playback';
 
 let timingService: TimingService | null = null;
 

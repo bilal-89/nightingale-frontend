@@ -4,7 +4,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { NoteColor } from '../store/slices/arrangement/types';
 import { ColorStrip } from '../../../shared/components/ui/ColorStrip';
 import { RootState } from '../../../store';
-import { setTrackSettings } from '../state/slices/player.slice';
+import { setTrackSettings } from '../store/player';
+
 
 export const ColorPickerPanel: React.FC = () => {
     const dispatch = useDispatch();

@@ -1,10 +1,10 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { useAppDispatch } from '../../hooks';
-import { selectNote } from '../../state/slices/player.slice';
+import { selectNote } from '../../store/player';
+
 import { NoteEvent } from '../../types';
 import { LAYOUT } from '../../constants';
 import { useNoteDrag } from '../../hooks/useNoteDrag';
-import { NoteColor } from '../../store/slices/arrangement/types';
 
 interface NoteProps {
     note: NoteEvent;

@@ -2,8 +2,8 @@
 
 import { configureStore, Middleware } from '@reduxjs/toolkit';
 import keyboardReducer from '../features/keyboard/store/slices/keyboard.slice';
-import playerReducer from '../features/player/state/slices/player.slice';
-import playbackReducer from '../features/player/state/slices/playback.slice';
+import playerReducer from '../features/player/store/player';
+import playbackReducer from '../features/player/store/playback';
 import arrangementReducer from '../features/player/store/slices/arrangement/slice';
 
 import { keyboardAudioMiddleware } from '../features/audio/store/middleware/keyboardAudio.middleware.ts';

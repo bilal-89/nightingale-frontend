@@ -9,8 +9,9 @@ import {
     selectTempo,
     selectIsPlaying,
     selectCurrentTime
-} from '../state/slices/playback.slice';
-import { selectTracks } from '../state/slices/player.slice';
+} from '../store/playback';
+import { selectTracks } from '../store/player';
+
 import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
 
 export const useTiming = () => {

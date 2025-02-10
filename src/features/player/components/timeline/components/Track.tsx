@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../../../store/hooks';
-import { setCurrentTrack } from '../../../state/slices/player.slice';
+import { setCurrentTrack } from '../../../store/player';
+
 import { Track as TrackType } from '../../../types/track';
 import Note from '../../notes/Note';
 import { cn } from '../../../../../core/utils/styles.utils';

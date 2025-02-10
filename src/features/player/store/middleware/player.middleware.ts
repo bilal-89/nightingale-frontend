@@ -3,7 +3,7 @@
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
 // New location: src/features/player/store/middleware/player.middleware.ts
 // Update imports:
-import { commitRecordingBuffer } from '../../state/slices/player.slice';
+import { commitRecordingBuffer } from '../player';
 import type { NoteEvent } from '../../types';
 
 const activeNotes = new Map();

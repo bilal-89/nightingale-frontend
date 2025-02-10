@@ -4,7 +4,8 @@ import { Card } from '../../../shared/components/ui/card';
 import { Circle } from 'lucide-react';
 import TimelineGrid from './timeline/components/TimelineGrid';
 import TransportControls from './transport/TransportControls';
-import { startRecording, stopRecording } from '../state/slices/player.slice';
+import { startRecording, stopRecording } from '../store/player';
+
 import { ColorPickerPanel } from './ColorPickerPanel';
 
 // Memoized Record Button Component

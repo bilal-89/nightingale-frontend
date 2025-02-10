@@ -12,7 +12,7 @@ import {
     setTrackSettings,
     selectTracks,
     selectCurrentTrack
-} from '../state/slices/player.slice';
+} from '../store/player';
 import {Track} from "../types/track.ts";
 
 export const useTracks = () => {

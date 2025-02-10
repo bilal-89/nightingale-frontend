@@ -4,7 +4,8 @@ import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { ParameterControls } from './ParameterControls';
 import { useAppSelector } from '../../hooks';
-import { selectSelectedNote } from '../../state/slices/player.slice';
+import { selectSelectedNote } from '../../store/player';
+
 
 const noteNameFromMidi = (midi: number) => {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];

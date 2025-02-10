@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from 'react';
 import { useAppDispatch, useAppSelector } from './useStore';
-import { moveNote, selectTimelineSettings } from '../state/slices/player.slice';
+import { moveNote, selectTimelineSettings } from '../store/player';
+
 import { LAYOUT } from '../constants';
 import { NoteEvent } from "../types";
 

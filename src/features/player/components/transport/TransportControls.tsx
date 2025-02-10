@@ -7,7 +7,7 @@ import {
     selectIsRecording,
     startRecording,
     stopRecording
-} from '../../state/slices/player.slice';
+} from '../../store/player';
 import {
     selectIsSettingLoopPoints,
     selectLoopRegionAsPercentages,
@@ -15,7 +15,7 @@ import {
     startSettingLoopPoints,
     clearLoopPoints,
     toggleLoopEnabled
-} from '../../state/slices/playback.slice';
+} from '../../store/playback';
 
 const TransportControls: React.FC = () => {
     // Get our playback controls and state

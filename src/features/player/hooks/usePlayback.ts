@@ -11,8 +11,9 @@ import {
     setPlaybackPosition,
     updatePlaybackPosition,
     setTempo
-} from '../state/slices/playback.slice';
-import { selectTracks } from '../state/slices/player.slice';
+} from '../store/playback';
+import { selectTracks } from '../store/player';
+
 
 export const usePlayback = () => {
     // Redux state

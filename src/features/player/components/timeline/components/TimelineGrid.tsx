@@ -7,8 +7,8 @@ import {
     selectTimelineSettings,
     setCurrentTrack,
     addTrack
-} from '../../../state/slices/player.slice';
-import { selectIsPlaying } from '../../../state/slices/playback.slice';
+} from '../../../store/player';
+import { selectIsPlaying } from '../../../store/playback';
 import Note from '../../notes/Note';
 import { TIMING } from '../../../utils/time.utils';
 import { cn } from '../../../../../core/utils/styles.utils';

@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from './useStore';
 import { ParameterService } from '../parameters/parameter.service';
-import { updateNoteParameters, selectSelectedNote } from '../state/slices/player.slice';
+import { updateNoteParameters, selectSelectedNote } from '../store/player';
+
 
 const parameterService = new ParameterService();
 
