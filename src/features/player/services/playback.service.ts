@@ -3,6 +3,7 @@
 import { TIMING } from '../utils/time.utils';
 import keyboardAudioManager from '../../../features/audio/engine/synthesis/keyboardEngine';
 import type { NoteEvent } from '../types';
+import {Track} from "../store/player";
 
 export interface PlaybackEvents {
     onPositionChange?: (positionInMs: number) => void;
@@ -87,12 +88,14 @@ export class PlaybackService {
     // Visual timeline update system using requestAnimationFrame for smooth animation
     private startTimelineUpdate() {
         const updateTimeline = () => {
-            if (!this.isPlaying) return;
+            if (!this.isPlaying || !this.state) return;
 
-            // Calculate position from wall clock time for smooth visual updates
-            const currentTime = performance.now() - this.playbackStartTime;
-            this.events.onPositionChange?.(currentTime);
+            // Calculate tempo-adjusted position
+            const rawTime = performance.now() - this.playbackStartTime;
+            const tempoScaleFactor = TIMING.DEFAULT_TEMPO / this.state.tempo;
+            const adjustedTime = rawTime * tempoScaleFactor;
 
+            this.events.onPositionChange?.(adjustedTime);
             this.animationFrameId = requestAnimationFrame(updateTimeline);
         };
 
@@ -138,6 +141,11 @@ export class PlaybackService {
         try {
             const previousMode = keyboardAudioManager.getCurrentMode();
 
+            // Calculate tempo-adjusted timing
+            const tempoScaleFactor = TIMING.DEFAULT_TEMPO / this.state!.tempo;
+            const adjustedStartTime = absoluteStartTime * tempoScaleFactor;
+            const adjustedDuration = (note.duration / 1000) * tempoScaleFactor;
+
             // Configure synthesis for this note
             if (note.synthesis.mode === 'tunable') {
                 keyboardAudioManager.setMode('tunable');
@@ -153,11 +161,11 @@ export class PlaybackService {
                 keyboardAudioManager.setMode('drums');
             }
 
-            // Schedule the note to play
+            // Schedule the note to play with adjusted timing
             keyboardAudioManager.playExactNote({
                 ...note,
-                timestamp: absoluteStartTime,
-                duration: note.duration / 1000,
+                timestamp: adjustedStartTime,
+                duration: adjustedDuration,
                 synthesis: {
                     ...note.synthesis,
                     envelope: {
@@ -168,14 +176,14 @@ export class PlaybackService {
                         ...note.synthesis.envelope
                     }
                 }
-            }, absoluteStartTime);
+            }, adjustedStartTime);
 
-            // Remember that we scheduled this note
+            // Remember that we scheduled this note with adjusted timing
             this.scheduledNotes.push({
                 id: scheduleId,
                 note,
                 trackId,
-                absoluteStartTime
+                absoluteStartTime: adjustedStartTime
             });
 
             // Restore previous synthesis state
@@ -224,13 +232,23 @@ export class PlaybackService {
         if (!this.state) return;
 
         const currentTime = this.getCurrentTimeInMs();
+        const oldTempo = this.state.tempo;
         this.state.tempo = newTempo;
 
-        // When tempo changes, update our timing system to maintain position
-        this.playbackStartTime = performance.now() - currentTime;
-        this.state.startTime = this.state.audioContext.currentTime - (currentTime / 1000);
+        // Adjust timing system for new tempo while maintaining position
+        const tempoRatio = oldTempo / newTempo;
+        this.playbackStartTime = performance.now() - (currentTime * tempoRatio);
+        this.state.startTime = this.state.audioContext.currentTime - ((currentTime * tempoRatio) / 1000);
         this.state.lastScheduledTime = this.state.audioContext.currentTime;
+
+        // Clear scheduled notes to prevent timing conflicts
         this.scheduledNotes = [];
+
+        console.log('Tempo changed:', {
+            from: oldTempo,
+            to: newTempo,
+            adjustmentRatio: tempoRatio
+        });
     }
 
     public seek(timeInMs: number) {

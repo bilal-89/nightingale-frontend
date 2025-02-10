@@ -2,7 +2,6 @@
 
 import keyboardAudioManager from '../../../features/audio/engine/synthesis/keyboardEngine';
 
-
 /**
  * TimingService coordinates audio playback timing and visual updates.
  * It manages both the scheduling of audio events and the smooth updating
@@ -18,6 +17,7 @@ export class TimingService {
     private isPlaying: boolean = false;
     private startTimeRef: number = 0;
     private lastTickTime: number = 0;
+    private tempo: number = 120;
 
     // Track which notes we've already scheduled
     private scheduledNotes = new Set<string>();
@@ -31,8 +31,11 @@ export class TimingService {
         private callbacks: {
             onScheduleNotes?: (startTime: number, endTime: number) => void;
             onTick?: (currentTimeMs: number) => void;
-        } = {}
-    ) {}
+        } = {},
+        initialTempo: number = 120
+    ) {
+        this.tempo = initialTempo;
+    }
 
     /**
      * Initialize the audio system. We use keyboardAudioManager's context
@@ -45,6 +48,29 @@ export class TimingService {
         if (this.audioContext?.state === 'suspended') {
             await this.audioContext.resume();
         }
+    }
+
+    /**
+     * Update the current tempo and adjust timing to maintain musical position
+     */
+    public setTempo(newTempo: number) {
+        const currentPosition = this.getCurrentMusicalTime();
+        this.tempo = newTempo;
+        this.updateTimeReferences(this.convertToRealTime(currentPosition));
+    }
+
+    /**
+     * Convert real time to musical time (adjusted for tempo)
+     */
+    private convertToMusicalTime(realTimeMs: number): number {
+        return realTimeMs * (this.tempo / 120);
+    }
+
+    /**
+     * Convert musical time to real time
+     */
+    private convertToRealTime(musicalTimeMs: number): number {
+        return musicalTimeMs * (120 / this.tempo);
     }
 
     /**
@@ -76,7 +102,7 @@ export class TimingService {
      * between visual and audio systems.
      */
     private updateTimeReferences(timeMs: number): void {
-        this.startTimeRef = performance.now() - timeMs;
+        this.startTimeRef = performance.now() - this.convertToRealTime(timeMs);
         this.lastTickTime = performance.now();
     }
 
@@ -125,13 +151,14 @@ export class TimingService {
         const scheduleNotes = () => {
             if (!this.isPlaying || !this.audioContext) return;
 
-            // Calculate our scheduling window in seconds
-            const elapsedSeconds = (performance.now() - this.startTimeRef) / 1000;
-            const endTimeSeconds = elapsedSeconds + this.config.scheduleAheadTime;
+            // Calculate our scheduling window in seconds with tempo adjustment
+            const elapsedRealSeconds = (performance.now() - this.startTimeRef) / 1000;
+            const elapsedMusicalSeconds = this.convertToMusicalTime(elapsedRealSeconds * 1000) / 1000;
+            const endTimeSeconds = elapsedMusicalSeconds + this.config.scheduleAheadTime;
 
             // Schedule notes within our window
             if (this.callbacks.onScheduleNotes) {
-                this.callbacks.onScheduleNotes(elapsedSeconds, endTimeSeconds);
+                this.callbacks.onScheduleNotes(elapsedMusicalSeconds, endTimeSeconds);
             }
 
             // Schedule next check
@@ -165,11 +192,19 @@ export class TimingService {
     }
 
     /**
-     * Get the current playback position in milliseconds.
+     * Get the current musical time in milliseconds (tempo-adjusted)
+     */
+    private getCurrentMusicalTime(): number {
+        if (!this.isPlaying) return 0;
+        const realTime = performance.now() - this.startTimeRef;
+        return this.convertToMusicalTime(realTime);
+    }
+
+    /**
+     * Get the current playback position in milliseconds
      */
     public getCurrentTime(): number {
-        if (!this.isPlaying) return 0;
-        return performance.now() - this.startTimeRef;
+        return this.getCurrentMusicalTime();
     }
 
     /**
