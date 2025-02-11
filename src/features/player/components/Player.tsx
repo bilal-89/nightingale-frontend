@@ -2,7 +2,7 @@ import { useCallback, memo } from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks';
 import { Card } from '../../../shared/components/ui/card';
 import { Circle } from 'lucide-react';
-import TimelineGrid from './timeline/components/TimelineGrid';
+import TimelineGrid from './timeline/TimelineGrid/index';
 import TransportControls from './transport/TransportControls';
 import { startRecording, stopRecording } from '../store/player';
 
