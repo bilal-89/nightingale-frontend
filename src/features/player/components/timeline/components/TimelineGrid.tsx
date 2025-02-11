@@ -9,7 +9,7 @@ import {
     addTrack
 } from '../../../store/player';
 import { selectIsPlaying } from '../../../store/playback';
-import Note from '../../notes/Note';
+import Note from '../../notes/Note/index';
 import { TIMING } from '../../../utils/time.utils';
 import { cn } from '../../../../../core/utils/styles.utils';
 
