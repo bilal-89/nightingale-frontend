@@ -43,9 +43,9 @@ export const TrackHeaders: React.FC<TrackHeadersProps> = ({
                     className={cn(
                         "w-full h-24 px-3 border-b border-[#d1cdc4] transition-all duration-100",
                         "flex items-center text-left",
-                        currentTrackIndex === index
-                            ? "bg-[#e8e4dc]"
-                            : "bg-[#f5f2ed]"
+                        (pressedTrackId === track.id || currentTrackIndex === index)
+                            ? "bg-[#e8e4dc]"  // Darker beige
+                            : "bg-[#f5f2ed]"  // Lighter beige
                     )}
                     style={{
                         boxShadow: currentTrackIndex === index || pressedTrackId === track.id
