@@ -12,7 +12,7 @@ const initialState: PlayerState = {
            id: 'track-1',
            name: 'Track 1', 
            notes: [],
-           color: '#b3d1ff',
+           color: '#9fc102',
            isMuted: false,
            isSolo: false
        },
@@ -20,7 +20,7 @@ const initialState: PlayerState = {
            id: 'track-2',
            name: 'Track 2',
            notes: [],
-           color: '#b8e6c1',
+           color: '#ff6a1b',
            isMuted: false,
            isSolo: false
        },
@@ -28,7 +28,7 @@ const initialState: PlayerState = {
            id: 'track-3',
            name: 'Track 3',
            notes: [],
-           color: '#ffd4a3',
+           color: '#9e4206',
            isMuted: false,
            isSolo: false
        }
