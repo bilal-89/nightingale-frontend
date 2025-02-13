@@ -1,5 +1,5 @@
 // src/audio/constants/drumSounds.ts
-import { DrumSound } from '../types/drumTypes';
+import { DrumSound } from '../api/types';
 
 export const drumSounds: Record<number, DrumSound> = {
     60: { type: '808_low', baseFreq: 60, label: '808', color: '#ece4e4' },

@@ -1,5 +1,5 @@
 // src/features/player/store/types/arrangement.arrangement.types.ts
-import { SynthesisParameters } from '../../../../audio/types/audioTypes.ts';
+import { SynthesisParameters } from '../../../../audio/api/types';
 
 // Add color to NoteEvent
 export interface NoteEvent {

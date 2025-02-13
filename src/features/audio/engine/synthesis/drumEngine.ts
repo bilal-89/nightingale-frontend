@@ -1,6 +1,6 @@
 // src/audio/managers/drumManager.ts
 
-import { DrumType } from '../../types/drumTypes';
+import { DrumType } from '../../api/types';
 import { drumSounds } from '../../constants/drumSounds';
 
 

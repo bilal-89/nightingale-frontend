@@ -1,4 +1,4 @@
-import { SynthesisParameters } from '../audio/types/audioTypes.ts';
+import { SynthesisParameters } from '../audio/api/types';
 
 export interface NoteEvent {
     tuning: number;
