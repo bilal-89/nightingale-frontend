@@ -19,7 +19,7 @@ import {
     SynthMode,
     Waveform
 } from '../store/slices/keyboard.slice';
-import { initializeAudioContext } from '../../audio/store/middleware/keyboardAudio.middleware.ts';
+import { initializeAudioContext } from '../../audio/store/actions.ts';
 import { RootState } from '../../../store';
 import { useTiming } from '../../player/hooks/useTiming.ts';
 import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';

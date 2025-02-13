@@ -12,6 +12,10 @@ import {
 import keyboardAudioManager from '../engine/synthesis/keyboardEngine';
 import { drumSoundManager } from '../engine/synthesis/drumEngine';
 
+// Add this action creator
+export const initializeAudioContext = () => ({
+    type: 'keyboard/initializeAudio' as const
+});
 // Initialize audio system
 export const initializeAudioSystem = createAsyncThunk(
     'audio/initializeSystem',
