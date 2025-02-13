@@ -5,14 +5,13 @@ import keyboardReducer from '../features/keyboard/store/slices/keyboard.slice';
 import playerReducer from '../features/player/store/player';
 import playbackReducer from '../features/player/store/playback';
 import arrangementReducer from '../features/player/store/slices/arrangement/slice';
+import audioReducer from '../features/audio/store/slice';
+import audioMiddleware from '../features/audio/store/middleware';
 
-import { keyboardAudioMiddleware } from '../features/audio/store/middleware/keyboardAudio.middleware.ts';
-import { drumAudioMiddleware } from '../features/audio/store/middleware/drumAudio.middleware';
 import { playerMiddleware } from '../features/player/store/middleware/player.middleware';
 import { playbackMiddleware } from '../features/player/store/middleware/playback.middleware';
 import { arrangementMiddleware } from '../features/player/store/middleware/arrangement.middleware';
 
-// We extend our ignored actions to include our new player-related actions
 const IGNORED_ACTIONS = {
     KEYBOARD: [
         'keyboard/initializeAudio',
@@ -31,30 +30,33 @@ const IGNORED_ACTIONS = {
         'arrangement/updatePlaybackPosition',
         'arrangement/setPlaybackPosition'
     ],
-    // Add our new player actions to ignore
     PLAYER: [
         'player/startRecording',
         'player/stopRecording',
         'player/addNoteEvent',
         'player/updatePlaybackPosition'
+    ],
+    AUDIO: [
+        'audio/initializeAudio',
+        'audio/cleanup',
+        'audio/setContext'
     ]
 } as const;
 
-// Paths that might contain non-serializable values
 const IGNORED_PATHS = [
     'keyboard.audioContext',
     'arrangement.playback.scheduler',
-    'player.recordingBuffer',  // Add this to ignore the recording buffer
-    'playback.schedulingConfig'
+    'player.recordingBuffer',
+    'playback.schedulingConfig',
+    'audio.context'
 ] as const;
 
-// Add our new middleware to the custom middleware array
+// Modified existing customMiddleware array
 const customMiddleware: Middleware[] = [
-    keyboardAudioMiddleware,
-    drumAudioMiddleware,
+    audioMiddleware,  // Replace the old keyboard and drum middleware
     arrangementMiddleware,
     playbackMiddleware,
-    playerMiddleware  // Add our new player middleware
+    playerMiddleware
 ];
 
 export const store = configureStore({
@@ -62,7 +64,8 @@ export const store = configureStore({
         keyboard: keyboardReducer,
         arrangement: arrangementReducer,
         player: playerReducer,
-        playback: playbackReducer
+        playback: playbackReducer,
+        audio: audioReducer
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({
@@ -71,7 +74,8 @@ export const store = configureStore({
                     ...IGNORED_ACTIONS.KEYBOARD,
                     ...IGNORED_ACTIONS.ARRANGEMENT,
                     ...IGNORED_ACTIONS.PLAYBACK,
-                    ...IGNORED_ACTIONS.PLAYER  // Include our new ignored actions
+                    ...IGNORED_ACTIONS.PLAYER,
+                    ...IGNORED_ACTIONS.AUDIO
                 ],
                 ignoredPaths: IGNORED_PATHS
             }
@@ -79,9 +83,7 @@ export const store = configureStore({
     devTools: process.env.NODE_ENV !== 'production'
 });
 
-// Infer types from store
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
-// Export ignored actions and paths for reuse
 export { IGNORED_ACTIONS, IGNORED_PATHS };
