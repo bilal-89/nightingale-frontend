@@ -7,7 +7,6 @@ import {
     selectClips,
     selectTempo,
     selectIsPlaying,
-    selectCurrentTime,
     stopPlayback
 } from '../../store/slices/arrangement/slice';
 
@@ -93,22 +92,22 @@ export const playbackMiddleware: Middleware = store => next => async action => {
             break;
         }
 
-        case 'playback/setLoopRegion': {
-            debug('Setting loop region', action.payload);
-            // When loop points change, update scheduling if needed
-            const state = store.getState();
-            const isPlaying = selectIsPlaying(state);
-            const currentTime = selectCurrentTime(state);
-
-            if (isPlaying && timingService) {
-                const { start, end } = action.payload;
-                if (currentTime < start || currentTime >= end) {
-                    timingService.stop();
-                    timingService.start(start);
-                }
-            }
-            break;
-        }
+        // case 'playback/setLoopRegion': {
+        //     debug('Setting loop region', action.payload);
+        //     // When loop points change, update scheduling if needed
+        //     const state = store.getState();
+        //     const isPlaying = selectIsPlaying(state);
+        //     const currentTime = selectCurrentTime(state);
+        //
+        //     if (isPlaying && timingService) {
+        //         const { start, end } = action.payload;
+        //         if (currentTime < start || currentTime >= end) {
+        //             timingService.stop();
+        //             timingService.start(start);
+        //         }
+        //     }
+        //     break;
+        // }
 
         // Add cleanup on unmount
         case '@@init': {
