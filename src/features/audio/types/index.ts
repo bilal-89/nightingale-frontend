@@ -16,4 +16,6 @@ export interface SynthesisParameters {
             Q: number;
         };
     };
-} 
+}
+
+export type ParameterType = 'tuning' | 'velocity' | 'attack' | 'decay' | 'sustain' | 'release' | 'filterCutoff' | 'filterResonance'; 

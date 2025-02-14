@@ -11,6 +11,7 @@ import {
 } from './slice';
 import keyboardAudioManager from '../engine/synthesis/keyboardEngine';
 import { drumSoundManager } from '../engine/synthesis/drumEngine';
+import { ParameterType } from '../types';
 
 // Add this action creator
 export const initializeAudioContext = () => ({
@@ -38,7 +39,7 @@ export const cleanupAudioSystem = createAsyncThunk(
     async (_, { dispatch }) => {
         try {
             keyboardAudioManager.cleanup();
-            drumSoundManager.cleanup();
+            // drumSoundManager.cleanup();
             dispatch(cleanup());
         } catch (error) {
             console.error('Failed to cleanup audio system:', error);
@@ -89,12 +90,16 @@ export const switchAudioMode = createAsyncThunk(
         dispatch(setMode(newMode));
     }
 );
+//
+// const isValidParameter = (param: string): param is Extract<keyof KeyParameters, string> => {
+//     return ['tuning', 'velocity', 'attack', 'decay', 'sustain', 'release', 'filterCutoff', 'filterResonance'].includes(param);
+// };
 
 // Update note parameter with both state and audio engine
 export const updateNoteParameter = createAsyncThunk(
     'audio/updateParameter',
     async (
-        { note, parameter, value }: { note: number; parameter: string; value: number },
+        { note, parameter, value }: { note: number; parameter: ParameterType; value: number },
         { dispatch, getState }
     ) => {
         const state = getState() as RootState;

@@ -39,7 +39,7 @@ const ParameterPanel: React.FC = () => {
     }, [dispatch, isPanelVisible]);
 
     // Handle mouse up - switch context only if the click started on the container
-    const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    const handleMouseUp = useCallback(() => {
         if (isPressed && clickedContainer) {
             setContext(prev => prev === 'keyboard' ? 'note' : 'keyboard');
         }

@@ -1,7 +1,6 @@
 // src/features/audio/store/middleware/index.ts
 import { Middleware } from '@reduxjs/toolkit';
 import { RootState } from '../../../../store';
-import { playNote, stopNote, updateNoteParameter } from '../actions';
 import { setMode } from '../slice';  // Import from slice instead of actions
 import keyboardAudioManager from '../../engine/synthesis/keyboardEngine';
 import { drumSoundManager } from '../../engine/synthesis/drumEngine';
@@ -15,10 +14,15 @@ const debug = {
     }
 };
 
-export const audioMiddleware: Middleware<{}, RootState> = ({ dispatch, getState }) => next => action => {
+const isAudioAction = (action: unknown): action is { type: string; payload: any } => {
+    return typeof action === 'object' && action !== null && 'type' in action;
+};
+
+export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getState }) => next => action => {
+    if (!isAudioAction(action)) return next(action);
+    
     const prevState = getState().audio;
     const result = next(action);
-    const currentState = getState().audio;
 
     try {
         switch (action.type) {
@@ -106,7 +110,6 @@ export const audioMiddleware: Middleware<{}, RootState> = ({ dispatch, getState 
                 debug.log('Cleaning up audio system');
                 try {
                     keyboardAudioManager.cleanup();
-                    drumSoundManager.cleanup();
                 } catch (error) {
                     debug.log('Error during cleanup:', error);
                 }

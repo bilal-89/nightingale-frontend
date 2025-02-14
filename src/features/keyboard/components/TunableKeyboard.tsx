@@ -24,10 +24,10 @@ import { RootState } from '../../../store';
 import { useTiming } from '../../player/hooks/useTiming.ts';
 import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
 
-const modeLabels: Record<SynthMode, string> = {
-    tunable: "Tones",
-    drums: "Drums"
-};
+// const modeLabels: Record<SynthMode, string> = {
+//     tunable: "Tones",
+//     drums: "Drums"
+// };
 
 const waveformLabels: Record<Waveform, string> = {
     sine: "Sine",
