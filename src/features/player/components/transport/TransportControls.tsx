@@ -1,21 +1,8 @@
 import React from 'react';
-import { Play, Square, SkipBack, Mic, Repeat } from 'lucide-react';
-import { usePlayback } from '../../hooks/usePlayback';
+import { Play, Square, SkipBack } from 'lucide-react';
+import { usePlayback } from '../../hooks';
 import { formatTime } from '../../utils/time.utils';
-import { useAppDispatch, useAppSelector } from '../../hooks/useStore';
-import {
-    selectIsRecording,
-    startRecording,
-    stopRecording
-} from '../../store/player';
-import {
-    selectIsSettingLoopPoints,
-    selectLoopRegionAsPercentages,
-    selectIsLoopEnabled,
-    startSettingLoopPoints,
-    clearLoopPoints,
-    toggleLoopEnabled
-} from '../../store/playback';
+
 
 const TransportControls: React.FC = () => {
     // Get our playback controls and state
@@ -29,26 +16,6 @@ const TransportControls: React.FC = () => {
         setTempo
     } = usePlayback();
 
-    // Get recording state and dispatch
-    const dispatch = useAppDispatch();
-    const isRecording = useAppSelector(selectIsRecording);
-
-    // Get loop-related state
-    const isSettingLoopPoints = useAppSelector(selectIsSettingLoopPoints);
-    const loopRegion = useAppSelector(selectLoopRegionAsPercentages);
-    const loopEnabled = useAppSelector(selectIsLoopEnabled);
-
-    // Handle recording toggle
-    const handleRecordToggle = () => {
-        if (isRecording) {
-            dispatch(stopRecording());
-            stop();
-        } else {
-            dispatch(startRecording());
-            play();
-        }
-    };
-
     // Handle play/pause
     const handlePlayPause = () => {
         if (isPlaying) {
@@ -61,17 +28,6 @@ const TransportControls: React.FC = () => {
     // Handle rewind
     const handleRewind = () => {
         seek(0);
-    };
-
-    // Handle loop controls
-    const handleLoopClick = () => {
-        if (isSettingLoopPoints) {
-            dispatch(clearLoopPoints());
-        } else if (loopRegion) {
-            dispatch(toggleLoopEnabled());
-        } else {
-            dispatch(startSettingLoopPoints());
-        }
     };
 
     return (
@@ -128,22 +84,6 @@ const TransportControls: React.FC = () => {
                             <Play className="w-5 h-5" />
                         )}
                     </button>
-
-                    {/* Loop button */}
-                    <button
-                        className={`p-2 rounded-lg transition-all duration-300
-                            ${isSettingLoopPoints ? 'bg-blue-500 text-white' :
-                            loopEnabled ? 'bg-blue-500 text-white' : 'bg-[#e8e4dc]'}
-                            hover:bg-[#dcd8d0]`}
-                        onClick={handleLoopClick}
-                        style={{
-                            boxShadow: (isSettingLoopPoints || loopEnabled)
-                                ? 'inset 2px 2px 4px #2b6cb0, inset -2px -2px 4px #4299e1'
-                                : '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'
-                        }}
-                    >
-                        <Repeat className={`w-5 h-5 ${isSettingLoopPoints ? 'animate-pulse' : ''}`} />
-                    </button>
                 </div>
 
                 {/* Time display */}
@@ -165,15 +105,6 @@ const TransportControls: React.FC = () => {
                     />
                 </div>
             </div>
-
-            {/* Loop point setting status */}
-            {isSettingLoopPoints && (
-                <div className="text-sm text-blue-500 px-2">
-                    {loopRegion?.start === undefined
-                        ? "Click to set loop start point"
-                        : "Click to set loop end point"}
-                </div>
-            )}
         </div>
     );
 };

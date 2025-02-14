@@ -8,14 +8,8 @@ import {
     selectTempo,
     selectIsPlaying,
     selectCurrentTime,
-    updatePlaybackPosition,
     stopPlayback
 } from '../../store/slices/arrangement/slice';
-
-import {
-    selectLoopRegion,
-    selectIsLoopEnabled,
-} from '../playback';
 
 let timingService: TimingService | null = null;
 
@@ -30,9 +24,6 @@ export const playbackMiddleware: Middleware = store => next => async action => {
         case 'arrangement/startPlayback': {
             debug('Starting playback');
             const state = store.getState();
-            const currentTime = selectCurrentTime(state);
-            const loopRegion = selectLoopRegion(state);
-            const isLoopEnabled = selectIsLoopEnabled(state);
             const schedulingConfig = selectSchedulingConfig(state);
 
             try {
@@ -46,56 +37,16 @@ export const playbackMiddleware: Middleware = store => next => async action => {
                         {
                             onTick: (timeMs) => {
                                 const state = store.getState();
-                                const loopRegion = selectLoopRegion(state);
-                                const isLoopEnabled = selectIsLoopEnabled(state);
-
-                                // Handle loop points during playback
-                                if (isLoopEnabled && loopRegion && timeMs >= loopRegion.end) {
-                                    // Jump back to loop start
-                                    timingService?.seekTo(loopRegion.start);
-                                    store.dispatch(updatePlaybackPosition(loopRegion.start));
-                                } else {
-                                    store.dispatch(updatePlaybackPosition(timeMs));
-                                }
                             },
                             onScheduleNotes: (startTime, endTime) => {
                                 const state = store.getState();
                                 const clips = selectClips(state);
                                 const tempo = selectTempo(state);
-                                const loopRegion = selectLoopRegion(state);
-                                const isLoopEnabled = selectIsLoopEnabled(state);
 
-                                // Calculate actual scheduling window considering loop points
-                                let scheduleStart = startTime * 1000;
-                                let scheduleEnd = endTime * 1000;
 
-                                if (isLoopEnabled && loopRegion) {
-                                    // If we're approaching the loop end, also schedule notes from the start
-                                    if (scheduleEnd > loopRegion.end) {
-                                        // Schedule notes up to loop end
-                                        scheduleNotesInRange(
-                                            clips,
-                                            tempo,
-                                            scheduleStart,
-                                            loopRegion.end,
-                                            startTime
-                                        );
-
-                                        // Schedule notes from loop start
-                                        const loopOverflowTime = scheduleEnd - loopRegion.end;
-                                        scheduleNotesInRange(
-                                            clips,
-                                            tempo,
-                                            loopRegion.start,
-                                            loopRegion.start + loopOverflowTime,
-                                            startTime + (loopRegion.start - scheduleStart) / 1000
-                                        );
-                                        return;
-                                    }
-                                }
 
                                 // Normal note scheduling
-                                scheduleNotesInRange(clips, tempo, scheduleStart, scheduleEnd, startTime);
+                                scheduleNotesInRange(clips, tempo, startTime);
                             }
                         }
                     );
@@ -103,18 +54,6 @@ export const playbackMiddleware: Middleware = store => next => async action => {
 
                 // Initialize audio systems
                 await timingService.initialize();
-
-                // Handle starting playback with loop points
-                if (isLoopEnabled && loopRegion) {
-                    // If we're outside the loop region, start from loop start
-                    if (currentTime < loopRegion.start || currentTime >= loopRegion.end) {
-                        timingService.start(loopRegion.start);
-                    } else {
-                        timingService.start(currentTime);
-                    }
-                } else {
-                    timingService.start(currentTime);
-                }
 
             } catch (error) {
                 debug('Failed to start playback', error);
@@ -144,17 +83,8 @@ export const playbackMiddleware: Middleware = store => next => async action => {
             debug('Setting position', action.payload);
             const state = store.getState();
             const isPlaying = selectIsPlaying(state);
-            const loopRegion = selectLoopRegion(state);
-            const isLoopEnabled = selectIsLoopEnabled(state);
 
-            // Handle manual seeking with loop points
-            if (isLoopEnabled && loopRegion) {
-                const newPosition = action.payload;
-                // If seeking outside loop region, clamp to loop region
-                if (newPosition < loopRegion.start || newPosition >= loopRegion.end) {
-                    action.payload = loopRegion.start;
-                }
-            }
+
 
             if (isPlaying && timingService) {
                 timingService.stop();
