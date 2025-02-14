@@ -130,6 +130,8 @@ class KeyboardAudioManager {
             timestamp: now,
             velocity,
             duration: 0,
+            tuning: this.tunings.get(note) || 0,  // Add this line
+
             synthesis
         };
     }
@@ -251,11 +253,11 @@ class KeyboardAudioManager {
     }
 
     // Calculate frequency for a note including tuning
-    private getFrequency(note: number): number {
-        const baseMidiNote = note - 69; // A4 = 69
+    private getFrequency(note: number, tuning?: number): number {
+        const baseMidiNote = note - 69;
         const baseFrequency = 440 * Math.pow(2, baseMidiNote / 12);
-        const tuning = this.tunings.get(note) || 0;
-        return tuning === 0 ? baseFrequency : baseFrequency * Math.pow(2, tuning / 1200);
+        const actualTuning = (tuning !== undefined ? tuning : this.tunings.get(note)) || 0;
+        return actualTuning === 0 ? baseFrequency : baseFrequency * Math.pow(2, actualTuning / 1200);
     }
 
     private getWaveformForNote(note: number): Waveform {
@@ -352,7 +354,7 @@ class KeyboardAudioManager {
                 // Configure oscillator with waveform
                 oscillator.type = noteEvent.synthesis.waveform;
                 oscillator.frequency.setValueAtTime(
-                    this.getFrequency(noteEvent.note),
+                    this.getFrequency(noteEvent.note, noteEvent.tuning), // Use note's tuning
                     time
                 );
 
