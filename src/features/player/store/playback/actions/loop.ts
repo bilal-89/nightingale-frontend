@@ -1,3 +1,4 @@
+//actions/loop.ts
 import { createAction } from '@reduxjs/toolkit';
 
 export const startSettingLoopPoints = createAction('playback/startSettingLoopPoints');
