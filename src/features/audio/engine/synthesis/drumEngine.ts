@@ -15,7 +15,7 @@ export class DrumSoundManager {
         return this.context;
     }
 
-    private initialize(): this {
+    initialize(): this {
         if (!this.context) {
             // Instead of checking for webkitAudioContext, we can simply use AudioContext
             // Modern browsers all support this standard version

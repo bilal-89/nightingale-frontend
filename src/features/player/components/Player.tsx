@@ -8,8 +8,13 @@ import { startRecording, stopRecording } from '../store/player';
 
 import { ColorPickerPanel } from './ColorPickerPanel';
 
+interface RecordButtonProps {
+    isRecording: boolean;
+    onRecordToggle: () => void;
+}
+
 // Memoized Record Button Component
-const RecordButton = memo(({ isRecording, onRecordToggle }) => (
+const RecordButton = memo<RecordButtonProps>(({ isRecording, onRecordToggle }) => (
     <button
         className={`p-2 rounded-lg transition-all duration-300 ${
             isRecording ? 'bg-red-500' : 'bg-[#e8e4dc]'

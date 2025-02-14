@@ -45,7 +45,7 @@ export const TimelineGrid: React.FC = () => {
             if (track.notes.length === 0) {
                 return { lowestNote: 60, highestNote: 72 }; // Default octave range
             }
-            const notes = track.notes.map(n => n.note);
+            const notes = track.notes.map((n: { note: number }) => n.note);
             return {
                 lowestNote: Math.min(...notes),
                 highestNote: Math.max(...notes)

@@ -55,7 +55,7 @@ const Note: React.FC<NoteProps> = ({
     // Calculate vertical position with tuning adjustment
     const calculateVerticalPosition = () => {
         const pitchRange = highestNote - lowestNote || 1;
-        const tuning = note.synthesis?.tuning ?? 0;
+        const tuning = note.tuning ?? 0;
         const tuningOffset = tuning / 100;
         const adjustedNote = note.note + tuningOffset;
         const normalizedPitch = (adjustedNote - lowestNote) / pitchRange;
@@ -67,6 +67,10 @@ const Note: React.FC<NoteProps> = ({
         top: Math.min(LAYOUT.TRACK_HEIGHT - PADDING - LAYOUT.NOTE_HEIGHT,
             Math.max(PADDING, calculateVerticalPosition())),
         width: note.duration * timelineZoom,
+        height: LAYOUT.NOTE_HEIGHT,
+        background: trackColor,
+        isSelected,
+        isDragging: isLocalDragging
     };
 
     return (

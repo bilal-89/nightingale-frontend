@@ -49,7 +49,7 @@ const IGNORED_PATHS = [
     'player.recordingBuffer',
     'playback.schedulingConfig',
     'audio.context'
-] as const;
+];
 
 // Modified existing customMiddleware array
 const customMiddleware: Middleware[] = [

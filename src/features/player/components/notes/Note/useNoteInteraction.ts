@@ -13,7 +13,7 @@ export function useNoteInteraction(note: NoteEvent, trackId: string) {
 
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         setIsLocalDragging(true);
-        handleDragStart(e, note, trackId);
+        handleDragStart(e, note, Number(trackId));
     }, [note, trackId, handleDragStart]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -25,7 +25,7 @@ export function useNoteInteraction(note: NoteEvent, trackId: string) {
 
     const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         e.stopPropagation();
-        dispatch(selectNote({ trackId, noteId: note.id }));
+        dispatch(selectNote({ trackId: String(trackId), noteId: note.id }));
     }, [dispatch, trackId, note.id]);
 
     return {
