@@ -1,3 +1,4 @@
+//src/features/player/store/player/slice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { PlayerState, Track } from './types';
 import { NoteEvent } from '../../types';

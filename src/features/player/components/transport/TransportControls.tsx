@@ -33,25 +33,6 @@ const TransportControls: React.FC = () => {
     return (
         <div className="flex flex-col gap-2">
             <div className="flex gap-2 mb-4 px-2 items-center">
-                {/* Recording button */}
-                {/*<button*/}
-                {/*    className={`px-4 py-2 rounded-lg transition-all duration-300*/}
-                {/*        ${isRecording*/}
-                {/*        ? 'bg-red-500 text-white'*/}
-                {/*        : 'bg-[#e8e4dc] text-gray-700 hover:bg-[#dcd8d0]'}`}*/}
-                {/*    onClick={handleRecordToggle}*/}
-                {/*    style={{*/}
-                {/*        boxShadow: isRecording*/}
-                {/*            ? 'inset 2px 2px 4px #c41e3a, inset -2px -2px 4px #ff1a1a'*/}
-                {/*            : '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'*/}
-                {/*    }}*/}
-                {/*>*/}
-                {/*    <div className="flex items-center gap-2">*/}
-                {/*        <Mic className={`w-4 h-4 ${isRecording ? 'animate-pulse' : ''}`}/>*/}
-                {/*        <span>{isRecording ? 'Stop Recording' : 'Record'}</span>*/}
-                {/*    </div>*/}
-                {/*</button>*/}
-
                 {/* Playback control group */}
                 <div className="flex gap-2">
                     {/* Rewind button */}
@@ -68,18 +49,17 @@ const TransportControls: React.FC = () => {
 
                     {/* Play/Stop button */}
                     <button
-                        className={`p-2 rounded-lg transition-all duration-300
-                            ${isPlaying ? 'bg-green-500' : 'bg-[#e8e4dc]'}
-                            ${isPlaying ? 'hover:bg-green-600' : 'hover:bg-[#dcd8d0]'}`}
+                        className={`p-2 rounded-lg transition-all duration-300 bg-[#e8e4dc]
+                            ${isPlaying ? 'hover:bg-[#e8e4dc]' : 'hover:bg-[#dcd8d0]'}`}
                         onClick={handlePlayPause}
                         style={{
                             boxShadow: isPlaying
-                                ? 'inset 2px 2px 4px #2f855a, inset -2px -2px 4px #48bb78'
+                                ? 'inset 2px 2px 4px #d1cdc4, inset -2px -2px 4px #ffffff'
                                 : '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'
                         }}
                     >
                         {isPlaying ? (
-                            <Square className="w-5 h-5 text-white" />
+                            <Square className="w-5 h-5" />
                         ) : (
                             <Play className="w-5 h-5" />
                         )}

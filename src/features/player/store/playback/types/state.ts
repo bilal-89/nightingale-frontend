@@ -1,4 +1,4 @@
-// import { LoopRegion } from './loop';
+//src/features/player/store/playback/types/state.ts
 import { SchedulingConfig } from './scheduling';
 
 export interface PlaybackSliceState {

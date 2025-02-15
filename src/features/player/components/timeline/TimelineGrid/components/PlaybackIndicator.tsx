@@ -15,7 +15,7 @@ export const PlaybackIndicator: React.FC<PlaybackIndicatorProps> = ({
 
     return (
         <div
-            className="absolute top-0 bottom-0 w-px bg-green-500 z-20 pointer-events-none transform-gpu"
+            className="absolute top-[31px] bottom-[47px] w-px bg-stone-300 z-20 pointer-events-none transform-gpu"
             style={{
                 transform: `translateX(${position}px)`,
                 willChange: 'transform'
