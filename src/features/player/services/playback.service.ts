@@ -169,11 +169,11 @@ export class PlaybackService {
                 synthesis: {
                     ...note.synthesis,
                     envelope: {
+                        ...note.synthesis.envelope,
                         attack: 0.005,
                         decay: 0,
                         sustain: 1,
-                        release: 0.005,
-                        ...note.synthesis.envelope
+                        release: 0.005
                     }
                 }
             }, adjustedStartTime);

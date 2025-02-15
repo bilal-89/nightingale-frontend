@@ -13,6 +13,7 @@ import {
 import { selectTracks } from '../store/player';
 
 import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
+import { NoteEvent } from '../types';
 
 export const useTiming = () => {
     const dispatch = useAppDispatch();
@@ -60,13 +61,13 @@ export const useTiming = () => {
 
     // Schedule upcoming notes for playback
     const scheduleUpcomingNotes = useCallback((windowStartSeconds: number, windowEndSeconds: number) => {
-        if (!isPlaying || !keyboardAudioManager.getContext()) return;
-
         const audioContext = keyboardAudioManager.getContext();
+        if (!isPlaying || !audioContext) return;
+
         const currentAudioTime = audioContext.currentTime;
 
         tracks.forEach(track => {
-            track.notes.forEach(note => {
+            track.notes.forEach((note: NoteEvent) => {
                 const noteId = `${note.id}-${note.timestamp}`;
                 const noteTimeInSeconds = note.timestamp / 1000;
 
@@ -81,6 +82,7 @@ export const useTiming = () => {
 
                     // Prepare complete synthesis settings
                     const synthSettings = {
+                        ...note.synthesis,  // Spread existing synthesis first
                         mode: note.synthesis?.mode || 'tunable',
                         waveform: note.synthesis?.waveform || 'sine',
                         tuning: tuningValue,
@@ -89,8 +91,7 @@ export const useTiming = () => {
                             decay: note.synthesis?.envelope?.decay || 0.1,
                             sustain: note.synthesis?.envelope?.sustain || 0.7,
                             release: note.synthesis?.envelope?.release || 0.1
-                        },
-                        ...note.synthesis
+                        }
                     };
 
                     // Log for debugging
@@ -110,8 +111,7 @@ export const useTiming = () => {
                         ...note,
                         timestamp: scheduleTime,
                         duration: note.duration / 1000,
-                        synthesis: synthSettings,
-                        tuning: tuningValue
+                        synthesis: synthSettings
                     }, scheduleTime);
 
                     // Restore original keyboard tuning after scheduling
