@@ -1,33 +1,33 @@
-// src/features/player/store/slices/arrangement/reducers/recording.ts
+// src/features/player/store/reducers/recording.ts
 import { PayloadAction } from '@reduxjs/toolkit';
-import {ArrangementState, NoteColor, NoteEvent} from '../types.ts';
+import { PlayerState } from '../types';
+import { NoteEvent } from '../../types';
+import { NoteColor } from '../types';
 
 export const recordingReducers = {
-    startRecording: (state: ArrangementState) => {
+    startRecording: (state: PlayerState) => {
         state.isRecording = true;
         state.recordingStartTime = Date.now();
         state.recordingBuffer = [];
     },
 
-    stopRecording: (state: ArrangementState) => {
+    stopRecording: (state: PlayerState) => {
         state.isRecording = false;
         state.recordingStartTime = null;
     },
 
-    // src/features/player/store/slices/arrangement/reducers/recording.ts
-    addNoteEvent: (state: ArrangementState, action: PayloadAction<Omit<NoteEvent, 'color'>>) => {
+    addNoteEvent: (state: PlayerState, action: PayloadAction<Omit<NoteEvent, 'color'>>) => {
         if (state.isRecording) {
-            // Get current track's color
-            const currentTrack = state.tracks.find(t => t.id === state.currentTrack);
+            const currentTrack = state.tracks.find(t => t.id === state.currentTrack.toString());
             const noteWithColor = {
                 ...action.payload,
-                color: currentTrack?.color || NoteColor.Red // Add the track's color to new notes
+                color: currentTrack?.color || NoteColor.Red
             };
             state.recordingBuffer.push(noteWithColor);
         }
     },
 
-    updateNoteEvent: (state: ArrangementState, action: PayloadAction<{
+    updateNoteEvent: (state: PlayerState, action: PayloadAction<{
         note: number;
         timestamp: number;
         duration: number;

@@ -1,13 +1,13 @@
-// src/features/player/store/slices/arrangement/reducers/notes.ts
 import { PayloadAction } from '@reduxjs/toolkit';
-import type { ArrangementState, NoteEvent, SelectedNote } from '../types.ts';
+import { PlayerState } from '../types';
+import { NoteEvent, SelectedNote } from '../../types';
 
 export const noteReducers = {
-    selectNote: (state: ArrangementState, action: PayloadAction<SelectedNote | null>) => {
+    selectNote: (state: PlayerState, action: PayloadAction<SelectedNote | null>) => {
         state.selectedNote = action.payload;
     },
 
-    updateSelectedNoteParameters: (state: ArrangementState, action: PayloadAction<Partial<NoteEvent>>) => {
+    updateSelectedNoteParameters: (state: PlayerState, action: PayloadAction<Partial<NoteEvent>>) => {
         if (!state.selectedNote) return;
 
         const clip = state.clips.find(c => c.id === state.selectedNote!.clipId);
@@ -21,8 +21,9 @@ export const noteReducers = {
             ...action.payload
         };
     },
-    addNoteWithCurrentTrackColor: (state: ArrangementState, action: PayloadAction<Omit<NoteEvent, 'color'>>) => {
-        const currentTrack = state.tracks.find(t => t.id === state.currentTrack);
+
+    addNoteWithCurrentTrackColor: (state: PlayerState, action: PayloadAction<Omit<NoteEvent, 'color'>>) => {
+        const currentTrack = state.tracks.find(t => t.id === state.currentTrack.toString());
         if (currentTrack) {
             const noteWithColor = {
                 ...action.payload,

@@ -1,12 +1,8 @@
 // src/features/player/store/slices/arrangement.slice.ts
 import { createSlice } from '@reduxjs/toolkit';
 import {ArrangementState, NoteColor} from './types';
-import { recordingReducers } from "./reducers/recording";
-import { playbackReducers } from './reducers/playback';
-import { noteReducers } from './reducers/notes';
-import { clipReducers } from "./reducers/clips.ts";
+import { recordingReducers, noteReducers, playbackReducers, clipReducers } from '../../reducers';
 
-// src/features/player/store/slices/arrangement/slice.ts
 const initialState: ArrangementState = {
     isRecording: false,
     recordingStartTime: null,
@@ -34,7 +30,7 @@ const arrangementSlice = createSlice({
     name: 'arrangement',
     initialState,
     reducers: {
-        ...recordingReducers,
+        ...recordingReducers,  // Now using our new recording reducers
         ...clipReducers,
         ...playbackReducers,
         ...noteReducers

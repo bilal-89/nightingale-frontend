@@ -1,17 +1,17 @@
-// src/features/player/store/slices/arrangement/reducers/clips.ts
 import { PayloadAction } from '@reduxjs/toolkit';
-import {ArrangementState, Clip, NoteColor} from '../types.ts';
+import { PlayerState } from '../types';
+import { Clip, NoteColor } from '../../types';
 
 export const clipReducers = {
-    setCurrentTrack: (state: ArrangementState, action: PayloadAction<number>) => {
+    setCurrentTrack: (state: PlayerState, action: PayloadAction<number>) => {
         state.currentTrack = action.payload;
     },
 
-    addClip: (state: ArrangementState, action: PayloadAction<Clip>) => {
+    addClip: (state: PlayerState, action: PayloadAction<Clip>) => {
         state.clips.push(action.payload);
     },
 
-    updateClipLength: (state: ArrangementState, action: PayloadAction<{
+    updateClipLength: (state: PlayerState, action: PayloadAction<{
         id: string;
         length: number;
     }>) => {
@@ -21,14 +21,14 @@ export const clipReducers = {
         }
     },
 
-    toggleClipSelection: (state: ArrangementState, action: PayloadAction<string>) => {
+    toggleClipSelection: (state: PlayerState, action: PayloadAction<string>) => {
         const clip = state.clips.find(c => c.id === action.payload);
         if (clip) {
             clip.isSelected = !clip.isSelected;
         }
     },
 
-    moveClip: (state: ArrangementState, action: PayloadAction<{
+    moveClip: (state: PlayerState, action: PayloadAction<{
         id: string;
         startCell: number;
         track: number;
@@ -40,7 +40,7 @@ export const clipReducers = {
         }
     },
 
-    updateClipParameters: (state: ArrangementState, action: PayloadAction<{
+    updateClipParameters: (state: PlayerState, action: PayloadAction<{
         id: string;
         parameters: Partial<Clip['parameters']>;
     }>) => {
@@ -53,7 +53,7 @@ export const clipReducers = {
         }
     },
 
-    setTrackColor: (state: ArrangementState, action: PayloadAction<{
+    setTrackColor: (state: PlayerState, action: PayloadAction<{
         trackId: number;
         color: NoteColor;
     }>) => {
@@ -80,5 +80,4 @@ export const clipReducers = {
             });
         }
     }
-
 };
