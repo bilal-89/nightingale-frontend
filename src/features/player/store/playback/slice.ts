@@ -1,5 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { PlaybackSliceState } from '../player';
+import { PlaybackSliceState } from './types';
 
 const initialState: PlaybackSliceState = {
    isPlaying: false,

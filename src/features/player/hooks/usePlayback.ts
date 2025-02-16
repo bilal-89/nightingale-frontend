@@ -11,7 +11,7 @@ import {
     setPlaybackPosition,
     updatePlaybackPosition,
     setTempo
-} from '../store/player';
+} from '../store/playback';
 import { selectTracks } from '../store/player';
 
 

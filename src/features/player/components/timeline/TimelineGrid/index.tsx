@@ -8,7 +8,7 @@ import {
     selectTracks,
     selectTimelineSettings,
 } from '../../../store/player';
-import { selectIsPlaying } from '../../../store/player';
+import { selectIsPlaying } from '../../../store/playback';
 
 import { TrackHeaders } from './components/TrackHeaders';
 import { GridArea } from './components/GridArea';

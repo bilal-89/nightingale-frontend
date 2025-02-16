@@ -2,9 +2,6 @@ export * from './types';
 export * from './actions';
 export * from './selectors';
 export { default } from './slice';
-export * from '../player/types';
-export * from '../player/actions';
-export * from '../player/selectors';
 
 // Re-export everything from the slice
 export {

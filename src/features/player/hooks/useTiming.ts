@@ -9,7 +9,7 @@ import {
     selectTempo,
     selectIsPlaying,
     selectCurrentTime
-} from '../store/player';
+} from '../store/playback';
 import { selectTracks } from '../store/player';
 
 import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
