@@ -1,3 +1,4 @@
+//src/features/player/store/player/actions/recording.ts
 import { createAction } from '@reduxjs/toolkit';
 import { NoteEvent } from '../../../types';
 

@@ -8,9 +8,7 @@ import arrangementReducer from '../features/player/store/slices/arrangement/slic
 import audioReducer from '../features/audio/store/slice';
 import audioMiddleware from '../features/audio/store/middleware';
 
-import { playerMiddleware } from '../features/player/store/middleware/player.middleware';
-import { playbackMiddleware } from '../features/player/store/middleware/playback.middleware';
-import { arrangementMiddleware } from '../features/player/store/middleware/arrangement.middleware';
+import { playerMiddleware } from '../features/player/store/middleware';
 
 const IGNORED_ACTIONS = {
     KEYBOARD: [
@@ -54,8 +52,6 @@ const IGNORED_PATHS = [
 // Modified existing customMiddleware array
 const customMiddleware: Middleware[] = [
     audioMiddleware,  // Replace the old keyboard and drum middleware
-    arrangementMiddleware,
-    playbackMiddleware,
     playerMiddleware
 ];
 
