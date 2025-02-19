@@ -85,7 +85,6 @@ const ParameterPanel: React.FC = () => {
                 }}
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Rest of the component remains unchanged */}
                 <div className="flex justify-between items-center mb-4">
                     <div className="text-sm font-medium text-gray-700">
                         {context === 'note' ? 'Note' : 'Key'}
@@ -113,7 +112,7 @@ const ParameterPanel: React.FC = () => {
                                                     <button
                                                         onClick={() => handleParameterUpdate(
                                                             param.id,
-                                                            (parameterValues[param.id] ?? param.defaultValue) - param.step
+                                                            (parameterValues[param.id]?.value ?? param.defaultValue) - param.step
                                                         )}
                                                         className="px-2 py-1 rounded bg-blue-500 text-white text-xs"
                                                     >
@@ -122,7 +121,7 @@ const ParameterPanel: React.FC = () => {
                                                     <button
                                                         onClick={() => handleParameterUpdate(
                                                             param.id,
-                                                            (parameterValues[param.id] ?? param.defaultValue) + param.step
+                                                            (parameterValues[param.id]?.value ?? param.defaultValue) + param.step
                                                         )}
                                                         className="px-2 py-1 rounded bg-blue-500 text-white text-xs"
                                                     >
@@ -131,14 +130,18 @@ const ParameterPanel: React.FC = () => {
                                                 </>
                                             )}
                                             <span className="text-sm text-gray-600 tabular-nums min-w-[3rem] text-right">
-                                                {parameterValues[param.id] ?? param.defaultValue}
-                                                {param.unit}
-                                            </span>
+                                            {parameterValues[param.id]?.isMixed ?
+                                                '---' :
+                                                `${parameterValues[param.id]?.value ?? param.defaultValue}${param.unit}`
+                                            }
+                                        </span>
                                         </div>
                                     </div>
 
                                     <div
-                                        className="relative h-2 bg-[#e5e9ec] rounded-full"
+                                        className={`relative h-2 bg-[#e5e9ec] rounded-full ${
+                                            parameterValues[param.id]?.isMixed ? 'opacity-50' : ''
+                                        }`}
                                         style={{
                                             boxShadow: 'inset 2px 2px 4px #c8ccd0, inset -2px -2px 4px #ffffff'
                                         }}
@@ -148,16 +151,17 @@ const ParameterPanel: React.FC = () => {
                                             min={param.min}
                                             max={param.max}
                                             step={param.step}
-                                            value={parameterValues[param.id] ?? param.defaultValue}
+                                            value={parameterValues[param.id]?.value ?? param.defaultValue}
                                             onChange={(e) => handleParameterUpdate(param.id, Number(e.target.value))}
                                             className="absolute w-full h-full opacity-0 cursor-pointer"
                                         />
                                         <div
                                             className="absolute h-full bg-blue-500 rounded-full"
                                             style={{
-                                                width: `${((parameterValues[param.id] ?? param.defaultValue) - param.min) /
+                                                width: `${((parameterValues[param.id]?.value ?? param.defaultValue) - param.min) /
                                                 (param.max - param.min) * 100}%`,
-                                                boxShadow: '2px 2px 4px rgba(0,0,0,0.1)'
+                                                boxShadow: '2px 2px 4px rgba(0,0,0,0.1)',
+                                                opacity: parameterValues[param.id]?.isMixed ? 0.5 : 1
                                             }}
                                         />
                                     </div>

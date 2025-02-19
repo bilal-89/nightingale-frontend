@@ -31,6 +31,7 @@ export const TimelineGrid: React.FC = () => {
     const currentTrackIndex = useAppSelector(selectCurrentTrack);
     const timelineSettings = useAppSelector(selectTimelineSettings);
     const selectedNoteId = useAppSelector(state => state.player.selectedNoteId);
+    const multiSelectedNoteIds = useAppSelector(state => state.player.multiSelectedNoteIds); // Add this
 
     // Playback position management
     const playbackPositionRef = useGridPlayback(
@@ -70,6 +71,8 @@ export const TimelineGrid: React.FC = () => {
                     timelineSettings={timelineSettings}
                     trackRanges={trackRanges}
                     selectedNoteId={selectedNoteId}
+                    multiSelectedNoteIds={multiSelectedNoteIds}  // Add this
+
                     playbackPosition={playbackPositionRef.current}
                     isPlaying={isPlaying}
                 />

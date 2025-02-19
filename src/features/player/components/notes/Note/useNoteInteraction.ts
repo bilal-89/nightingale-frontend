@@ -12,9 +12,21 @@ export function useNoteInteraction(note: NoteEvent, trackId: string) {
     const [isLocalDragging, setIsLocalDragging] = useState(false);
 
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-        setIsLocalDragging(true);
-        handleDragStart(e, note, Number(trackId));
+        // Only start dragging if it's not a shift-click
+        if (!e.shiftKey) {
+            setIsLocalDragging(true);
+            handleDragStart(e, note, Number(trackId));
+        }
     }, [note, trackId, handleDragStart]);
+
+    const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        e.stopPropagation();
+        dispatch(selectNote({
+            trackId: String(trackId),
+            noteId: note.id,
+            isMultiSelect: e.shiftKey  // Pass shift key state to action
+        }));
+    }, [dispatch, trackId, note.id]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -22,11 +34,6 @@ export function useNoteInteraction(note: NoteEvent, trackId: string) {
             handleKeyboardMove(note, trackId, e.key === 'ArrowLeft' ? 'left' : 'right', e.shiftKey);
         }
     }, [note, trackId, handleKeyboardMove]);
-
-    const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-        e.stopPropagation();
-        dispatch(selectNote({ trackId: String(trackId), noteId: note.id }));
-    }, [dispatch, trackId, note.id]);
 
     return {
         isLocalDragging,

@@ -12,8 +12,9 @@ const USABLE_HEIGHT = LAYOUT.TRACK_HEIGHT - (PADDING * 2);
 const Note: React.FC<NoteProps> = ({
                                        note,
                                        trackId,
-                                       // trackIndex,
                                        isSelected,
+                                       isMultiSelected,
+                                       isFocused,
                                        timelineZoom,
                                        availableTracks,
                                        lowestNote,
@@ -70,6 +71,8 @@ const Note: React.FC<NoteProps> = ({
         height: LAYOUT.NOTE_HEIGHT,
         background: trackColor,
         isSelected,
+        isMultiSelected,
+        isFocused,
         isDragging: isLocalDragging
     };
 
@@ -78,11 +81,13 @@ const Note: React.FC<NoteProps> = ({
             note={note}
             trackColor={trackColor}
             isSelected={isSelected}
+            isMultiSelected={isMultiSelected}
+            isFocused={isFocused}
             isLocalDragging={isLocalDragging}
             style={style}
             onMouseDown={handleMouseDown}
             onClick={handleClick}
-            onKeyDown={isSelected ? handleKeyDown : undefined}
+            onKeyDown={isSelected || isFocused ? handleKeyDown : undefined}
         />
     );
 };

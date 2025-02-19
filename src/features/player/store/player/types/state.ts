@@ -1,5 +1,8 @@
-import {Track} from "./track.ts";
+// features/player/store/player/types/state.ts
+
+import {Track} from "./track";
 import {NoteEvent} from "../../../types";
+import {SchedulingConfig} from "../../types";
 
 export interface PlayerState {
    isRecording: boolean;
@@ -9,16 +12,13 @@ export interface PlayerState {
    tracks: Track[];
    selectedNoteId: string | null;
    selectedTrackId: string | null;
+   multiSelectedNoteIds: string[];  // New field for multi-select
    tempo: number;
    timelineZoom: number;
    snapEnabled: boolean;
    snapResolution: number;
    snapStrength: number;
 }
-
-
-//src/features/player/store/playback/types/state.ts
-import { SchedulingConfig } from './scheduling';
 
 export interface PlaybackSliceState {
    isPlaying: boolean;

@@ -4,6 +4,7 @@ import { NoteEvent } from '../../types';
 
 // Extend PlayerState to include playback properties
 interface ExtendedPlayerState extends PlayerState {
+    multiSelectedNoteIds: string[];  // Add this field
     playback: {
         isPlaying: boolean;
         currentTime: number;
@@ -48,6 +49,7 @@ const initialState: ExtendedPlayerState = {
             isSolo: false
         }
     ],
+    multiSelectedNoteIds: [],  // Add this field
     selectedNoteId: null,
     selectedTrackId: null,
     tempo: 120,
@@ -144,6 +146,65 @@ export const playerSlice = createSlice({
                 };
             }
         },
+        // Add new action for moving multiple notes
+        moveNotes: (state, action: PayloadAction<{
+            notes: Array<{
+                trackId: string;
+                noteId: string;
+                newTime: number;
+                newTrackId?: string;
+            }>;
+        }>) => {
+            action.payload.notes.forEach(({ trackId, noteId, newTime, newTrackId }) => {
+                const sourceTrack = state.tracks.find(t => t.id === trackId);
+                if (!sourceTrack) return;
+
+                const noteIndex = sourceTrack.notes.findIndex(n => n.id === noteId);
+                if (noteIndex === -1) return;
+
+                const note = sourceTrack.notes[noteIndex];
+
+                if (newTrackId && newTrackId !== trackId) {
+                    const targetTrack = state.tracks.find(t => t.id === newTrackId);
+                    if (targetTrack) {
+                        sourceTrack.notes.splice(noteIndex, 1);
+                        targetTrack.notes.push({
+                            ...note,
+                            timestamp: newTime
+                        });
+                        targetTrack.notes.sort((a, b) => a.timestamp - b.timestamp);
+                    }
+                } else {
+                    sourceTrack.notes[noteIndex] = {
+                        ...note,
+                        timestamp: newTime
+                    };
+                    sourceTrack.notes.sort((a, b) => a.timestamp - b.timestamp);
+                }
+            });
+        },
+
+// Add new action for updating parameters of multiple notes
+        updateMultipleNoteParameters: (state, action: PayloadAction<{
+            updates: Array<{
+                trackId: string;
+                noteId: string;
+                updates: Partial<NoteEvent>;
+            }>;
+        }>) => {
+            action.payload.updates.forEach(({ trackId, noteId, updates }) => {
+                const track = state.tracks.find(t => t.id === trackId);
+                if (!track) return;
+
+                const noteIndex = track.notes.findIndex(n => n.id === noteId);
+                if (noteIndex === -1) return;
+
+                track.notes[noteIndex] = {
+                    ...track.notes[noteIndex],
+                    ...updates
+                };
+            });
+        },
         updateNoteParameters: (state, action: PayloadAction<{
             trackId: string;
             noteId: string;
@@ -175,17 +236,52 @@ export const playerSlice = createSlice({
             state.selectedNoteId = action.payload;
         },
 
+        // Update the selectNote reducer
         selectNote: (state, action: PayloadAction<{
             trackId: string;
             noteId: string;
+            isMultiSelect?: boolean;
         } | null>) => {
-            if (action.payload) {
-                state.selectedNoteId = action.payload.noteId;
-                state.selectedTrackId = action.payload.trackId;
-            } else {
+            if (!action.payload) {
                 state.selectedNoteId = null;
                 state.selectedTrackId = null;
+                state.multiSelectedNoteIds = [];
+                return;
             }
+
+            const { trackId, noteId, isMultiSelect } = action.payload;
+
+            if (!isMultiSelect) {
+                // Single selection mode
+                state.selectedNoteId = noteId;
+                state.selectedTrackId = trackId;
+                state.multiSelectedNoteIds = [];
+            } else {
+                // Multi-select mode
+                if (state.selectedNoteId && state.multiSelectedNoteIds.length === 0) {
+                    // If we have a single selection, move it to multi-select
+                    state.multiSelectedNoteIds = [state.selectedNoteId];
+                }
+
+                // Add new note to selection if not already included
+                if (!state.multiSelectedNoteIds.includes(noteId)) {
+                    state.multiSelectedNoteIds.push(noteId);
+                }
+
+                state.selectedNoteId = null;
+                state.selectedTrackId = trackId;
+            }
+        },
+        clearSelection: (state) => {
+            state.selectedNoteId = null;
+            state.selectedTrackId = null;
+            state.multiSelectedNoteIds = [];
+        },
+        // Optional: Add action to remove a note from multi-selection
+        removeFromSelection: (state, action: PayloadAction<string>) => {
+            state.multiSelectedNoteIds = state.multiSelectedNoteIds.filter(
+                id => id !== action.payload
+            );
         },
 
         commitRecordingBuffer: (state, action: PayloadAction<string>) => {
@@ -314,6 +410,10 @@ export const {
     deleteTrack,
     setTrackSettings,
     setCurrentTrack,
+    clearSelection,
+    removeFromSelection,
+    moveNotes,
+    updateMultipleNoteParameters
 
     // ... (other actions)
 } = playerSlice.actions;

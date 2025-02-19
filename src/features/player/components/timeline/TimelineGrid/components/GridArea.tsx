@@ -6,12 +6,14 @@ import { TrackLane } from './TrackLane';
 import { PlaybackIndicator } from './PlaybackIndicator';
 import { GridAreaProps } from '../types';
 import { GRID_CONSTANTS } from '../constants';
+// src/features/player/components/timeline/TimelineGrid/components/GridArea.tsx
 
 export const GridArea: React.FC<GridAreaProps> = ({
                                                       tracks,
                                                       timelineSettings,
                                                       trackRanges,
                                                       selectedNoteId,
+                                                      multiSelectedNoteIds = [], // Provide default empty array
                                                       playbackPosition,
                                                       isPlaying
                                                   }) => {
@@ -37,6 +39,7 @@ export const GridArea: React.FC<GridAreaProps> = ({
                         trackIndex={index}
                         timelineZoom={timelineSettings.zoom}
                         selectedNoteId={selectedNoteId}
+                        multiSelectedNoteIds={multiSelectedNoteIds}
                         trackRange={trackRanges[index]}
                         availableTracks={tracks.map(t => t.id)}
                     />

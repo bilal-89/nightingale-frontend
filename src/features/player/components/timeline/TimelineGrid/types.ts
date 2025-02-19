@@ -39,12 +39,22 @@ export interface GridAreaProps {
     timelineSettings: TimelineSettings;
     trackRanges: TrackRange[];
     selectedNoteId: string | null;
+    multiSelectedNoteIds?: string[];  // Make optional
     playbackPosition: number;
     isPlaying: boolean;
 }
-
 export interface TimeRulerProps {
     cellCount: number;
     cellWidth: number;
     formatGridTime: (cellIndex: number) => string;
+}
+
+export interface TrackLaneProps {
+    track: Track;
+    trackIndex: number;
+    timelineZoom: number;
+    selectedNoteId: string | null;
+    multiSelectedNoteIds: string[];  // Add this
+    trackRange: TrackRange;
+    availableTracks: string[];
 }

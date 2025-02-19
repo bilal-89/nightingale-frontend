@@ -7,6 +7,8 @@ export interface NoteProps {
     trackId: string;
     trackIndex: number;
     isSelected: boolean;
+    isMultiSelected?: boolean;  // New prop for multi-select state
+    isFocused?: boolean;       // New prop for single-select focus
     timelineZoom: number;
     availableTracks: string[];
     lowestNote: number;
@@ -21,9 +23,12 @@ export interface NoteStyleProps {
     height: number;
     background: string;
     isSelected: boolean;
+    isMultiSelected?: boolean;
+    isFocused?: boolean;
     isDragging: boolean;
 }
 
+// Keep existing NoteGradientProps
 export interface NoteGradientProps {
     trackColor: string;
     baseOpacity: number;
