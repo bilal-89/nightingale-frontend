@@ -3,13 +3,6 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { PlayerState, Track } from './types';
 import { NoteEvent } from '../../types';
 import { NoteColor } from '../../../../shared/constants/colors';
-  // Updated import path
-// import {
-//     PlayerState,
-//     Track,
-//     // NoteEvent,
-//     NoteColor  // Import NoteColor from our types
-// } from '../types';
 
 // Extend PlayerState to include playback properties
 interface ExtendedPlayerState extends PlayerState {

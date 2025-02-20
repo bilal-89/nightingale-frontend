@@ -41,13 +41,13 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
     // Define visual styles with more subtle unpressed colors
     const modeStyles = {
         tunable: {
-            bg: trackColor ? getColorWithOpacity(trackColor, 0.2) : '#e5e9ec',  // Very subtle when not pressed
-            bgPressed: trackColor ? getColorWithOpacity(trackColor, 0.3) : '#dde1e4',  // More intense when pressed
+            bg: trackColor ? getColorWithOpacity(trackColor, 0.25) : '#e5e9ec',  // Very subtle when not pressed
+            bgPressed: trackColor ? getColorWithOpacity(trackColor, 0.4) : '#dde1e4',  // More intense when pressed
             shadow1: '#c8ccd0',
             shadow2: '#ffffff',
             keySize: 'w-16 h-24',
             borderRadius: 'rounded-[14px]',
-            translation: 'translate-y-[2px]',
+            translation: 'translate-y-[7px]',
             shadowSize: '3px'
         },
         drums: {
@@ -57,7 +57,7 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
             shadow2: '#ffffff',
             keySize: 'w-20 h-20',
             borderRadius: 'rounded-[9px]',
-            translation: 'translate-y-[1px]',
+            translation: 'translate-y-[5px]',
             shadowSize: '4px'
         }
     };

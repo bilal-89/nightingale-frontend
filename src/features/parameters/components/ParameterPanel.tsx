@@ -160,15 +160,16 @@ const ParameterPanel: React.FC = () => {
                                             className="absolute w-full h-full opacity-0 cursor-pointer"
                                         />
                                         <div
-                                            className="absolute h-full rounded-full"
-                                            style={{
+                                                className="absolute h-full rounded-full"
+                                                style={{
                                                 width: `${((parameterValues[param.id]?.value ?? param.defaultValue) - param.min) /
                                                 (param.max - param.min) * 100}%`,
                                                 backgroundColor: currentTrackColor,
                                                 boxShadow: '2px 2px 4px rgba(0,0,0,0.1)',
-                                                opacity: parameterValues[param.id]?.isMixed ? 0.5 : 0.8
+                                                opacity: parameterValues[param.id]?.isMixed ? 0.5 : 0.8,
+                                                transition: 'background-color 300ms ease-in-out, opacity 300ms ease-in-out'  // Add this line
                                             }}
-                                        />
+                                                />
                                     </div>
                                 </div>
                             ))}

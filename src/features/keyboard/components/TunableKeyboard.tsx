@@ -187,11 +187,11 @@ const TunableKeyboard: React.FC = () => {
 
     return (
         <Card className={`p-8 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background}`}>
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-5">
                 <div
                     className={`
-                        grid grid-cols-6 gap-x-4 gap-y-4 p-4 rounded-xl cursor-pointer
-                        transition-all duration-300 ease-in-out
+                        grid grid-cols-6 gap-x-0 gap-y-3 p-6 rounded-xl cursor-pointer
+                        transition-all duration-100 ease-in-out
                         ${currentStyle.containerBg}
                     `}
                     style={getContainerStyle()}
@@ -199,7 +199,7 @@ const TunableKeyboard: React.FC = () => {
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseLeave}
                 >
-                    <div className="contents transition-all duration-300 ease-in-out">
+                    <div className="contents transition-all duration-100 ease-in-out">
                         {notes.slice(0, 6).map(({note}) => (
                             <div key={note} className="flex justify-center transition-all duration-300 ease-in-out">
                                 <TunableKey
