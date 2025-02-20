@@ -7,7 +7,7 @@ const KeyboardWorkspace: React.FC = () => {
         // Use the same soft background color as in ParameterPanel
         <div className="flex flex-col lg:flex-row gap-5 rounded-[19px] p-5 min-h-screen bg-[#e5e9ec]">
             {/* Keyboard section with neumorphic styling */}
-            <div className="flex-1 rounded-[19px] p-7"
+            <div className="flex-1 rounded-[19px] p-0"
                  style={{
                      boxShadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff'
                  }}>
