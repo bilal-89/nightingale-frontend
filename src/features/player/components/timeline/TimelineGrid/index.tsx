@@ -1,15 +1,14 @@
-// src/features/player/components/timeline/TimelineGrid/index.tsx
-
-import React, { useMemo } from 'react';
-import { useAppSelector } from '../../../hooks';
+import React, { useMemo, useEffect } from 'react';
+import { useAppSelector, useAppDispatch } from '../../../hooks';
 import { useTiming } from '../../../hooks/useTiming';
 import {
     selectCurrentTrack,
     selectTracks,
     selectTimelineSettings,
+    selectIsPlaying,
+    deleteNotes
 } from '../../../store/player';
-import { selectIsPlaying } from '../../../store/player';
-
+import { selectSelectedNote, selectMultiSelectedNotes } from '../../../store/player/selectors/selection';
 import { TrackHeaders } from './components/TrackHeaders';
 import { GridArea } from './components/GridArea';
 import { useTrackInteraction } from './hooks/useTrackInteraction';
@@ -17,6 +16,7 @@ import { useGridPlayback } from './hooks/useGridPlayback';
 
 export const TimelineGrid: React.FC = () => {
     // Hooks
+    const dispatch = useAppDispatch();
     const { getCurrentTime } = useTiming();
     const {
         pressedTrackId,
@@ -25,13 +25,18 @@ export const TimelineGrid: React.FC = () => {
         handleTrackMouseLeave
     } = useTrackInteraction();
 
+    // Use grid interaction hook for event prevention
+    useTrackInteraction();
+
     // Selectors
     const isPlaying = useAppSelector(selectIsPlaying);
     const tracks = useAppSelector(selectTracks);
     const currentTrackIndex = useAppSelector(selectCurrentTrack);
     const timelineSettings = useAppSelector(selectTimelineSettings);
+    const selectedNote = useAppSelector(selectSelectedNote);
+    const multiSelectedNotes = useAppSelector(selectMultiSelectedNotes);
     const selectedNoteId = useAppSelector(state => state.player.selectedNoteId);
-    const multiSelectedNoteIds = useAppSelector(state => state.player.multiSelectedNoteIds); // Add this
+    const multiSelectedNoteIds = useAppSelector(state => state.player.multiSelectedNoteIds);
 
     // Playback position management
     const playbackPositionRef = useGridPlayback(
@@ -39,6 +44,35 @@ export const TimelineGrid: React.FC = () => {
         getCurrentTime,
         timelineSettings
     );
+
+    // Delete handler
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.key === 'Delete' || e.key === 'Backspace') &&
+                (selectedNote || multiSelectedNotes.length > 0)) {
+                e.preventDefault();
+
+                const notesToDelete = multiSelectedNotes.length > 0
+                    ? multiSelectedNotes.map(n => ({
+                        trackId: n.trackId,
+                        noteId: n.note.id
+                    }))
+                    : selectedNote
+                        ? [{
+                            trackId: selectedNote.trackId,
+                            noteId: selectedNote.note.id
+                        }]
+                        : [];
+
+                if (notesToDelete.length > 0) {
+                    dispatch(deleteNotes({ notes: notesToDelete }));
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [dispatch, selectedNote, multiSelectedNotes]);
 
     // Calculate note ranges for each track for vertical positioning
     const trackRanges = useMemo(() => {
@@ -71,8 +105,7 @@ export const TimelineGrid: React.FC = () => {
                     timelineSettings={timelineSettings}
                     trackRanges={trackRanges}
                     selectedNoteId={selectedNoteId}
-                    multiSelectedNoteIds={multiSelectedNoteIds}  // Add this
-
+                    multiSelectedNoteIds={multiSelectedNoteIds}
                     playbackPosition={playbackPositionRef.current}
                     isPlaying={isPlaying}
                 />

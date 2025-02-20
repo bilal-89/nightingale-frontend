@@ -1,5 +1,4 @@
 // features/player/store/player/selectors/selection.ts
-
 import { createSelector } from '@reduxjs/toolkit';
 import { RootState } from '../../../../../store';
 

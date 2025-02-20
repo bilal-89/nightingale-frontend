@@ -1,3 +1,4 @@
+//src/features/player/store/player/slice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { PlayerState, Track } from './types';
 import { NoteEvent } from '../../types';
@@ -231,6 +232,22 @@ export const playerSlice = createSlice({
                 track.notes = track.notes.filter(n => n.id !== action.payload.noteId);
             }
         },
+        deleteNotes: (state, action: PayloadAction<{
+            notes: Array<{
+                trackId: string;
+                noteId: string;
+            }>;
+        }>) => {
+            action.payload.notes.forEach(({ trackId, noteId }) => {
+                const track = state.tracks.find(t => t.id === trackId);
+                if (track) {
+                    track.notes = track.notes.filter(n => n.id !== noteId);
+                }
+            });
+            // Clear selection after delete
+            state.selectedNoteId = null;
+            state.multiSelectedNoteIds = [];
+        },
 
         setSelectedNoteId: (state, action: PayloadAction<string | null>) => {
             state.selectedNoteId = action.payload;
@@ -413,7 +430,8 @@ export const {
     clearSelection,
     removeFromSelection,
     moveNotes,
-    updateMultipleNoteParameters
+    updateMultipleNoteParameters,
+    deleteNotes
 
     // ... (other actions)
 } = playerSlice.actions;

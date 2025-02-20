@@ -22,5 +22,6 @@ export {
     addTrack,
     deleteTrack,
     setTrackSettings,
-    setCurrentTrack
+    setCurrentTrack,
+    deleteNotes
 } from './slice';
