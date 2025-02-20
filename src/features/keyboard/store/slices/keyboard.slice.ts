@@ -39,6 +39,9 @@ export interface KeyboardState {
     isParameterPanelVisible: boolean;
     globalWaveform: Waveform;  // Global waveform setting
     parameterContext: ParameterContext;  // New field for context tracking
+    currentOctave: number;     // Added for octave control
+    minOctave: number;         // Added for octave control
+    maxOctave: number;         // Added for octave control
 }
 
 const defaultParameters: KeyParameters = {
@@ -63,7 +66,10 @@ const initialState: KeyboardState = {
     mode: 'tunable',
     isParameterPanelVisible: false,
     globalWaveform: 'sine',
-    parameterContext: 'keyboard'  // Default context
+    parameterContext: 'keyboard',  // Default context
+    currentOctave: 4,              // Added for octave control
+    minOctave: 0,                  // Added for octave control
+    maxOctave: 8,                  // Added for octave control
 };
 
 const keyboardSlice = createSlice({
@@ -176,12 +182,31 @@ const keyboardSlice = createSlice({
             state.parameterContext = 'keyboard';
         },
 
+        // New octave control reducers
+        incrementOctave: (state) => {
+            if (state.currentOctave < state.maxOctave) {
+                state.currentOctave += 1;
+            }
+        },
+
+        decrementOctave: (state) => {
+            if (state.currentOctave > state.minOctave) {
+                state.currentOctave -= 1;
+            }
+        },
+
+        setOctave: (state, action: PayloadAction<number>) => {
+            const octave = Math.min(Math.max(action.payload, state.minOctave), state.maxOctave);
+            state.currentOctave = octave;
+        },
+
         cleanup: (state) => {
             state.activeNotes = [];
             state.isInitialized = false;
             state.selectedKey = null;
             state.isParameterPanelVisible = false;
             state.parameterContext = 'keyboard';
+            state.currentOctave = initialState.currentOctave;  // Reset octave on cleanup
         }
     }
 });
@@ -199,6 +224,9 @@ export const {
     setMode,
     setSelectedKey,
     setParameterContext,
+    incrementOctave,     // Added for octave control
+    decrementOctave,     // Added for octave control
+    setOctave,          // Added for octave control
     cleanup
 } = keyboardSlice.actions;
 
@@ -239,5 +267,9 @@ export const selectBaseOctave = (state: { keyboard: KeyboardState }) =>
 
 export const selectMode = (state: { keyboard: KeyboardState }) =>
     state.keyboard.mode;
+
+// Added for octave control
+export const selectCurrentOctave = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.currentOctave;
 
 export default keyboardSlice.reducer;
