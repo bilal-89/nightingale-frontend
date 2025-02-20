@@ -4,31 +4,24 @@ import { selectIsPanelVisible, togglePanel } from '../../keyboard/store/slices/k
 import { useParameterValues } from '../hooks/useParameterValues';
 import { parameters } from '../constants/parameters';
 import { ParameterContext } from '../types/types';
+// import { getColorWithOpacity } from '../../../shared/constants/colors';
 
 const ParameterPanel: React.FC = () => {
     const dispatch = useAppDispatch();
     const isPanelVisible = useAppSelector(selectIsPanelVisible);
+    // Get current track color
+    const currentTrack = useAppSelector(state => state.player.currentTrack);
+    const tracks = useAppSelector(state => state.player.tracks);
+    const currentTrackColor = tracks[currentTrack]?.color;
 
-    // Track both press state and context
+    // Rest of your state setups...
     const [isPressed, setIsPressed] = useState(false);
     const [context, setContext] = useState<ParameterContext>('keyboard');
-
-    // Get parameter values and update handler for current context
     const { parameterValues, handleParameterUpdate } = useParameterValues(context);
-
-    // Organize parameters by their functional groups
-    const groups = {
-        note: parameters.filter(p => p.group === 'note' && p.contexts.includes(context)),
-        envelope: parameters.filter(p => p.group === 'envelope' && p.contexts.includes(context)),
-        filter: parameters.filter(p => p.group === 'filter' && p.contexts.includes(context))
-    };
-
-    // Track whether the click started on the container
     const [clickedContainer, setClickedContainer] = useState(false);
 
-    // Handle mouse down - set states only if clicking the container directly
+    // Your existing handlers...
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        // Check if the click target is the container itself
         if (e.target === e.currentTarget) {
             setIsPressed(true);
             setClickedContainer(true);
@@ -38,7 +31,6 @@ const ParameterPanel: React.FC = () => {
         }
     }, [dispatch, isPanelVisible]);
 
-    // Handle mouse up - switch context only if the click started on the container
     const handleMouseUp = useCallback(() => {
         if (isPressed && clickedContainer) {
             setContext(prev => prev === 'keyboard' ? 'note' : 'keyboard');
@@ -47,13 +39,11 @@ const ParameterPanel: React.FC = () => {
         setClickedContainer(false);
     }, [isPressed, clickedContainer]);
 
-    // Handle mouse leave - reset pressed state without switching context
     const handleMouseLeave = useCallback(() => {
         setIsPressed(false);
         setClickedContainer(false);
     }, []);
 
-    // Visual feedback styles for press interaction
     const getContainerStyle = () => ({
         transition: 'all 100ms ease-in-out',
         ...(isPressed ? {
@@ -67,6 +57,13 @@ const ParameterPanel: React.FC = () => {
         })
     });
 
+    // Organize parameters by their functional groups
+    const groups = {
+        note: parameters.filter(p => p.group === 'note' && p.contexts.includes(context)),
+        envelope: parameters.filter(p => p.group === 'envelope' && p.contexts.includes(context)),
+        filter: parameters.filter(p => p.group === 'filter' && p.contexts.includes(context))
+    };
+
     return (
         <div
             onMouseDown={handleMouseDown}
@@ -75,7 +72,6 @@ const ParameterPanel: React.FC = () => {
             className="w-full max-w-md p-6 bg-[#e5e9ec] rounded-3xl cursor-pointer relative"
             style={getContainerStyle()}
         >
-            {/* Panel content container with visibility animation */}
             <div
                 className="space-y-6"
                 style={{
@@ -114,7 +110,11 @@ const ParameterPanel: React.FC = () => {
                                                             param.id,
                                                             (parameterValues[param.id]?.value ?? param.defaultValue) - param.step
                                                         )}
-                                                        className="px-2 py-1 rounded bg-blue-500 text-white text-xs"
+                                                        className="px-2 py-1 rounded text-xs"
+                                                        style={{
+                                                            backgroundColor: currentTrackColor,
+                                                            color: 'white'
+                                                        }}
                                                     >
                                                         ←
                                                     </button>
@@ -123,18 +123,22 @@ const ParameterPanel: React.FC = () => {
                                                             param.id,
                                                             (parameterValues[param.id]?.value ?? param.defaultValue) + param.step
                                                         )}
-                                                        className="px-2 py-1 rounded bg-blue-500 text-white text-xs"
+                                                        className="px-2 py-1 rounded text-xs"
+                                                        style={{
+                                                            backgroundColor: currentTrackColor,
+                                                            color: 'white'
+                                                        }}
                                                     >
                                                         →
                                                     </button>
                                                 </>
                                             )}
                                             <span className="text-sm text-gray-600 tabular-nums min-w-[3rem] text-right">
-                                            {parameterValues[param.id]?.isMixed ?
-                                                '---' :
-                                                `${parameterValues[param.id]?.value ?? param.defaultValue}${param.unit}`
-                                            }
-                                        </span>
+                                                {parameterValues[param.id]?.isMixed ?
+                                                    '---' :
+                                                    `${parameterValues[param.id]?.value ?? param.defaultValue}${param.unit}`
+                                                }
+                                            </span>
                                         </div>
                                     </div>
 
@@ -156,12 +160,13 @@ const ParameterPanel: React.FC = () => {
                                             className="absolute w-full h-full opacity-0 cursor-pointer"
                                         />
                                         <div
-                                            className="absolute h-full bg-blue-500 rounded-full"
+                                            className="absolute h-full rounded-full"
                                             style={{
                                                 width: `${((parameterValues[param.id]?.value ?? param.defaultValue) - param.min) /
                                                 (param.max - param.min) * 100}%`,
+                                                backgroundColor: currentTrackColor,
                                                 boxShadow: '2px 2px 4px rgba(0,0,0,0.1)',
-                                                opacity: parameterValues[param.id]?.isMixed ? 0.5 : 1
+                                                opacity: parameterValues[param.id]?.isMixed ? 0.5 : 0.8
                                             }}
                                         />
                                     </div>

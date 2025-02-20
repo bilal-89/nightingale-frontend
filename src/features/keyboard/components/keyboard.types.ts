@@ -1,4 +1,5 @@
 // src/features/keyboard/types/keyboard.arrangement.types.ts
+import { NoteColor } from '../../../shared/constants/colors';
 
 export interface KeyProps {
     note: number;
@@ -7,6 +8,8 @@ export interface KeyProps {
     onNoteOn: (note: number) => void;
     onNoteOff: (note: number) => void;
     onTuningChange: (note: number, cents: number) => void;
+    trackColor?: NoteColor;  // Add the trackColor prop
+
 }
 
 export interface NoteInfo {

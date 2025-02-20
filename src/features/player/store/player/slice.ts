@@ -2,6 +2,14 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { PlayerState, Track } from './types';
 import { NoteEvent } from '../../types';
+import { NoteColor } from '../../../../shared/constants/colors';
+  // Updated import path
+// import {
+//     PlayerState,
+//     Track,
+//     // NoteEvent,
+//     NoteColor  // Import NoteColor from our types
+// } from '../types';
 
 // Extend PlayerState to include playback properties
 interface ExtendedPlayerState extends PlayerState {
@@ -29,7 +37,7 @@ const initialState: ExtendedPlayerState = {
             id: 'track-1',
             name: 'Track 1',
             notes: [],
-            color: '#9fc102',
+            color: NoteColor.Green,  // Replace '#9fc102'
             isMuted: false,
             isSolo: false
         },
@@ -37,7 +45,7 @@ const initialState: ExtendedPlayerState = {
             id: 'track-2',
             name: 'Track 2',
             notes: [],
-            color: '#ff6a1b',
+            color: NoteColor.Orange,
             isMuted: false,
             isSolo: false
         },
@@ -45,7 +53,7 @@ const initialState: ExtendedPlayerState = {
             id: 'track-3',
             name: 'Track 3',
             notes: [],
-            color: '#9e4206',
+            color: NoteColor.Purple,
             isMuted: false,
             isSolo: false
         }
@@ -96,10 +104,15 @@ export const playerSlice = createSlice({
         }>) => {
             const track = state.tracks.find(t => t.id === action.payload.trackId);
             if (track) {
-                track.notes.push(action.payload.note);
+                // Add track color to note when adding to track
+                track.notes.push({
+                    ...action.payload.note,
+                    color: track.color  // Add this line
+                });
                 track.notes.sort((a, b) => a.timestamp - b.timestamp);
             }
         },
+        // Add color sync to moveNote
         moveNote: (state, action: PayloadAction<{
             trackId: string;
             noteId: string;
@@ -121,7 +134,8 @@ export const playerSlice = createSlice({
                     sourceTrack.notes.splice(noteIndex, 1);
                     targetTrack.notes.push({
                         ...note,
-                        timestamp: newTime
+                        timestamp: newTime,
+                        color: targetTrack.color  // Add this line
                     });
                     targetTrack.notes.sort((a, b) => a.timestamp - b.timestamp);
                 }
@@ -329,13 +343,18 @@ export const playerSlice = createSlice({
             state.tempo = Math.max(20, Math.min(300, action.payload));
         },
 
+        // Update addTrack to use NoteColor
         addTrack: (state) => {
+            const lastTrack = state.tracks[state.tracks.length - 1];
+            const colors = Object.values(NoteColor);
+            const nextColorIndex = (colors.indexOf(lastTrack.color as NoteColor) + 1) % colors.length;
             const newTrackNumber = state.tracks.length + 1;
+
             state.tracks.push({
                 id: `track-${newTrackNumber}`,
                 name: `Track ${newTrackNumber}`,
                 notes: [],
-                color: '#4a9eff',
+                color: colors[nextColorIndex],
                 isMuted: false,
                 isSolo: false
             });
@@ -345,13 +364,23 @@ export const playerSlice = createSlice({
             state.tracks = state.tracks.filter(track => track.id !== action.payload);
         },
 
+        // Add color sync to setTrackSettings
         setTrackSettings: (state, action: PayloadAction<{
             trackId: string;
             updates: Partial<Track>;
         }>) => {
             const track = state.tracks.find(t => t.id === action.payload.trackId);
             if (track) {
+                const oldColor = track.color;
                 Object.assign(track, action.payload.updates);
+
+                // If color changed, update all notes in the track
+                if (action.payload.updates.color && action.payload.updates.color !== oldColor) {
+                    track.notes = track.notes.map(note => ({
+                        ...note,
+                        color: action.payload.updates.color
+                    }));
+                }
             }
         },
 

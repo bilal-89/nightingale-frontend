@@ -45,20 +45,20 @@ const modeStyles: Record<SynthMode, {
     innerShadow: string;
 }> = {
     tunable: {
-        background: 'from-[#f5f2ed] to-[#e8e4df]',
-        containerBg: 'bg-[#f0ece6]',
-        buttonBg: 'bg-[#e8e4dc]',
+        background: 'from-[#e5e9ec] to-[#e5e9ec]',  // Matching the workspace background
+        containerBg: 'bg-[#e5e9ec]',  // Same color
+        buttonBg: 'bg-[#e5e9ec]',
         textColor: 'text-[#4a4543]',
-        shadow: '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff',
-        innerShadow: 'inset 3px 3px 6px #d1cdc4, inset -3px -3px 6px #ffffff'
+        shadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff',  // Matching the workspace shadow
+        innerShadow: 'inset 8px 8px 16px #c8ccd0, inset -8px -8px 16px #ffffff'
     },
     drums: {
-        background: 'from-[#f7f2f2] to-[#ece4e4]',
-        containerBg: 'bg-[#f3eaea]',
-        buttonBg: 'bg-[#ece4e4]',
-        textColor: 'text-[#584949]',
-        shadow: '3px 3px 6px #d4cccc, -3px -3px 6px #ffffff',
-        innerShadow: 'inset 3px 3px 6px #d4cccc, inset -3px -3px 6px #ffffff'
+        background: 'from-[#e5e9ec] to-[#e5e9ec]',  // Same colors for both modes
+        containerBg: 'bg-[#e5e9ec]',
+        buttonBg: 'bg-[#e5e9ec]',
+        textColor: 'text-[#4a4543]',
+        shadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff',
+        innerShadow: 'inset 8px 8px 16px #c8ccd0, inset -8px -8px 16px #ffffff'
     }
 };
 
@@ -70,6 +70,9 @@ const TunableKeyboard: React.FC = () => {
     const currentMode = useSelector(selectMode);
     const currentWaveform = useSelector(selectGlobalWaveform);
     const isPanelVisible = useSelector(selectIsPanelVisible);
+    const currentTrack = useSelector((state: RootState) => state.player.currentTrack);
+    const tracks = useSelector((state: RootState) => state.player.tracks);
+    const currentTrackColor = tracks[currentTrack]?.color;
 
     // Container press state
     const [isPressed, setIsPressed] = useState(false);
@@ -187,7 +190,7 @@ const TunableKeyboard: React.FC = () => {
             <div className="flex flex-col gap-6">
                 <div
                     className={`
-                        grid grid-cols-6 gap-x-6 gap-y-6 p-8 rounded-xl cursor-pointer
+                        grid grid-cols-6 gap-x-4 gap-y-4 p-4 rounded-xl cursor-pointer
                         transition-all duration-300 ease-in-out
                         ${currentStyle.containerBg}
                     `}
@@ -210,6 +213,7 @@ const TunableKeyboard: React.FC = () => {
                                     mode={currentMode}
                                     onPanelClick={handlePanelClick}
                                     isPanelVisible={isPanelVisible}
+                                    trackColor={currentTrackColor}  // Add this
                                 />
                             </div>
                         ))}
@@ -229,6 +233,7 @@ const TunableKeyboard: React.FC = () => {
                                     mode={currentMode}
                                     onPanelClick={handlePanelClick}
                                     isPanelVisible={isPanelVisible}
+                                    trackColor={currentTrackColor}  // Add this
                                 />
                             </div>
                         ))}

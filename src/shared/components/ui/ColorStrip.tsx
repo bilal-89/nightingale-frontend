@@ -1,6 +1,6 @@
 // src/shared/components/ui/ColorStrip.tsx
 import React from 'react';
-import { NoteColor } from '../../../features/player/store/slices/arrangement/types';
+import { NoteColor } from '../../constants/colors.ts';
 
 interface ColorStripProps {
     selectedColor: NoteColor;

@@ -12,12 +12,23 @@ export interface PlayerState {
    tracks: Track[];
    selectedNoteId: string | null;
    selectedTrackId: string | null;
-   multiSelectedNoteIds: string[];  // New field for multi-select
+   multiSelectedNoteIds: string[];
    tempo: number;
    timelineZoom: number;
    snapEnabled: boolean;
    snapResolution: number;
    snapStrength: number;
+   playback: {
+      isPlaying: boolean;
+      currentTime: number;
+      schedulingConfig: {
+         scheduleAheadTime: number;
+         schedulerInterval: number;
+      };
+      metronomeEnabled: boolean;
+      countInEnabled: boolean;
+      prerollBars: number;
+   };
 }
 
 export interface PlaybackSliceState {

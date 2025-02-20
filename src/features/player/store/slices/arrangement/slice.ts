@@ -1,6 +1,7 @@
 // src/features/player/store/slices/arrangement.slice.ts
 import { createSlice } from '@reduxjs/toolkit';
-import {ArrangementState, NoteColor} from './types';
+import {ArrangementState} from './types';
+import {NoteColor} from '../../../../../shared/constants/colors.ts'
 import { recordingReducers, noteReducers, playbackReducers, clipReducers } from '../../reducers';
 
 const initialState: ArrangementState = {
@@ -18,11 +19,11 @@ const initialState: ArrangementState = {
     tracks: [  // Add this initialization
         { id: 0, color: NoteColor.Red },
         { id: 1, color: NoteColor.Orange },
-        { id: 2, color: NoteColor.Yellow },
+        { id: 2, color: NoteColor.Brown },
         { id: 3, color: NoteColor.Green },
         { id: 4, color: NoteColor.Blue },
-        { id: 5, color: NoteColor.Indigo },
-        { id: 6, color: NoteColor.Violet }
+        { id: 5, color: NoteColor.Purple },
+        { id: 6, color: NoteColor.Magenta }
     ]
 };
 
