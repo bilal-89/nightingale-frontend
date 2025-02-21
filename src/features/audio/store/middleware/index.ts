@@ -18,9 +18,25 @@ const isAudioAction = (action: unknown): action is { type: string; payload: any 
     return typeof action === 'object' && action !== null && 'type' in action;
 };
 
+// Helper to get current parameters for a note
+const getNoteParameters = (keyParams: any) => ({
+    tuning: keyParams.tuning?.value ?? 0,
+    velocity: keyParams.velocity?.value ?? 100,
+    envelope: {
+        attack: keyParams.attack?.value ?? 0,
+        decay: keyParams.decay?.value ?? 200,
+        sustain: keyParams.sustain?.value ?? 70,
+        release: keyParams.release?.value ?? 150
+    },
+    filter: {
+        cutoff: keyParams.filterCutoff?.value ?? 20000,
+        resonance: keyParams.filterResonance?.value ?? 0.707
+    }
+});
+
 export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getState }) => next => action => {
     if (!isAudioAction(action)) return next(action);
-    
+
     const prevState = getState().audio;
     const result = next(action);
 
@@ -29,10 +45,12 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
             case 'keyboard/noteOn': {
                 const note = action.payload;
                 const mode = getState().keyboard.mode;
+                const keyParams = getState().keyboard.keyParameters[note] || {};
                 debug.log(`Note on: ${note}, Mode: ${mode}`);
 
                 if (mode === 'drums') {
-                    drumSoundManager.playDrumSound(note);
+                    const params = getNoteParameters(keyParams);
+                    drumSoundManager.playDrumSound(note, params);
                 } else {
                     keyboardAudioManager.playNote(note);
                 }
@@ -56,6 +74,8 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 if (mode !== 'drums') {
                     keyboardAudioManager.setNoteParameter(keyNumber, parameter, value);
                 }
+                // We don't need to do anything else for drum mode - parameters are stored in state
+                // and will be used next time the note is played
                 break;
             }
 

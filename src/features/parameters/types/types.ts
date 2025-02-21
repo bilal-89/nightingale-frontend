@@ -1,3 +1,4 @@
+//src/features/parameters/types/types.ts
 import { KeyParameters } from '../../keyboard/store/slices/keyboard.slice';
 
 export type ParameterContext = 'keyboard' | 'note';

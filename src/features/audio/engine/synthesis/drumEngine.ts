@@ -3,6 +3,16 @@
 import { DrumType } from '../../api/types';
 import { drumSounds } from '../../constants/drumSounds';
 
+interface DrumParameters {
+    tuning?: number;      // cents
+    velocity?: number;    // 0-127
+    attack?: number;      // ms
+    decay?: number;       // ms
+    sustain?: number;     // 0-1
+    release?: number;     // ms
+    filterCutoff?: number;    // Hz
+    filterResonance?: number; // Q value
+}
 
 export class DrumSoundManager {
     private context: AudioContext | null = null;
@@ -17,34 +27,32 @@ export class DrumSoundManager {
 
     initialize(): this {
         if (!this.context) {
-            // Instead of checking for webkitAudioContext, we can simply use AudioContext
-            // Modern browsers all support this standard version
             this.context = new AudioContext();
         }
         return this;
     }
 
-    public playDrumSoundAt(note: number, time: number, tuning = 0): void {
+    public playDrumSoundAt(note: number, time: number, params: DrumParameters = {}): void {
         if (!this.context) this.initialize();
         const sound = drumSounds[note];
         if (!sound) return;
 
         const synthesizer = this.getSynthesizer(sound.type);
-        synthesizer(sound.baseFreq, tuning, time);
+        synthesizer(sound.baseFreq, params, time);
     }
 
-    public playDrumSound(note: number, tuning = 0): void {
+    public playDrumSound(note: number, params: DrumParameters = {}): void {
         if (!this.context) this.initialize();
         const now = this.context!.currentTime;
-        this.playDrumSoundAt(note, now, tuning);
+        this.playDrumSoundAt(note, now, params);
     }
 
-    private getSynthesizer(type: DrumType): (freq: number, tuning: number, time: number) => void {
-        const synthMap: Record<DrumType, (freq: number, tuning: number, time: number) => void> = {
+    private getSynthesizer(type: DrumType): (freq: number, params: DrumParameters, time: number) => void {
+        const synthMap: Record<DrumType, (freq: number, params: DrumParameters, time: number) => void> = {
             '808_low': this.create808Scheduled.bind(this),
             '808_mid': this.create808Scheduled.bind(this),
-            'hihat_closed': (_freq, tuning, time) => this.createHiHatScheduled(false, tuning, time),
-            'hihat_open': (_freq, tuning, time) => this.createHiHatScheduled(true, tuning, time),
+            'hihat_closed': (_freq, params, time) => this.createHiHatScheduled(false, params, time),
+            'hihat_open': (_freq, params, time) => this.createHiHatScheduled(true, params, time),
             'rimshot': this.createRimshotScheduled.bind(this),
             'crash': this.createCrashScheduled.bind(this),
             'conga_low': this.createCongaScheduled.bind(this),
@@ -58,100 +66,169 @@ export class DrumSoundManager {
         return synthMap[type];
     }
 
-    private create808Scheduled(frequency: number, tuning = 0, startTime: number): void {
+    private create808Scheduled(frequency: number, params: DrumParameters = {}, startTime: number): void {
         if (!this.context) return;
 
-        const duration = 0.5;
-        const { oscillator, gainNode } = this.createOscillatorWithGain();
-        const tunedFreq = this.getTunedFrequency(frequency, tuning);
+        const duration = (params.attack || 0) + (params.decay || 500) + (params.release || 100);
+        const { oscillator, gainNode, filter } = this.createOscillatorWithGainAndFilter();
+        const tunedFreq = this.getTunedFrequency(frequency, params.tuning || 0);
+        const velocity = (params.velocity !== undefined ? params.velocity : 100) / 127;
+
+        // Apply filter if provided
+        if (params.filterCutoff || params.filterResonance) {
+            filter.frequency.value = params.filterCutoff || 20000;
+            filter.Q.value = params.filterResonance || 0.707;
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+        } else {
+            oscillator.connect(gainNode);
+        }
 
         oscillator.type = 'triangle';
         oscillator.frequency.setValueAtTime(tunedFreq * 2, startTime);
         oscillator.frequency.exponentialRampToValueAtTime(
             tunedFreq,
-            startTime + 0.15
+            startTime + (params.attack || 0) / 1000
         );
 
-        gainNode.gain.setValueAtTime(1, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+        // ADSR envelope
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(velocity, startTime + (params.attack || 0) / 1000);
+        gainNode.gain.linearRampToValueAtTime(
+            velocity * (params.sustain || 0.1),
+            startTime + ((params.attack || 0) + (params.decay || 500)) / 1000
+        );
+        gainNode.gain.exponentialRampToValueAtTime(
+            0.001,
+            startTime + duration / 1000
+        );
 
-        this.schedulePlayback(oscillator, startTime, duration, [oscillator, gainNode]);
+        this.schedulePlayback(oscillator, startTime, duration / 1000, [oscillator, gainNode, filter]);
     }
 
-    private createHiHatScheduled(isOpen: boolean, tuning = 0, startTime: number): void {
+    private createHiHatScheduled(isOpen: boolean, params: DrumParameters = {}, startTime: number): void {
         if (!this.context) return;
 
-        const duration = isOpen ? 0.2 : 0.05;
-        const { noise, filter, gainNode } = this.createNoiseWithFilter(duration);
-        const baseFreq = this.getTunedFrequency(2000, tuning);
+        const duration = (params.attack || 0) + (params.decay || (isOpen ? 200 : 50)) + (params.release || 100);
+        const { noise, filter, gainNode } = this.createNoiseWithFilter(duration / 1000);
+        const velocity = (params.velocity !== undefined ? params.velocity : 100) / 127;
 
-        filter.frequency.value = baseFreq;
-        filter.Q.value = 5;
+        // Apply filter parameters
+        filter.frequency.value = params.filterCutoff || 2000;
+        filter.Q.value = params.filterResonance || 5;
 
-        gainNode.gain.setValueAtTime(0.3, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+        if (params.tuning) {
+            filter.frequency.value = this.getTunedFrequency(filter.frequency.value, params.tuning);
+        }
 
-        this.schedulePlayback(noise, startTime, duration, [noise, filter, gainNode]);
+        // ADSR envelope
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(velocity * 0.3, startTime + (params.attack || 0) / 1000);
+        gainNode.gain.linearRampToValueAtTime(
+            velocity * 0.3 * (params.sustain || 0.1),
+            startTime + ((params.attack || 0) + (params.decay || (isOpen ? 200 : 50))) / 1000
+        );
+        gainNode.gain.exponentialRampToValueAtTime(
+            0.001,
+            startTime + duration / 1000
+        );
+
+        this.schedulePlayback(noise, startTime, duration / 1000, [noise, filter, gainNode]);
     }
 
-    private createRimshotScheduled(frequency: number, tuning = 0, startTime: number): void {
+    private createRimshotScheduled(frequency: number, params: DrumParameters = {}, startTime: number): void {
         if (!this.context) return;
 
-        const duration = 0.05;
-        const { oscillator, gainNode } = this.createOscillatorWithGain();
-        const tunedFreq = this.getTunedFrequency(frequency, tuning);
+        const duration = (params.attack || 0) + (params.decay || 50) + (params.release || 50);
+        const { oscillator, gainNode, filter } = this.createOscillatorWithGainAndFilter();
+        const tunedFreq = this.getTunedFrequency(frequency, params.tuning || 0);
+        const velocity = (params.velocity !== undefined ? params.velocity : 100) / 127;
+
+        if (params.filterCutoff || params.filterResonance) {
+            filter.frequency.value = params.filterCutoff || 20000;
+            filter.Q.value = params.filterResonance || 0.707;
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+        } else {
+            oscillator.connect(gainNode);
+        }
 
         oscillator.frequency.setValueAtTime(tunedFreq, startTime);
-        gainNode.gain.setValueAtTime(0.5, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
 
-        this.schedulePlayback(oscillator, startTime, duration, [oscillator, gainNode]);
+        // ADSR envelope
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(velocity * 0.5, startTime + (params.attack || 0) / 1000);
+        gainNode.gain.linearRampToValueAtTime(
+            velocity * 0.5 * (params.sustain || 0.1),
+            startTime + ((params.attack || 0) + (params.decay || 50)) / 1000
+        );
+        gainNode.gain.exponentialRampToValueAtTime(
+            0.001,
+            startTime + duration / 1000
+        );
+
+        this.schedulePlayback(oscillator, startTime, duration / 1000, [oscillator, gainNode, filter]);
     }
 
-    private createCrashScheduled(frequency: number, tuning = 0, startTime: number): void {
+    private createCrashScheduled(frequency: number, params: DrumParameters = {}, startTime: number): void {
         if (!this.context) return;
 
-        const duration = 0.5;
-        const { noise, filter, gainNode } = this.createNoiseWithFilter(duration);
-        const tunedFreq = this.getTunedFrequency(frequency, tuning);
+        const duration = (params.attack || 0) + (params.decay || 500) + (params.release || 500);
+        const { noise, filter, gainNode } = this.createNoiseWithFilter(duration / 1000);
+        const tunedFreq = this.getTunedFrequency(frequency, params.tuning || 0);
+        const velocity = (params.velocity !== undefined ? params.velocity : 100) / 127;
 
-        filter.frequency.value = tunedFreq;
-        filter.Q.value = 3;
+        filter.frequency.value = params.filterCutoff || tunedFreq;
+        filter.Q.value = params.filterResonance || 3;
 
-        gainNode.gain.setValueAtTime(0.3, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+        // ADSR envelope
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(velocity * 0.3, startTime + (params.attack || 0) / 1000);
+        gainNode.gain.linearRampToValueAtTime(
+            velocity * 0.3 * (params.sustain || 0.1),
+            startTime + ((params.attack || 0) + (params.decay || 500)) / 1000
+        );
+        gainNode.gain.exponentialRampToValueAtTime(
+            0.001,
+            startTime + duration / 1000
+        );
 
-        this.schedulePlayback(noise, startTime, duration, [noise, filter, gainNode]);
+        this.schedulePlayback(noise, startTime, duration / 1000, [noise, filter, gainNode]);
     }
 
-    private createCongaScheduled(frequency: number, tuning = 0, startTime: number): void {
+    private createCongaScheduled(frequency: number, params: DrumParameters = {}, startTime: number): void {
         if (!this.context) return;
 
-        const tunedFreq = this.getTunedFrequency(frequency, tuning);
+        const tunedFreq = this.getTunedFrequency(frequency, params.tuning || 0);
+        const duration = (params.attack || 0) + (params.decay || 200) + (params.release || 100);
+        const velocity = (params.velocity !== undefined ? params.velocity : 100) / 127;
 
         // Main oscillator setup
-        const { oscillator: mainOsc, gainNode: mainGain } = this.createOscillatorWithGain();
+        const { oscillator: mainOsc, gainNode: mainGain, filter: mainFilter } = this.createOscillatorWithGainAndFilter();
+        if (params.filterCutoff || params.filterResonance) {
+            mainFilter.frequency.value = params.filterCutoff || 20000;
+            mainFilter.Q.value = params.filterResonance || 0.707;
+            mainOsc.connect(mainFilter);
+            mainFilter.connect(mainGain);
+        } else {
+            mainOsc.connect(mainGain);
+        }
+
         mainOsc.frequency.setValueAtTime(tunedFreq, startTime);
-        mainGain.gain.setValueAtTime(0.7, startTime);
-        mainGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
 
-        // Harmonic oscillator setup
-        const { oscillator: harmOsc, gainNode: harmGain } = this.createOscillatorWithGain();
-        harmOsc.frequency.setValueAtTime(tunedFreq * 1.5, startTime);
-        harmGain.gain.setValueAtTime(0.3, startTime);
-        harmGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.15);
+        // ADSR envelope
+        mainGain.gain.setValueAtTime(0, startTime);
+        mainGain.gain.linearRampToValueAtTime(velocity * 0.7, startTime + (params.attack || 0) / 1000);
+        mainGain.gain.linearRampToValueAtTime(
+            velocity * 0.7 * (params.sustain || 0.1),
+            startTime + ((params.attack || 0) + (params.decay || 200)) / 1000
+        );
+        mainGain.gain.exponentialRampToValueAtTime(
+            0.001,
+            startTime + duration / 1000
+        );
 
-        // Attack noise setup
-        const { noise, filter, gainNode: noiseGain } = this.createNoiseWithFilter(0.1);
-        filter.frequency.value = tunedFreq * 2;
-        filter.Q.value = 2;
-        noiseGain.gain.setValueAtTime(0.2, startTime);
-        noiseGain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.05);
-
-        // Schedule all components
-        this.schedulePlayback(mainOsc, startTime, 0.2, [mainOsc, mainGain]);
-        this.schedulePlayback(harmOsc, startTime, 0.15, [harmOsc, harmGain]);
-        this.schedulePlayback(noise, startTime, 0.05, [noise, filter, noiseGain]);
+        this.schedulePlayback(mainOsc, startTime, duration / 1000, [mainOsc, mainGain, mainFilter]);
     }
 
     private getTunedFrequency(baseFreq: number, tuning: number): number {
@@ -159,12 +236,17 @@ export class DrumSoundManager {
         return baseFreq * tuningMultiplier;
     }
 
-    private createOscillatorWithGain(): { oscillator: OscillatorNode; gainNode: GainNode } {
+    private createOscillatorWithGainAndFilter(): {
+        oscillator: OscillatorNode;
+        gainNode: GainNode;
+        filter: BiquadFilterNode;
+    } {
         const oscillator = this.context!.createOscillator();
         const gainNode = this.context!.createGain();
-        oscillator.connect(gainNode);
+        const filter = this.context!.createBiquadFilter();
+        filter.type = 'lowpass';
         gainNode.connect(this.context!.destination);
-        return { oscillator, gainNode };
+        return { oscillator, gainNode, filter };
     }
 
     private createNoiseWithFilter(duration: number): {
@@ -187,10 +269,10 @@ export class DrumSoundManager {
         filter.type = 'bandpass';
 
         const gainNode = this.context!.createGain();
+        gainNode.connect(this.context!.destination);
 
         noise.connect(filter);
         filter.connect(gainNode);
-        gainNode.connect(this.context!.destination);
 
         return { noise, filter, gainNode };
     }
