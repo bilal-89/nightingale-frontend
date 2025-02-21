@@ -47,7 +47,7 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
             shadow2: '#ffffff',
             keySize: 'w-16 h-24',
             borderRadius: 'rounded-[14px]',
-            translation: 'translate-y-[7px]',
+            translation: 'translate-y-[3px]',
             shadowSize: '3px'
         },
         drums: {
@@ -56,9 +56,9 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
             shadow1: '#d1cdc4',
             shadow2: '#ffffff',
             keySize: 'w-20 h-20',
-            borderRadius: 'rounded-[9px]',
-            translation: 'translate-y-[5px]',
-            shadowSize: '4px'
+            borderRadius: 'rounded-[14px]',
+            translation: 'translate-y-[3px]',
+            shadowSize: '3px'
         }
     };
 
@@ -86,7 +86,7 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                            inset -${currentStyle.shadowSize} -${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow2}`
                         : `${currentStyle.shadowSize} ${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow1}, 
                            -${currentStyle.shadowSize} -${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow2}`,
-                    transition: 'all 400ms cubic-bezier(0.4, 0, 0.2, 1)'
+                    transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             >
                 {mode === 'drums' && drumSound && (

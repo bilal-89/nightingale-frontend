@@ -69,7 +69,7 @@ const ParameterPanel: React.FC = () => {
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseLeave}
-            className="w-full max-w-md p-6 bg-[#e5e9ec] rounded-3xl cursor-pointer relative"
+            className="w-full max-w-md p-7 bg-[#e5e9ec] rounded-3xl cursor-pointer relative"
             style={getContainerStyle()}
         >
             <div

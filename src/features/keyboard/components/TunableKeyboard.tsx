@@ -200,9 +200,9 @@ const TunableKeyboard: React.FC = () => {
 
     return (
         <Card className={`p-8 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background}`}>
-            <div className="flex gap-5 ">
-                <OctaveControls className=" ml-[-13px]" />
-                <div className="flex flex-col gap-1 flex-1">
+            <div className="flex gap-6 ">
+                <OctaveControls className="ml-[-14px]" />
+                <div className="flex flex-col gap-7 flex-1">
                     <div
                         className={`
                             grid grid-cols-6 gap-x-24 gap-y-6 p-16 rounded-xl cursor-pointer
