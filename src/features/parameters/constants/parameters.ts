@@ -23,18 +23,18 @@ export const parameters: Parameter[] = [
         contexts: ['keyboard', 'note'],
         group: 'note'
     },
-    {
-        id: 'microTiming',
-        name: 'Micro-timing',
-        min: -50,
-        max: 50,
-        step: 1,
-        unit: 'ms',
-        defaultValue: 0,
-        contexts: ['note'],
-        // extraControls: true,
-        group: 'note'
-    },
+    // {
+    //     // id: 'microTiming',
+    //     name: 'Micro-timing',
+    //     min: -50,
+    //     max: 50,
+    //     step: 1,
+    //     unit: 'ms',
+    //     defaultValue: 0,
+    //     contexts: ['note'],
+    //     // extraControls: true,
+    //     group: 'note'
+    // },
     // ADSR Envelope parameters
     {
         id: 'attack',
