@@ -64,7 +64,7 @@ class KeyboardAudioManager {
 
 
     // Default filter settings
-    private readonly DEFAULT_FILTER_CUTOFF = 20000;  // Hz
+    private readonly DEFAULT_FILTER_CUTOFF = 19000;  // Hz
     private readonly DEFAULT_FILTER_RESONANCE = 0.707;  // Q value
 
     // Modify playTunableNoteRT to include filter

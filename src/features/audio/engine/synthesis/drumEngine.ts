@@ -76,7 +76,7 @@ export class DrumSoundManager {
 
         // Apply filter if provided
         if (params.filterCutoff || params.filterResonance) {
-            filter.frequency.value = params.filterCutoff || 20000;
+            filter.frequency.value = params.filterCutoff || 19000;
             filter.Q.value = params.filterResonance || 0.707;
             oscillator.connect(filter);
             filter.connect(gainNode);

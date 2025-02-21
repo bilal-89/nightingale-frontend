@@ -88,7 +88,7 @@ export const parameters: Parameter[] = [
         max: 20000,
         step: 1,
         unit: 'Hz',
-        defaultValue: 20000,
+        defaultValue: 19000,
         contexts: ['keyboard', 'note'],
         group: 'filter'
     },

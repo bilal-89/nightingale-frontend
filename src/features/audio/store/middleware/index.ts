@@ -29,7 +29,7 @@ const getNoteParameters = (keyParams: any) => ({
         release: keyParams.release?.value ?? 150
     },
     filter: {
-        cutoff: keyParams.filterCutoff?.value ?? 20000,
+        cutoff: keyParams.filterCutoff?.value ?? 19000,
         resonance: keyParams.filterResonance?.value ?? 0.707
     }
 });

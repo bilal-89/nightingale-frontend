@@ -39,7 +39,7 @@ export const selectKeyEnvelope = (state: RootState, keyNumber: number) => ({
 });
 
 export const selectKeyFilter = (state: RootState, keyNumber: number) => ({
-    cutoff: selectKeyParameter(state, keyNumber, 'filterCutoff') ?? 20000,
+    cutoff: selectKeyParameter(state, keyNumber, 'filterCutoff') ?? 19000,
     resonance: selectKeyParameter(state, keyNumber, 'filterResonance') ?? 0.707
 });
 
