@@ -13,6 +13,8 @@ import { TrackHeaders } from './components/TrackHeaders';
 import { GridArea } from './components/GridArea';
 import { useTrackInteraction } from './hooks/useTrackInteraction';
 import { useGridPlayback } from './hooks/useGridPlayback';
+import { useSelectionBox } from '../../../hooks/useSelectionBox';
+import SelectionBox from './components/SelectionBox';
 
 export const TimelineGrid: React.FC = () => {
     // Hooks
@@ -25,8 +27,8 @@ export const TimelineGrid: React.FC = () => {
         handleTrackMouseLeave
     } = useTrackInteraction();
 
-    // Use grid interaction hook for event prevention
-    useTrackInteraction();
+    // Selection box hook
+    const { selectionBox, handleSelectionStart, gridRef } = useSelectionBox();
 
     // Selectors
     const isPlaying = useAppSelector(selectIsPlaying);
@@ -89,7 +91,16 @@ export const TimelineGrid: React.FC = () => {
     }, [tracks]);
 
     return (
-        <div className="w-full bg-white rounded-lg shadow-sm overflow-hidden">
+        <div
+            ref={gridRef}
+            className="w-full bg-white rounded-lg shadow-sm overflow-hidden relative"
+            onMouseDown={handleSelectionStart}
+            style={{
+                position: 'relative',
+                userSelect: 'none',
+                cursor: 'default'
+            }}
+        >
             <div className="flex">
                 <TrackHeaders
                     tracks={tracks}
@@ -109,6 +120,20 @@ export const TimelineGrid: React.FC = () => {
                     playbackPosition={playbackPositionRef.current}
                     isPlaying={isPlaying}
                 />
+
+                {/* Use SelectionBox component instead of inline div */}
+                {selectionBox && selectionBox.width > 5 && selectionBox.height > 5 && (
+                    <SelectionBox
+                        startPoint={{
+                            x: selectionBox.left,
+                            y: selectionBox.top
+                        }}
+                        currentPoint={{
+                            x: selectionBox.left + selectionBox.width,
+                            y: selectionBox.top + selectionBox.height
+                        }}
+                    />
+                )}
             </div>
         </div>
     );

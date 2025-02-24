@@ -12,19 +12,19 @@ const PADDING = 4;
 const USABLE_HEIGHT = LAYOUT.TRACK_HEIGHT - (PADDING * 2);
 
 const Note: React.FC<NoteProps> = ({
-    note,
-    trackId,
-    trackIndex,
-    isSelected,
-    isMultiSelected,
-    isFocused,
-    timelineZoom,
-    availableTracks,
-    lowestNote,
-    highestNote,
-    trackColor,
-    verticalPosition
-}) => {
+                                       note,
+                                       trackId,
+                                       trackIndex,
+                                       isSelected,
+                                       isMultiSelected,
+                                       isFocused,
+                                       timelineZoom,
+                                       availableTracks,
+                                       lowestNote,
+                                       highestNote,
+                                       trackColor,
+                                       verticalPosition
+                                   }) => {
     const {
         isLocalDragging,
         setIsLocalDragging,
@@ -93,11 +93,24 @@ const Note: React.FC<NoteProps> = ({
         isDragging: isLocalDragging
     };
 
-    console.log('Note render:', { id: note.id, isSelected, isMultiSelected, isFocused });
+    // For debugging
+    useEffect(() => {
+        if (isSelected || isMultiSelected) {
+            console.log('Note selected:', note.id, { isSelected, isMultiSelected });
+        }
+    }, [isSelected, isMultiSelected, note.id]);
 
     return (
         <NoteVisuals
-            note={{...note, duration: currentDuration}}
+            note={{
+                id: note.id,
+                velocity: note.velocity ?? velocity ?? 100,
+                synthesis: {
+                    envelope: { attack: (attackTime ?? 50) / 1000 },
+                    tuning: tuning
+                }
+            }}
+            trackId={trackId}  // Pass trackId
             trackColor={trackColor}
             isSelected={isSelected}
             isMultiSelected={isMultiSelected}
@@ -108,6 +121,9 @@ const Note: React.FC<NoteProps> = ({
             onClick={handleClick}
             onKeyDown={isSelected || isFocused ? handleKeyDown : undefined}
             draggable={false}
+            onDragStart={handleDragStart}  // Add these drag handlers
+            onDrag={handleDrag}
+            onDragEnd={handleDragEnd}
         />
     );
 };

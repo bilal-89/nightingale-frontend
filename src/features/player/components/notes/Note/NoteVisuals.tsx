@@ -7,6 +7,7 @@ import { NoteStyleProps } from './types';
 
 interface NoteVisualsProps {
     note: {
+        id: string;  // Ensure note has an id property
         velocity: number;
         synthesis?: {
             envelope?: {
@@ -15,6 +16,7 @@ interface NoteVisualsProps {
             tuning?: number;
         };
     };
+    trackId: string;  // Add trackId to props
     trackColor: string;
     isSelected: boolean;
     isMultiSelected?: boolean;
@@ -32,6 +34,7 @@ interface NoteVisualsProps {
 
 export const NoteVisuals: React.FC<NoteVisualsProps> = ({
                                                             note,
+                                                            trackId,
                                                             trackColor,
                                                             isSelected,
                                                             isMultiSelected,
@@ -52,8 +55,8 @@ export const NoteVisuals: React.FC<NoteVisualsProps> = ({
 
     // Enhanced selection styling with more distinct states
     const getSelectionClasses = () => {
-        const baseClasses = 'absolute rounded-lg transition-shadow duration-75 cursor-move select-none';
-        
+        const baseClasses = 'note absolute rounded-lg transition-shadow duration-75 cursor-move select-none';
+
         if (isLocalDragging) {
             return `${baseClasses} scale-[1.02] z-30 ring-2 ring-blue-400 shadow-lg`;
         }
@@ -72,6 +75,8 @@ export const NoteVisuals: React.FC<NoteVisualsProps> = ({
     return (
         <div
             className={getSelectionClasses()}
+            data-note-id={note.id}  // Add data attribute for selection box
+            data-track-id={trackId} // Add data attribute for selection box
             style={{
                 left: `${style.left}px`,
                 top: `${style.top}px`,
@@ -80,8 +85,8 @@ export const NoteVisuals: React.FC<NoteVisualsProps> = ({
                 background: getAttackGradient({ trackColor, baseOpacity, attackTime }),
                 transform: 'translateZ(0)',
                 transition: 'all 0.1s ease-out',
-                boxShadow: isSelected || isMultiSelected || isFocused ? 
-                    'inset 1px 1px 1px rgba(255,255,255,0.3), inset -1px -1px 1px rgba(0,0,0,0.2)' : 
+                boxShadow: isSelected || isMultiSelected || isFocused ?
+                    'inset 1px 1px 1px rgba(255,255,255,0.3), inset -1px -1px 1px rgba(0,0,0,0.2)' :
                     'none',
                 cursor: 'move'
             }}
