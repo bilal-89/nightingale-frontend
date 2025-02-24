@@ -87,8 +87,13 @@ export const playerSlice = createSlice({
             state.recordingStartTime = null;
         },
         addNoteEvent: (state, action: PayloadAction<NoteEvent>) => {
-            if (state.isRecording) {
-                state.recordingBuffer.push(action.payload);
+            if (state.isRecording && state.recordingStartTime) {
+                state.recordingBuffer.push({
+                    ...action.payload,
+                    timestamp: Date.now() - state.recordingStartTime, // Keep using relative timestamp
+                    duration: 0,
+                    isActive: true
+                });
             }
         },
         addNoteToTrack: (state, action: PayloadAction<{
@@ -150,7 +155,8 @@ export const playerSlice = createSlice({
             if (noteIndex !== -1) {
                 state.recordingBuffer[noteIndex] = {
                     ...state.recordingBuffer[noteIndex],
-                    duration: action.payload.duration
+                    duration: action.payload.duration,
+                    isActive: false
                 };
             }
         },

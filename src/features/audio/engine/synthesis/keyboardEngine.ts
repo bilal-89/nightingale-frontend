@@ -1,6 +1,7 @@
 import { SynthesisParameters, CompleteNoteEvent } from '../../api/types';
 import { drumSoundManager } from './drumEngine';
 import { Waveform } from '../../../keyboard/store/slices/keyboard.slice';
+import { LAYOUT } from '../../../../constants';
 
 class KeyboardAudioManager {
     // Core audio settings
@@ -351,46 +352,34 @@ class KeyboardAudioManager {
                 const envelope = noteEvent.synthesis.envelope;
                 const maxGain = this.velocityToGain(noteEvent.velocity);
 
-                // Configure oscillator with waveform
+                // Configure oscillator
                 oscillator.type = noteEvent.synthesis.waveform;
                 oscillator.frequency.setValueAtTime(
-                    this.getFrequency(noteEvent.note, noteEvent.tuning), // Use note's tuning
+                    this.getFrequency(noteEvent.note, noteEvent.tuning),
                     time
                 );
 
                 // Calculate envelope timings
                 const attackEndTime = time + envelope.attack;
+                const decayEndTime = attackEndTime + envelope.decay;
                 const releaseStartTime = time + noteEvent.duration;
                 const releaseEndTime = releaseStartTime + envelope.release;
 
-                // Set initial gain
+                // Set envelope stages using linearRampToValueAtTime instead
                 gainNode.gain.setValueAtTime(0, time);
-
-                // Handle attack phase differently based on attack time
-                if (envelope.attack <= 0.001) {
-                    gainNode.gain.setValueAtTime(maxGain, time);
-                } else {
-                    gainNode.gain.setValueCurveAtTime(
-                        this.createAttackCurve(noteEvent.velocity),
-                        time,
-                        envelope.attack
-                    );
-                }
-
-                // Decay and sustain
+                
+                // Attack
+                gainNode.gain.linearRampToValueAtTime(maxGain, attackEndTime);
+                
+                // Decay to sustain
                 const sustainLevel = maxGain * envelope.sustain;
-                gainNode.gain.setTargetAtTime(
-                    sustainLevel,
-                    attackEndTime,
-                    envelope.decay / 4
-                );
-
-                // Release phase
-                gainNode.gain.setTargetAtTime(
-                    0,
-                    releaseStartTime,
-                    envelope.release / 3
-                );
+                gainNode.gain.linearRampToValueAtTime(sustainLevel, decayEndTime);
+                
+                // Sustain (no automation needed, stays at sustainLevel)
+                
+                // Release
+                gainNode.gain.setValueAtTime(sustainLevel, releaseStartTime);
+                gainNode.gain.linearRampToValueAtTime(0, releaseEndTime);
 
                 // Connect audio path
                 oscillator.connect(gainNode);
@@ -398,7 +387,7 @@ class KeyboardAudioManager {
 
                 // Schedule precise start/stop times
                 oscillator.start(time);
-                oscillator.stop(releaseEndTime + 0.1);
+                oscillator.stop(releaseEndTime + 0.01);
 
                 // Clean up
                 setTimeout(() => {
@@ -408,7 +397,7 @@ class KeyboardAudioManager {
                     } catch (error) {
                         console.error('Error cleaning up note:', error);
                     }
-                }, (releaseEndTime + 0.2 - this.audioContext.currentTime) * 1000);
+                }, (releaseEndTime + 0.02 - this.audioContext.currentTime) * 1000);
             }
         } catch (error) {
             console.error('Error in playExactNote:', error);

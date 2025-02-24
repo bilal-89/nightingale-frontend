@@ -89,7 +89,8 @@ export const playerMiddleware: Middleware = store => next => async action => {
             case 'keyboard/noteOn': {
                 if (state.player.isRecording) {
                     const note = action.payload;
-                    const msTime = Date.now() - (state.player.recordingStartTime || 0);
+                    // Exact same calculation as the indicator
+                    const msTime = Date.now() - state.player.recordingStartTime;
 
                     const tuningValue = keyboardState.keyParameters[note]?.tuning?.value ?? 0;
                     const currentWaveform = keyboardState?.keyParameters?.[note]?.waveform

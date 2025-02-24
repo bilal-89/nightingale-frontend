@@ -1,39 +1,96 @@
 // src/features/player/components/notes/Note/useNoteInteraction.ts
 
-import { useCallback, useState } from 'react';
-import { useAppDispatch } from '../../../hooks';
-import { selectNote } from '../../../store/player';
-import { useNoteDrag } from '../../../hooks/useNoteDrag';
+import { useCallback, useState, useRef } from 'react';
+import { useAppDispatch, useAppSelector } from '../../../hooks';
+import { selectNote, moveNote } from '../../../store/player';
 import { NoteEvent } from '../../../types';
 
-export function useNoteInteraction(note: NoteEvent, trackId: string) {
+export const useNoteInteraction = (note: NoteEvent, trackId: string) => {
     const dispatch = useAppDispatch();
-    const { handleDragStart, handleDrag, handleDragEnd, handleKeyboardMove } = useNoteDrag();
     const [isLocalDragging, setIsLocalDragging] = useState(false);
+    const dragStartPos = useRef<{ x: number; timestamp: number } | null>(null);
+    const timelineZoom = useAppSelector(state => state.player.timelineZoom);
+    const multiSelectedNoteIds = useAppSelector(state => state.player.multiSelectedNoteIds);
+    const allNotes = useAppSelector(state => state.player.tracks.find(t => t.id === trackId)?.notes || []);
 
+    // Handle mouse down to start dragging
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-        // Only start dragging if it's not a shift-click
         if (!e.shiftKey) {
+            e.preventDefault();  // Prevent default behavior
+            e.stopPropagation();  // Stop event bubbling
+            
+            // Store initial positions of all selected notes
+            const selectedNotes = allNotes.filter(n => multiSelectedNoteIds.includes(n.id));
+            const initialOffsets = selectedNotes.map(n => ({
+                id: n.id,
+                offset: n.timestamp - note.timestamp
+            }));
+            
             setIsLocalDragging(true);
-            handleDragStart(e, note, Number(trackId));
+            dragStartPos.current = {
+                x: e.clientX,
+                timestamp: note.timestamp
+            };
+
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+                moveEvent.preventDefault();
+                if (!dragStartPos.current) return;
+
+                const pixelDelta = moveEvent.clientX - dragStartPos.current.x;
+                const timeDelta = pixelDelta / timelineZoom;
+                const baseNewTime = Math.max(0, dragStartPos.current.timestamp + timeDelta);
+
+                // If note is part of multiselection, move all selected notes maintaining relative positions
+                if (multiSelectedNoteIds.includes(note.id)) {
+                    initialOffsets.forEach(({ id, offset }) => {
+                        dispatch(moveNote({
+                            trackId,
+                            noteId: id,
+                            newTime: Math.round(baseNewTime + offset)
+                        }));
+                    });
+                } else {
+                    dispatch(moveNote({
+                        trackId,
+                        noteId: note.id,
+                        newTime: Math.round(baseNewTime)
+                    }));
+                }
+            };
+
+            const handleMouseUp = (upEvent: MouseEvent) => {
+                upEvent.preventDefault();
+                setIsLocalDragging(false);
+                dragStartPos.current = null;
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+            };
+
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
         }
-    }, [note, trackId, handleDragStart]);
+    }, [dispatch, note.id, note.timestamp, trackId, timelineZoom, multiSelectedNoteIds, allNotes]);
 
     const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         e.stopPropagation();
         dispatch(selectNote({
             trackId: String(trackId),
             noteId: note.id,
-            isMultiSelect: e.shiftKey  // Pass shift key state to action
+            isMultiSelect: e.shiftKey
         }));
     }, [dispatch, trackId, note.id]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
             e.preventDefault();
-            handleKeyboardMove(note, trackId, e.key === 'ArrowLeft' ? 'left' : 'right', e.shiftKey);
+            const delta = e.key === 'ArrowLeft' ? -10 : 10;
+            dispatch(moveNote({
+                trackId,
+                noteId: note.id,
+                newTime: note.timestamp + delta
+            }));
         }
-    }, [note, trackId, handleKeyboardMove]);
+    }, [dispatch, note, trackId]);
 
     return {
         isLocalDragging,
@@ -41,7 +98,8 @@ export function useNoteInteraction(note: NoteEvent, trackId: string) {
         handleMouseDown,
         handleKeyDown,
         handleClick,
-        handleDrag,
-        handleDragEnd
+        handleDrag: () => {}, // Empty handlers since we're not using drag events
+        handleDragStart: () => {},
+        handleDragEnd: () => {}
     };
-}
+};
