@@ -28,7 +28,7 @@ export const AutoTuneButton: React.FC = () => {
         <div className="relative">
             <button
                 className={`px-3 py-2 rounded-lg transition-all duration-300 bg-[#e8e4dc]
-                    ${hasSelection ? 'hover:bg-[#dcd8d0]' : 'opacity-50 cursor-not-allowed'}
+                    ${hasSelection ? 'hover:bg-[#dcd8d0]' : 'opacity-50'}
                     ${isOpen ? 'shadow-inner' : ''}`}
                 onClick={() => setIsOpen(!isOpen)}
                 disabled={!hasSelection}
