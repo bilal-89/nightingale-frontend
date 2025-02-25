@@ -18,6 +18,7 @@ interface ExtendedPlayerState extends PlayerState {
         countInEnabled: boolean;
         prerollBars: number;
     };
+    quantizeValue?: number; // Add this line
 }
 
 const initialState: ExtendedPlayerState = {
@@ -70,7 +71,8 @@ const initialState: ExtendedPlayerState = {
         metronomeEnabled: false,
         countInEnabled: false,
         prerollBars: 1
-    }
+    },
+    quantizeValue: 16, // Default to 16th notes
 };
 
 export const playerSlice = createSlice({
@@ -423,6 +425,53 @@ export const playerSlice = createSlice({
         },
         setPrerollBars: (state, action: PayloadAction<number>) => {
             state.playback.prerollBars = Math.max(0, Math.min(4, action.payload));
+        },
+        setQuantizeValue: (state, action: PayloadAction<number>) => {
+            state.quantizeValue = action.payload;
+        },
+        quantizeSelectedNotes: (state, action: PayloadAction<{ division: number }>) => {
+            const { division } = action.payload;
+            const beatsPerMinute = state.tempo || 120;
+            const secondsPerBeat = 60 / beatsPerMinute;
+            const secondsPerDivision = secondsPerBeat / (division / 4);
+            const millisecondsPerDivision = secondsPerDivision * 1000;
+            
+            const notesToQuantize: Array<{ trackId: string; noteIndex: number }> = [];
+            
+            // Collect notes to quantize
+            state.tracks.forEach(track => {
+                track.notes.forEach((note, noteIndex) => {
+                    if (state.selectedNoteId === note.id || 
+                        state.multiSelectedNoteIds.includes(note.id)) {
+                        notesToQuantize.push({
+                            trackId: track.id,
+                            noteIndex
+                        });
+                    }
+                });
+            });
+            
+            console.log(`Quantizing ${notesToQuantize.length} notes to 1/${division}`);
+            
+            // Apply quantization
+            notesToQuantize.forEach(({ trackId, noteIndex }) => {
+                const track = state.tracks.find(t => t.id === trackId);
+                if (!track) return;
+                
+                const note = track.notes[noteIndex];
+                if (!note) return;
+                
+                // Find nearest grid point
+                const nearestGridPoint = Math.round(note.timestamp / millisecondsPerDivision) * millisecondsPerDivision;
+                
+                // Update note timestamp
+                note.timestamp = nearestGridPoint;
+            });
+
+            // Sort notes after quantization
+            state.tracks.forEach(track => {
+                track.notes.sort((a, b) => a.timestamp - b.timestamp);
+            });
         }
     }
 });
@@ -459,7 +508,9 @@ export const {
     removeFromSelection,
     moveNotes,
     updateMultipleNoteParameters,
-    deleteNotes
+    deleteNotes,
+    setQuantizeValue,
+    quantizeSelectedNotes
 
     // ... (other actions)
 } = playerSlice.actions;

@@ -2,7 +2,7 @@ import React from 'react';
 import { Play, Square, SkipBack } from 'lucide-react';
 import { usePlayback } from '../../hooks';
 import { formatTime } from '../../utils/time.utils';
-
+import { QuantizeButton } from './QuantizeButton';
 
 const TransportControls: React.FC = () => {
     // Get our playback controls and state
@@ -83,6 +83,11 @@ const TransportControls: React.FC = () => {
                         min="20"
                         max="300"
                     />
+                </div>
+
+                {/* Add Quantize button */}
+                <div className="ml-4">
+                    <QuantizeButton />
                 </div>
             </div>
         </div>
