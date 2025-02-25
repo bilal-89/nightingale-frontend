@@ -472,6 +472,48 @@ export const playerSlice = createSlice({
             state.tracks.forEach(track => {
                 track.notes.sort((a, b) => a.timestamp - b.timestamp);
             });
+        },
+        autoTuneSelectedNotes: (state, action: PayloadAction<{ system: string }>) => {
+            const notesToTune: Array<{ trackId: string; noteIndex: number }> = [];
+            
+            // Collect notes to tune
+            state.tracks.forEach(track => {
+                track.notes.forEach((note, noteIndex) => {
+                    if (state.selectedNoteId === note.id || 
+                        state.multiSelectedNoteIds.includes(note.id)) {
+                        notesToTune.push({
+                            trackId: track.id,
+                            noteIndex
+                        });
+                    }
+                });
+            });
+            
+            console.log(`Auto-tuning ${notesToTune.length} notes using ${action.payload.system}`);
+            
+            // Apply tuning based on selected system
+            notesToTune.forEach(({ trackId, noteIndex }) => {
+                const track = state.tracks.find(t => t.id === trackId);
+                if (!track) return;
+                
+                const note = track.notes[noteIndex];
+                if (!note) return;
+
+                switch (action.payload.system) {
+                    case 'equal':
+                    default:
+                        // Equal Temperament tuning
+                        if (note.tuning !== undefined) {
+                            const semitoneOffset = note.tuning / 100;
+                            if (Math.abs(semitoneOffset) >= 0.5) {
+                                note.note += Math.sign(semitoneOffset);
+                            }
+                            note.tuning = 0;
+                        }
+                        break;
+                    // Future tuning systems can be added here
+                }
+            });
         }
     }
 });
@@ -510,7 +552,8 @@ export const {
     updateMultipleNoteParameters,
     deleteNotes,
     setQuantizeValue,
-    quantizeSelectedNotes
+    quantizeSelectedNotes,
+    autoTuneSelectedNotes
 
     // ... (other actions)
 } = playerSlice.actions;

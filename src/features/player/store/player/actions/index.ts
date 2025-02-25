@@ -5,4 +5,4 @@ export * from './track';
 export * from './transport';
 export * from './tempo';
 export * from './quantize';
-
+export * from './autotune';

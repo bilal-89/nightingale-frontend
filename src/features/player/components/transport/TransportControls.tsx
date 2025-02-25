@@ -3,6 +3,7 @@ import { Play, Square, SkipBack } from 'lucide-react';
 import { usePlayback } from '../../hooks';
 import { formatTime } from '../../utils/time.utils';
 import { QuantizeButton } from './QuantizeButton';
+import { AutoTuneButton } from './AutoTuneButton';
 
 const TransportControls: React.FC = () => {
     // Get our playback controls and state
@@ -85,9 +86,10 @@ const TransportControls: React.FC = () => {
                     />
                 </div>
 
-                {/* Add Quantize button */}
-                <div className="ml-4">
+                {/* Note manipulation buttons */}
+                <div className="flex gap-2 ml-4">
                     <QuantizeButton />
+                    <AutoTuneButton />
                 </div>
             </div>
         </div>
