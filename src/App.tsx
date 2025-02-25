@@ -1,7 +1,7 @@
 import { Provider } from 'react-redux';
 import { store } from './store';
 import { Player } from "./features/player";  // Import our new Player component
-import KeyboardWorkspace from "./features/workspace/components/KeyboardWorkspace.tsx";
+import KeyboardWorkspace from "./features/keyboard/layouts/KeyboardWorkspace.tsx";
 
 // Add console logs to help debug
 console.log('App rendering');

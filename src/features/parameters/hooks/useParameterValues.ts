@@ -1,7 +1,9 @@
+// useParameterValues.ts
+
 import { useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { selectSelectedNote } from '../../player/state/slices/player.slice';
-import { setKeyParameter } from '../../../store/slices/keyboard/keyboard.slice';
+import { selectSelectedNote, selectMultiSelectedNotes } from '../../player/store/player';
+import { setKeyParameter } from '../../keyboard/store/slices/keyboard.slice';
 import { useParameters } from '../../player/hooks/useParameters';
 import { parameters } from '../constants/parameters';
 import {
@@ -13,147 +15,148 @@ import {
     KeyParameterState,
 } from '../types/types';
 
-// Define the shape of a selected note in our application state
 interface SelectedNoteState {
     trackId: string;
     note: NoteEvent;
 }
 
-/**
- * Hook for managing parameter values and updates across keyboard and note contexts.
- * Handles the complexity of accessing and updating parameters in different contexts
- * while maintaining type safety.
- */
-export const useParameterValues = (activeContext: ParameterContext) => {
-    // Set up our Redux hooks
-    const dispatch = useAppDispatch();
+interface ParameterState {
+    value: number;
+    isMixed: boolean;
+}
 
-    // Get necessary state from Redux store
+export const useParameterValues = (activeContext: ParameterContext) => {
+    const dispatch = useAppDispatch();
     const selectedKey = useAppSelector(state => state.keyboard.selectedKey);
     const selectedNote = useAppSelector(selectSelectedNote) as SelectedNoteState | null;
+    const multiSelectedNotes = useAppSelector(selectMultiSelectedNotes) as SelectedNoteState[];
     const keyParameters = useAppSelector(state => state.keyboard.keyParameters) as Record<number, KeyParameterState>;
-
-    // Get parameter change handler from useParameters hook
     const { handleParameterChange } = useParameters();
 
-
-    /**
-     * Calculate current parameter values based on context and selection state.
-     * This handles both keyboard and note contexts, providing appropriate values
-     * for all parameters based on the current state.
-     */
-    const parameterValues = useMemo(() => {
-        // Handle note context when a note is selected
-        if (activeContext === 'note' && selectedNote) {
-            return parameters.reduce((acc, param) => {
-                let rawValue: number | undefined;
-
-                // Determine the value based on parameter group
-                switch (param.group) {
-                    case 'filter': {
-                        // Handle filter parameters (cutoff and resonance)
-                        const synthesis = selectedNote.note.synthesis;
-                        rawValue = param.id === 'filterCutoff'
-                            ? synthesis.effects?.filter?.frequency
-                            : synthesis.effects?.filter?.Q;
-                        break;
-                    }
-                    case 'envelope': {
-                        // Handle envelope parameters (ADSR)
-                        if (isEnvelopeParam(param.id)) {
-                            // Convert from internal (seconds) to display (ms)
-                            const internalValue = selectedNote.note.synthesis?.envelope?.[param.id];
-                            if (internalValue !== undefined) {
-                                // Time parameters need to be converted from seconds to ms
-                                if (['attack', 'decay', 'release'].includes(param.id)) {
-                                    rawValue = internalValue * 1000;
-                                } else if (param.id === 'sustain') {
-                                    // Sustain needs to be converted from ratio to percentage
-                                    rawValue = internalValue * 100;
-                                } else {
-                                    rawValue = internalValue;
-                                }
-                            }
+    const getNoteParameterValue = useCallback((note: NoteEvent, param: typeof parameters[0]): number | undefined => {
+        switch (param.group) {
+            case 'filter': {
+                const synthesis = note.synthesis;
+                return param.id === 'filterCutoff'
+                    ? synthesis.effects?.filter?.frequency
+                    : synthesis.effects?.filter?.Q;
+            }
+            case 'envelope': {
+                if (isEnvelopeParam(param.id)) {
+                    const internalValue = note.synthesis?.envelope?.[param.id];
+                    if (internalValue !== undefined) {
+                        if (['attack', 'decay', 'release'].includes(param.id)) {
+                            return internalValue * 1000;
+                        } else if (param.id === 'sustain') {
+                            return internalValue * 100;
                         }
-                        break;
-                    }
-                    default: {
-                        // Handle basic note properties (tuning, velocity, etc.)
-                        if (isNoteProperty(param.id)) {
-                            if (param.id === 'velocity') {
-                                rawValue = selectedNote.note.velocity;
-                            } else if (param.id === 'tuning') {
-                                rawValue = selectedNote.note.tuning;
-                            } else {
-                                rawValue = selectedNote.note[param.id];
-                            }
-                        }
-                        break;
+                        return internalValue;
                     }
                 }
-
-                console.log(`Parameter ${param.id} value:`, {
-                    raw: rawValue,
-                    default: param.defaultValue,
-                    final: rawValue ?? param.defaultValue
-                });
-
-                // Use default value if no value is found
-                acc[param.id] = rawValue ?? param.defaultValue;
-                return acc;
-            }, {} as Record<string, number>);
+                break;
+            }
+            default: {
+                if (isNoteProperty(param.id)) {
+                    if (param.id === 'velocity') return note.velocity;
+                    if (param.id === 'tuning') return note.tuning;
+                    return note[param.id];
+                }
+            }
         }
+        return undefined;
+    }, []);
 
-        // Handle keyboard context when a key is selected
-        if (activeContext === 'keyboard' && selectedKey !== null) {
+    const parameterValues = useMemo(() => {
+        if (activeContext === 'note') {
+            if (multiSelectedNotes.length > 0) {
+                // Handle multiple selected notes
+                return parameters.reduce((acc, param) => {
+                    const values = multiSelectedNotes.map(noteState =>
+                        getNoteParameterValue(noteState.note, param)
+                    ).filter((value): value is number => value !== undefined);
+
+                    if (values.length > 0) {
+                        const firstValue = values[0];
+                        const isMixed = values.some(value => value !== firstValue);
+                        acc[param.id] = {
+                            value: firstValue,
+                            isMixed
+                        };
+                    } else {
+                        acc[param.id] = {
+                            value: param.defaultValue,
+                            isMixed: false
+                        };
+                    }
+                    return acc;
+                }, {} as Record<string, ParameterState>);
+            } else if (selectedNote) {
+                // Handle single selected note
+                return parameters.reduce((acc, param) => {
+                    const value = getNoteParameterValue(selectedNote.note, param) ?? param.defaultValue;
+                    acc[param.id] = {
+                        value,
+                        isMixed: false
+                    };
+                    return acc;
+                }, {} as Record<string, ParameterState>);
+            }
+        } else if (activeContext === 'keyboard' && selectedKey !== null) {
+            // Handle keyboard context
             return parameters.reduce((values, param) => {
                 if (isValidParameterId(param.id)) {
-                    // Get the parameter value for the selected key
                     const paramValue = keyParameters[selectedKey]?.[param.id];
-                    values[param.id] = paramValue?.value ?? param.defaultValue;
+                    values[param.id] = {
+                        value: paramValue?.value ?? param.defaultValue,
+                        isMixed: false
+                    };
                 }
                 return values;
-            }, {} as Record<string, number>);
+            }, {} as Record<string, ParameterState>);
         }
 
-        // Return empty object if no context or selection
         return {};
-    }, [activeContext, selectedKey, selectedNote, keyParameters]);
+    }, [activeContext, selectedKey, selectedNote, multiSelectedNotes, keyParameters, getNoteParameterValue]);
 
-    /**
-     * Handle parameter value updates for both keyboard and note contexts.
-     * This ensures type safety when updating parameters and handles the different
-     * update paths for each context.
-     */
     const handleParameterUpdate = useCallback((parameterId: string, value: number) => {
-        // Log parameter updates for debugging
-        console.log('Parameter update:', { parameterId, value, activeContext });
-
-        // Handle keyboard context updates
         if (activeContext === 'keyboard' && selectedKey !== null) {
-            // Verify parameter ID is valid for keyboard context
             if (isValidParameterId(parameterId)) {
                 dispatch(setKeyParameter({
                     keyNumber: selectedKey,
                     parameter: parameterId,
                     value
                 }));
-            } else {
-                console.warn(`Invalid parameter ID for keyboard context: ${parameterId}`);
+            }
+        } else if (activeContext === 'note') {
+            if (multiSelectedNotes.length > 0) {
+                // Update all selected notes
+                multiSelectedNotes.forEach(noteState => {
+                    handleParameterChange(
+                        noteState.trackId,
+                        noteState.note.id,
+                        parameterId,
+                        value
+                    );
+                });
+            } else if (selectedNote) {
+                // Update single note
+                handleParameterChange(
+                    selectedNote.trackId,
+                    selectedNote.note.id,
+                    parameterId,
+                    value
+                );
             }
         }
-        // Handle note context updates
-        else if (activeContext === 'note' && selectedNote) {
-            handleParameterChange(
-                selectedNote.trackId,
-                selectedNote.note.id,
-                parameterId,
-                value
-            );
-        }
-    }, [dispatch, selectedKey, selectedNote, activeContext, handleParameterChange]);
+    }, [
+        dispatch,
+        selectedKey,
+        selectedNote,
+        multiSelectedNotes,
+        activeContext,
+        handleParameterChange
+    ]);
 
-    // Return both the current values and the update handler
     return {
         parameterValues,
         handleParameterUpdate

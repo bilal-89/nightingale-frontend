@@ -1,4 +1,5 @@
-import { KeyParameters } from '../../../store/slices/keyboard/keyboard.slice';
+//src/features/parameters/types/types.ts
+import { KeyParameters } from '../../keyboard/store/slices/keyboard.slice';
 
 export type ParameterContext = 'keyboard' | 'note';
 export type ParameterGroup = 'envelope' | 'note' | 'filter';
@@ -7,7 +8,7 @@ export type ParameterGroup = 'envelope' | 'note' | 'filter';
 export interface NoteProperties {
     tuning?: number;
     velocity?: number;
-    microTiming?: number;
+    // microTiming?: number;
     // Add other parameters as needed
 }
 
@@ -65,7 +66,7 @@ export interface Parameter {
 
 // Helper function to check if a property exists on NoteProperties
 export const isNoteProperty = (id: string): id is keyof NoteProperties => {
-    return ['tuning', 'velocity', 'microTiming'].includes(id);
+    return ['tuning', 'velocity'].includes(id);
 };
 
 export const isValidParameterId = (id: string): id is keyof KeyParameters => {

@@ -9,9 +9,11 @@ import {
     selectTempo,
     selectIsPlaying,
     selectCurrentTime
-} from '../state/slices/playback.slice';
-import { selectTracks } from '../state/slices/player.slice';
-import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
+} from '../store/playback';
+import { selectTracks } from '../store/player';
+
+import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
+import { NoteEvent } from '../types';
 
 export const useTiming = () => {
     const dispatch = useAppDispatch();
@@ -39,15 +41,33 @@ export const useTiming = () => {
         return savedTuning;
     }, []);
 
+    // Tempo management
+    const setTempoAndUpdateService = useCallback((newTempo: number) => {
+        const boundedTempo = Math.max(20, Math.min(300, newTempo));
+        if (timingServiceRef.current) {
+            console.log('Updating timing service tempo:', boundedTempo);
+            timingServiceRef.current.setTempo(boundedTempo);
+        }
+        dispatch(setTempo(boundedTempo));
+    }, [dispatch]);
+
+    // Effect to sync TimingService with tempo changes
+    useEffect(() => {
+        if (timingServiceRef.current) {
+            console.log('Syncing timing service with tempo:', tempo);
+            timingServiceRef.current.setTempo(tempo);
+        }
+    }, [tempo]);
+
     // Schedule upcoming notes for playback
     const scheduleUpcomingNotes = useCallback((windowStartSeconds: number, windowEndSeconds: number) => {
-        if (!isPlaying || !keyboardAudioManager.getContext()) return;
-
         const audioContext = keyboardAudioManager.getContext();
+        if (!isPlaying || !audioContext) return;
+
         const currentAudioTime = audioContext.currentTime;
 
         tracks.forEach(track => {
-            track.notes.forEach(note => {
+            track.notes.forEach((note: NoteEvent) => {
                 const noteId = `${note.id}-${note.timestamp}`;
                 const noteTimeInSeconds = note.timestamp / 1000;
 
@@ -62,6 +82,7 @@ export const useTiming = () => {
 
                     // Prepare complete synthesis settings
                     const synthSettings = {
+                        ...note.synthesis,  // Spread existing synthesis first
                         mode: note.synthesis?.mode || 'tunable',
                         waveform: note.synthesis?.waveform || 'sine',
                         tuning: tuningValue,
@@ -70,8 +91,7 @@ export const useTiming = () => {
                             decay: note.synthesis?.envelope?.decay || 0.1,
                             sustain: note.synthesis?.envelope?.sustain || 0.7,
                             release: note.synthesis?.envelope?.release || 0.1
-                        },
-                        ...note.synthesis
+                        }
                     };
 
                     // Log for debugging
@@ -79,19 +99,19 @@ export const useTiming = () => {
                         note: note.note,
                         tuning: tuningValue,
                         savedTuning: keyboardTuningRef.current.get(note.note),
-                        recordedTuning: note.tuning
+                        recordedTuning: note.tuning,
+                        tempo: tempo  // Log current tempo for debugging
                     });
 
                     // Set up note tuning before playback
                     keyboardAudioManager.setNoteParameter(note.note, 'tuning', tuningValue);
 
-                    // Schedule the note
+                    // Schedule the note with tempo-adjusted timing
                     keyboardAudioManager.playExactNote({
                         ...note,
                         timestamp: scheduleTime,
                         duration: note.duration / 1000,
-                        synthesis: synthSettings,
-                        tuning: tuningValue
+                        synthesis: synthSettings
                     }, scheduleTime);
 
                     // Restore original keyboard tuning after scheduling
@@ -101,7 +121,7 @@ export const useTiming = () => {
                 }
             });
         });
-    }, [isPlaying, tracks, restoreTuningState]);
+    }, [isPlaying, tracks, restoreTuningState, tempo]);  // Added tempo to dependencies
 
     // Initialize timing service
     useEffect(() => {
@@ -117,7 +137,8 @@ export const useTiming = () => {
                     onTick: (currentTimeMs) => {
                         dispatch(updatePlaybackPosition(currentTimeMs));
                     }
-                }
+                },
+                tempo  // Pass initial tempo to TimingService
             );
         }
 
@@ -127,7 +148,7 @@ export const useTiming = () => {
                 timingServiceRef.current = null;
             }
         };
-    }, [scheduleUpcomingNotes, dispatch]);
+    }, [scheduleUpcomingNotes, dispatch, tempo]);  // Added tempo to dependencies
 
     // Handle playback state changes
     useEffect(() => {
@@ -163,15 +184,11 @@ export const useTiming = () => {
     }, [isPlaying, currentTime]);
 
     return {
-        setTempo: useCallback((newTempo: number) => {
-            const boundedTempo = Math.max(20, Math.min(300, newTempo));
-            dispatch(setTempo(boundedTempo));
-        }, [dispatch]),
+        setTempo: setTempoAndUpdateService,  // Use the new combined tempo update function
         getCurrentTime: useCallback(() => {
             if (!isPlaying) return currentTime;
             return timingServiceRef.current?.getCurrentTime() ?? currentTime;
         }, [isPlaying, currentTime]),
-        // Expose tuning state management functions
         saveTuningState,
         restoreTuningState
     };

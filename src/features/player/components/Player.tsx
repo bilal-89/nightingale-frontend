@@ -1,13 +1,20 @@
 import { useCallback, memo } from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks';
-import { Card } from '../../../components/ui/card';
+import { Card } from '../../../shared/components/ui/card';
 import { Circle } from 'lucide-react';
-import TimelineGrid from './timeline/components/TimelineGrid';
+import TimelineGrid from './timeline/TimelineGrid/index';
 import TransportControls from './transport/TransportControls';
-import { startRecording, stopRecording } from '../state/slices/player.slice';
+import { startRecording, stopRecording } from '../store/player';
+
+import { ColorPickerPanel } from './ColorPickerPanel';
+
+interface RecordButtonProps {
+    isRecording: boolean;
+    onRecordToggle: () => void;
+}
 
 // Memoized Record Button Component
-const RecordButton = memo(({ isRecording, onRecordToggle }) => (
+const RecordButton = memo<RecordButtonProps>(({ isRecording, onRecordToggle }) => (
     <button
         className={`p-2 rounded-lg transition-all duration-300 ${
             isRecording ? 'bg-red-500' : 'bg-[#e8e4dc]'
@@ -46,6 +53,8 @@ export const Player = () => {
             </div>
 
             <TimelineGrid />
+            <ColorPickerPanel/>
+
         </Card>
     );
 };

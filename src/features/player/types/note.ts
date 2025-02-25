@@ -1,4 +1,5 @@
-import { SynthesisParameters } from '../../../audio/types/audioTypes';
+import { SynthesisParameters } from '../../audio/api/types';
+import { NoteColor } from '../../../shared/constants/colors';
 
 // src/features/player/types/note.ts
 export interface NoteEvent {
@@ -16,6 +17,8 @@ export interface NoteEvent {
             release: number;
         };
     };
+    color?: NoteColor;
+
     // New optional properties for timing expression
     quantizeOffset?: number;  // How far note was moved by quantization
     originalTime?: number;    // Pre-quantized time for reference

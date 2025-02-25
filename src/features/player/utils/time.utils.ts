@@ -16,16 +16,17 @@ export const TIMING = {
      * Used for quantization and musical time display.
      */
     msToTicks: (ms: number, tempo: number): number => {
-        const beatsPerMs = tempo / (60 * 1000);
+        const beatsPerMs = tempo / (60 * 1000);  // Convert BPM to beats per millisecond
         return Math.round(ms * beatsPerMs * TIMING.TICKS_PER_BEAT);
     },
+
 
     /**
      * Converts musical time (ticks) to real time (milliseconds).
      * Used for playback scheduling and musical grid alignment.
      */
     ticksToMs: (ticks: number, tempo: number): number => {
-        const msPerBeat = (60 * 1000) / tempo;
+        const msPerBeat = (60 * 1000) / tempo;  // Convert BPM to milliseconds per beat
         return (ticks / TIMING.TICKS_PER_BEAT) * msPerBeat;
     },
 

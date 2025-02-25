@@ -1,4 +1,4 @@
-// src/features/player/parameters/types.ts
+// src/features/player/parameters/arrangement.types.ts
 
 export interface ParameterDefinition {
     id: string;

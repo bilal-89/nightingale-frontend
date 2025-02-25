@@ -1,8 +1,9 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useAppDispatch } from '../../../store/hooks';
-import { Card } from '../../../components/ui/card';
+import { Card } from '../../../shared/components/ui/card';
 import TunableKey from './TunableKey';
+import { OctaveControls } from './OctaveControls';
 import {
     noteOn,
     noteOff,
@@ -16,18 +17,14 @@ import {
     selectMode,
     selectIsPanelVisible,
     selectGlobalWaveform,
+    selectCurrentOctave,
     SynthMode,
     Waveform
-} from '../../../store/slices/keyboard/keyboard.slice';
-import { initializeAudioContext } from '../../../store/middleware/keyboardAudio.middleware';
+} from '../store/slices/keyboard.slice';
+import { initializeAudioContext } from '../../audio/store/actions.ts';
 import { RootState } from '../../../store';
-import { useTiming } from '../../../features/player/hooks/useTiming';
-import keyboardAudioManager from '../../../audio/context/keyboard/keyboardAudioManager';
-
-const modeLabels: Record<SynthMode, string> = {
-    tunable: "Tones",
-    drums: "Drums"
-};
+import { useTiming } from '../../player/hooks/useTiming.ts';
+import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
 
 const waveformLabels: Record<Waveform, string> = {
     sine: "Sine",
@@ -45,20 +42,20 @@ const modeStyles: Record<SynthMode, {
     innerShadow: string;
 }> = {
     tunable: {
-        background: 'from-[#f5f2ed] to-[#e8e4df]',
-        containerBg: 'bg-[#f0ece6]',
-        buttonBg: 'bg-[#e8e4dc]',
+        background: 'from-[#e5e9ec] to-[#e5e9ec]',
+        containerBg: 'bg-[#e5e9ec]',
+        buttonBg: 'bg-[#e5e9ec]',
         textColor: 'text-[#4a4543]',
-        shadow: '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff',
-        innerShadow: 'inset 3px 3px 6px #d1cdc4, inset -3px -3px 6px #ffffff'
+        shadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff',
+        innerShadow: 'inset 8px 8px 16px #c8ccd0, inset -8px -8px 16px #ffffff'
     },
     drums: {
-        background: 'from-[#f7f2f2] to-[#ece4e4]',
-        containerBg: 'bg-[#f3eaea]',
-        buttonBg: 'bg-[#ece4e4]',
-        textColor: 'text-[#584949]',
-        shadow: '3px 3px 6px #d4cccc, -3px -3px 6px #ffffff',
-        innerShadow: 'inset 3px 3px 6px #d4cccc, inset -3px -3px 6px #ffffff'
+        background: 'from-[#e5e9ec] to-[#e5e9ec]',
+        containerBg: 'bg-[#e5e9ec]',
+        buttonBg: 'bg-[#e5e9ec]',
+        textColor: 'text-[#4a4543]',
+        shadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff',
+        innerShadow: 'inset 8px 8px 16px #c8ccd0, inset -8px -8px 16px #ffffff'
     }
 };
 
@@ -70,6 +67,13 @@ const TunableKeyboard: React.FC = () => {
     const currentMode = useSelector(selectMode);
     const currentWaveform = useSelector(selectGlobalWaveform);
     const isPanelVisible = useSelector(selectIsPanelVisible);
+    const currentTrack = useSelector((state: RootState) => state.player.currentTrack);
+    const tracks = useSelector((state: RootState) => state.player.tracks);
+    const currentTrackColor = tracks[currentTrack]?.color;
+    const currentOctave = useSelector(selectCurrentOctave);
+
+    const [isPressed, setIsPressed] = useState(false);
+    const [clickedContainer, setClickedContainer] = useState(false);
 
     const initializeAudio = useCallback(() => {
         if (!isInitialized) {
@@ -79,10 +83,7 @@ const TunableKeyboard: React.FC = () => {
 
     const handleNoteOn = useCallback((note: number) => {
         initializeAudio();
-
-        // Just play the note - it will use whatever tuning is currently set
         dispatch(noteOn(note));
-
     }, [dispatch, initializeAudio]);
 
     const handleNoteOff = useCallback((note: number) => {
@@ -90,25 +91,14 @@ const TunableKeyboard: React.FC = () => {
     }, [dispatch]);
 
     const handleTuningChange = useCallback((note: number, cents: number) => {
-        // Update audio engine first for immediate feedback
         keyboardAudioManager.setNoteParameter(note, 'tuning', cents);
-
-        // Save tuning state in timing service for playback
         timing.saveTuningState(note, cents);
-
-        // Update Redux state to persist the tuning value
         dispatch(setKeyParameter({
             keyNumber: note,
             parameter: 'tuning',
             value: cents
         }));
-
-        console.log('Tuning updated:', { note, cents });
     }, [dispatch, timing]);
-
-    const handleModeChange = useCallback((newMode: SynthMode) => {
-        dispatch(setMode(newMode));
-    }, [dispatch]);
 
     const handleWaveformChange = useCallback((newWaveform: Waveform) => {
         dispatch(setGlobalWaveform(newWaveform));
@@ -118,6 +108,36 @@ const TunableKeyboard: React.FC = () => {
         dispatch(togglePanel());
     }, [dispatch]);
 
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+        if (e.target === e.currentTarget) {
+            setIsPressed(true);
+            setClickedContainer(true);
+        }
+    }, []);
+
+    const handleMouseUp = useCallback(() => {
+        if (isPressed && clickedContainer) {
+            dispatch(setMode(currentMode === 'tunable' ? 'drums' : 'tunable'));
+        }
+        setIsPressed(false);
+        setClickedContainer(false);
+    }, [isPressed, clickedContainer, currentMode, dispatch]);
+
+    const handleMouseLeave = useCallback(() => {
+        setIsPressed(false);
+        setClickedContainer(false);
+    }, []);
+
+    // Update useEffect section in TunableKeyboard.tsx
+
+    // In TunableKeyboard.tsx
+
+// First, let's create a helper function for consistent note calculation
+    const getAdjustedNote = (baseNote: number, octave: number) => {
+        return baseNote + ((octave - 4) * 12); // Adjust relative to middle octave (4)
+    };
+
+// Update useEffect for keyboard events
     useEffect(() => {
         const keyMap: Record<string, number> = {
             'a': 60,  // Middle C
@@ -136,16 +156,18 @@ const TunableKeyboard: React.FC = () => {
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.repeat) return;
-            const note = keyMap[e.key.toLowerCase()];
-            if (note !== undefined) {
-                handleNoteOn(note);
+            const baseNote = keyMap[e.key.toLowerCase()];
+            if (baseNote !== undefined) {
+                const adjustedNote = getAdjustedNote(baseNote, currentOctave);
+                handleNoteOn(adjustedNote);
             }
         };
 
         const handleKeyUp = (e: KeyboardEvent) => {
-            const note = keyMap[e.key.toLowerCase()];
-            if (note !== undefined) {
-                handleNoteOff(note);
+            const baseNote = keyMap[e.key.toLowerCase()];
+            if (baseNote !== undefined) {
+                const adjustedNote = getAdjustedNote(baseNote, currentOctave);
+                handleNoteOff(adjustedNote);
             }
         };
 
@@ -156,116 +178,110 @@ const TunableKeyboard: React.FC = () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [handleNoteOn, handleNoteOff]);
+    }, [handleNoteOn, handleNoteOff, currentOctave]);
 
-    const notes = Array.from({ length: 12 }, (_, i) => ({
-        note: 60 + i,
-        frequency: 440 * Math.pow(2, (60 + i - 69) / 12)
-    }));
+// Update notes array generation
+    const notes = Array.from({ length: 12 }, (_, i) => {
+        const baseNote = 60 + i; // Keep base note constant
+        const adjustedNote = getAdjustedNote(baseNote, currentOctave);
+        return {
+            note: adjustedNote,
+            frequency: 440 * Math.pow(2, (adjustedNote - 69) / 12)
+        };
+    });
 
     const currentStyle = modeStyles[currentMode];
 
+    const getContainerStyle = () => ({
+        transition: 'all 200ms ease-in-out',
+        boxShadow: isPressed ? currentStyle.innerShadow : currentStyle.shadow,
+        transform: isPressed ? 'translateY(1px)' : 'translateY(0)'
+    });
+
     return (
         <Card className={`p-8 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background}`}>
-            <div className="flex flex-col gap-6">
-                <div className="flex justify-center gap-4">
-                    {(['tunable', 'drums'] as const).map((mode) => (
-                        <button
-                            key={mode}
-                            onClick={() => handleModeChange(mode)}
-                            className={`
-                                px-6 py-3 rounded-xl
-                                transition-all duration-300 ease-in-out
-                                ${currentMode === mode ? modeStyles[mode].buttonBg : 'bg-opacity-50'}
-                                ${modeStyles[mode].textColor}
-                                ${currentMode === mode ? 'scale-105' : 'scale-100'}
-                            `}
-                            style={{
-                                boxShadow: currentMode === mode ? modeStyles[mode].shadow : 'none'
-                            }}
-                        >
-                            {modeLabels[mode]}
-                        </button>
-                    ))}
-                </div>
-
-                <div
-                    className={`
-                        grid grid-cols-6 gap-x-6 gap-y-6 p-8 rounded-xl 
-                        transition-all duration-300 ease-in-out
-                        ${currentStyle.containerBg}
-                    `}
-                    style={{
-                        boxShadow: currentStyle.innerShadow,
-                        width: 'fit-content',
-                        margin: '0 auto'
-                    }}
-                >
-                    <div className="contents transition-all duration-300 ease-in-out">
-                        {notes.slice(0, 6).map(({note}) => (
-                            <div key={note} className="flex justify-center transition-all duration-300 ease-in-out">
-                                <TunableKey
-                                    note={note}
-                                    isPressed={activeNotes.includes(note)}
-                                    tuning={useSelector((state: RootState) =>
-                                        selectParameter(state, note, 'tuning'))}
-                                    onNoteOn={handleNoteOn}
-                                    onNoteOff={handleNoteOff}
-                                    onTuningChange={handleTuningChange}
-                                    mode={currentMode}
-                                    onPanelClick={handlePanelClick}
-                                    isPanelVisible={isPanelVisible}
-                                />
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="contents transition-all duration-300 ease-in-out">
-                        {notes.slice(6, 12).map(({note}) => (
-                            <div key={note} className="flex justify-center transition-all duration-300 ease-in-out">
-                                <TunableKey
-                                    note={note}
-                                    isPressed={activeNotes.includes(note)}
-                                    tuning={useSelector((state: RootState) =>
-                                        selectParameter(state, note, 'tuning'))}
-                                    onNoteOn={handleNoteOn}
-                                    onNoteOff={handleNoteOff}
-                                    onTuningChange={handleTuningChange}
-                                    mode={currentMode}
-                                    onPanelClick={handlePanelClick}
-                                    isPanelVisible={isPanelVisible}
-                                />
-                            </div>
-                        ))}
-                    </div>
-
-                    {currentMode === 'tunable' && (
-                        <div className="col-span-6 flex justify-center gap-3 mt-4">
-                            {(['sine', 'square', 'sawtooth', 'triangle'] as const).map((waveform) => (
-                                <button
-                                    key={waveform}
-                                    onClick={() => handleWaveformChange(waveform)}
-                                    className={`
-                                        px-4 py-2 rounded-lg text-sm
-                                        transition-all duration-300 ease-in-out
-                                        ${currentWaveform === waveform
-                                        ? 'bg-[#e8e4dc] shadow-lg scale-105'
-                                        : 'bg-[#f0ece6] opacity-70 scale-100'
-                                    }
-                                        text-[#4a4543]
-                                        hover:opacity-90
-                                    `}
-                                    style={{
-                                        boxShadow: currentWaveform === waveform
-                                            ? '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff'
-                                            : 'none'
-                                    }}
-                                >
-                                    {waveformLabels[waveform]}
-                                </button>
+            <div className="flex gap-6 ">
+                <OctaveControls className="ml-[-14px]" />
+                <div className="flex flex-col gap-7 flex-1">
+                    <div
+                        className={`
+                            grid grid-cols-6 gap-x-24 gap-y-6 p-16 rounded-xl cursor-pointer
+                            transition-all duration-90 ease-in-out
+                            ${currentStyle.containerBg}
+                        `}
+                        style={getContainerStyle()}
+                        onMouseDown={handleMouseDown}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseLeave}
+                    >
+                        <div className="contents transition-all duration-100 ease-in-out">
+                            {notes.slice(0, 6).map(({note}) => (
+                                <div key={note} className="flex justify-center transition-all duration-300 ease-in-out">
+                                    <TunableKey
+                                        note={note}
+                                        isPressed={activeNotes.includes(note)}
+                                        tuning={useSelector((state: RootState) =>
+                                            selectParameter(state, note, 'tuning'))}
+                                        onNoteOn={handleNoteOn}
+                                        onNoteOff={handleNoteOff}
+                                        onTuningChange={handleTuningChange}
+                                        mode={currentMode}
+                                        onPanelClick={handlePanelClick}
+                                        isPanelVisible={isPanelVisible}
+                                        trackColor={currentTrackColor}
+                                    />
+                                </div>
                             ))}
                         </div>
-                    )}
+
+                        <div className="contents transition-all duration-300 ease-in-out">
+                            {notes.slice(6, 12).map(({note}) => (
+                                <div key={note} className="flex justify-center transition-all duration-300 ease-in-out">
+                                    <TunableKey
+                                        note={note}
+                                        isPressed={activeNotes.includes(note)}
+                                        tuning={useSelector((state: RootState) =>
+                                            selectParameter(state, note, 'tuning'))}
+                                        onNoteOn={handleNoteOn}
+                                        onNoteOff={handleNoteOff}
+                                        onTuningChange={handleTuningChange}
+                                        mode={currentMode}
+                                        onPanelClick={handlePanelClick}
+                                        isPanelVisible={isPanelVisible}
+                                        trackColor={currentTrackColor}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {currentMode === 'tunable' && (
+                            <div className="col-span-6 flex justify-center gap-3 mt-4">
+                                {(['sine', 'square', 'sawtooth', 'triangle'] as const).map((waveform) => (
+                                    <button
+                                        key={waveform}
+                                        onClick={() => handleWaveformChange(waveform)}
+                                        className={`
+                                            px-4 py-2 rounded-lg text-sm
+                                            transition-all duration-300 ease-in-out
+                                            ${currentWaveform === waveform
+                                            ? 'bg-[#e8e4dc] shadow-lg scale-105'
+                                            : 'bg-[#f0ece6] opacity-70 scale-100'
+                                        }
+                                            text-[#4a4543]
+                                            hover:opacity-90
+                                        `}
+                                        style={{
+                                            boxShadow: currentWaveform === waveform
+                                                ? '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff'
+                                                : 'none'
+                                        }}
+                                    >
+                                        {waveformLabels[waveform]}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </Card>
