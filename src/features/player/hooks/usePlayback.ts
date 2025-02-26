@@ -40,6 +40,7 @@ export const usePlayback = () => {
     // Service refs
     const playbackServiceRef = useRef<PlaybackService | null>(null);
     const lastPositionUpdateRef = useRef<number>(0);
+    const loopTimeoutRef = useRef<number | null>(null);
 
     // Cleanup utility
     const cleanupIntervals = useCallback(() => {
@@ -154,6 +155,129 @@ export const usePlayback = () => {
             );
         }
     }, [loopEnabled, loopStart, loopEnd]);
+
+    // Add handler for loop end events
+    useEffect(() => {
+        const service = playbackServiceRef.current;
+        const debugInfo = {
+            serviceExists: !!service,
+            isPlaying,
+            loopEnabled,
+            loopStart,
+            loopEnd,
+            loopDuration: loopEnd - loopStart,
+            hasExistingTimeout: !!loopTimeoutRef.current,
+            currentTime: service?.getCurrentTimeInMs() ?? 0
+        };
+        
+        if (!service) {
+            console.warn("Loop end handler not initialized - no service:", debugInfo);
+            return;
+        }
+        
+        // Create a event handler for loop end
+        const handleLoopEnd = () => {
+            const startTime = performance.now();
+            console.log("Loop end reached in hook", debugInfo);
+            
+            // Track state changes during timeout
+            const initialState = {
+                isPlaying,
+                loopEnabled,
+                loopStart,
+                loopEnd
+            };
+            
+            // Clear any existing timeout
+            if (loopTimeoutRef.current) {
+                console.debug("Clearing existing loop timeout");
+                window.clearTimeout(loopTimeoutRef.current);
+                loopTimeoutRef.current = null;
+            }
+            
+            // Small delay to let the UI update
+            loopTimeoutRef.current = window.setTimeout(() => {
+                const currentState = {
+                    isPlaying,
+                    loopEnabled,
+                    loopStart,
+                    loopEnd
+                };
+                
+                // Make sure we're still playing and looping
+                if (!isPlaying || !loopEnabled) {
+                    console.log("Not calling forcePlayLoopRegionNotes - no longer playing or looping:", {
+                        initialState,
+                        currentState,
+                        timeSinceLoopEnd: performance.now() - startTime
+                    });
+                    return;
+                }
+                
+                // Check if loop points changed during timeout
+                const loopPointsChanged = 
+                    initialState.loopStart !== currentState.loopStart ||
+                    initialState.loopEnd !== currentState.loopEnd;
+                
+                console.log("Forcing note replay in loop:", {
+                    initialState,
+                    currentState,
+                    loopPointsChanged,
+                    timeSinceLoopEnd: performance.now() - startTime
+                });
+                
+                try {
+                    service.forcePlayLoopRegionNotes();
+                } catch (error) {
+                    console.error("Error forcing note replay:", {
+                        error,
+                        state: currentState,
+                        timeSinceLoopEnd: performance.now() - startTime
+                    });
+                    
+                    // Notify error handler if available
+                    service.onError?.(
+                        error instanceof Error ? error : new Error('Failed to force play loop region notes')
+                    );
+                }
+            }, 50);
+        };
+        
+        // Add the event handler to the service
+        service.onLoopEnd = handleLoopEnd;
+        
+        // Debug log when effect is setup
+        console.debug("Loop end handler initialized:", debugInfo);
+        
+        return () => {
+            const cleanupInfo = {
+                ...debugInfo,
+                timeoutExists: !!loopTimeoutRef.current,
+                handlerExists: !!service.onLoopEnd
+            };
+            
+            if (service) {
+                service.onLoopEnd = undefined;
+            }
+            
+            if (loopTimeoutRef.current) {
+                window.clearTimeout(loopTimeoutRef.current);
+                loopTimeoutRef.current = null;
+            }
+            
+            console.debug("Loop end handler cleanup complete:", cleanupInfo);
+        };
+    }, [isPlaying, loopEnabled, loopStart, loopEnd]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (loopTimeoutRef.current) {
+                window.clearTimeout(loopTimeoutRef.current);
+                loopTimeoutRef.current = null;
+            }
+        };
+    }, []);
 
     // Public actions
     const play = useCallback(() => {

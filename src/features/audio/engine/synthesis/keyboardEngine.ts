@@ -457,6 +457,20 @@ class KeyboardAudioManager {
         }
     }
 
+    stopAllNotes(): void {
+        // Stop all currently playing tunable notes
+        if (this.currentMode === 'tunable') {
+            Array.from(this.activeVoices.keys()).forEach(note => this.stopNote(note));
+        }
+
+        // Stop all drum sounds (if needed)
+        if (this.audioContext) {
+            // If you need to stop drum sounds, add drum-specific stopping code here
+        }
+
+        console.log('Stopped all active notes');
+    }
+
     // Update tuning for a note
     setNoteTuning(note: number, cents: number): void {
         this.tunings.set(note, cents);
