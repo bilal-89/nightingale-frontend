@@ -19,9 +19,11 @@ export const useSelectionBox = () => {
     const dispatch = useAppDispatch();
     const tracks = useAppSelector(selectTracks);
 
-    const [selectionBox, setSelectionBox] = useState<Box | null>(null);
+    const [selectionBox, setSelectionBox] = useState<{
+        startPoint: Point;
+        currentPoint: Point;
+    } | null>(null);
     const [isSelecting, setIsSelecting] = useState(false);
-    const [startPoint, setStartPoint] = useState<Point | null>(null);
     const [shiftKey, setShiftKey] = useState(false);
 
     const gridRef = useRef<HTMLDivElement | null>(null);
@@ -34,21 +36,32 @@ export const useSelectionBox = () => {
             return;
         }
 
+        // Ensure we capture the event
+        e.preventDefault();
+        e.stopPropagation();
+        
         const grid = gridRef.current;
         if (!grid) return;
 
-        // Get grid's position relative to viewport
-        const rect = grid.getBoundingClientRect();
+        // Find the grid area element (the actual timeline part, not including headers)
+        const gridArea = grid.querySelector('.relative.flex-grow');
+        if (!gridArea) return;
 
-        // Calculate start point
-        const start = {
+        // Get accurate grid area position relative to viewport
+        const rect = gridArea.getBoundingClientRect();
+        
+        // Calculate the exact mouse position relative to the grid area
+        const exactStart = {
             x: e.clientX - rect.left,
             y: e.clientY - rect.top
         };
 
-        console.log('Selection started at:', start);
-
-        setStartPoint(start);
+        // Initialize selection box with start point
+        setSelectionBox({
+            startPoint: exactStart,
+            currentPoint: exactStart
+        });
+        
         setShiftKey(e.shiftKey);
         setIsSelecting(true);
 
@@ -57,64 +70,69 @@ export const useSelectionBox = () => {
             dispatch(selectNote({ trackId: '', noteId: '' }));
             selectedNotesRef.current.clear();
         }
-
-        e.preventDefault();
     }, [dispatch]);
 
     // Update selection while mouse is moving
     useEffect(() => {
-        if (!isSelecting || !startPoint) return;
+        if (!isSelecting || !selectionBox) return;
 
         const handleMouseMove = (e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
             const grid = gridRef.current;
             if (!grid) return;
 
-            // Get grid's position
-            const rect = grid.getBoundingClientRect();
+            // Find the grid area element
+            const gridArea = grid.querySelector('.relative.flex-grow');
+            if (!gridArea) return;
 
-            // Calculate current point
-            const current = {
+            // Get current grid area position
+            const rect = gridArea.getBoundingClientRect();
+
+            // Calculate precise current point relative to grid area
+            const currentPoint = {
                 x: e.clientX - rect.left,
                 y: e.clientY - rect.top
             };
 
-            // Calculate the selection box
-            const box = {
-                left: Math.min(startPoint.x, current.x),
-                top: Math.min(startPoint.y, current.y),
-                width: Math.abs(current.x - startPoint.x),
-                height: Math.abs(current.y - startPoint.y)
-            };
+            // Update selection box with new current point
+            setSelectionBox({
+                startPoint: selectionBox.startPoint,
+                currentPoint
+            });
 
-            // Only update if the box has a minimum size
-            if (box.width > 3 && box.height > 3) {
-                setSelectionBox(box);
+            // Calculate the selection box dimensions for note intersection testing
+            const left = Math.min(selectionBox.startPoint.x, currentPoint.x);
+            const top = Math.min(selectionBox.startPoint.y, currentPoint.y);
+            const width = Math.abs(currentPoint.x - selectionBox.startPoint.x);
+            const height = Math.abs(currentPoint.y - selectionBox.startPoint.y);
 
-                // Get all note elements in the DOM
+            // Only attempt to select notes if the box has some minimum size
+            if (width > 3 && height > 3) {
+                // Get all note elements in the grid
                 const noteElements = grid.querySelectorAll('[data-note-id]');
                 const notesToSelect: {trackId: string, noteId: string}[] = [];
 
-                // Debug info
-                console.log(`Found ${noteElements.length} notes in DOM. Selection box:`, box);
-
-                // Check each note element for intersection with selection box
+                // Precisely check each note element for intersection with selection box
                 noteElements.forEach(noteEl => {
                     const noteRect = noteEl.getBoundingClientRect();
+                    const gridAreaRect = gridArea.getBoundingClientRect();
 
-                    // Calculate position relative to grid
+                    // Calculate note position relative to grid area
                     const noteBox = {
-                        left: noteRect.left - rect.left,
-                        top: noteRect.top - rect.top,
+                        left: noteRect.left - gridAreaRect.left,
+                        top: noteRect.top - gridAreaRect.top,
                         width: noteRect.width,
                         height: noteRect.height
                     };
 
-                    // Check for intersection
+                    // Check for intersection with precise math
                     const intersects = !(
-                        noteBox.left > box.left + box.width ||
-                        noteBox.left + noteBox.width < box.left ||
-                        noteBox.top > box.top + box.height ||
-                        noteBox.top + noteBox.height < box.top
+                        noteBox.left > left + width ||
+                        noteBox.left + noteBox.width < left ||
+                        noteBox.top > top + height ||
+                        noteBox.top + noteBox.height < top
                     );
 
                     if (intersects) {
@@ -123,12 +141,9 @@ export const useSelectionBox = () => {
 
                         if (noteId && trackId) {
                             notesToSelect.push({ trackId, noteId });
-                            console.log(`Note intersects: ${noteId} (track: ${trackId})`);
                         }
                     }
                 });
-
-                console.log(`Found ${notesToSelect.length} notes intersecting with selection box`);
 
                 // If we have notes to select and we're not in shift mode, clear the selection first
                 if (!shiftKey && notesToSelect.length > 0) {
@@ -140,7 +155,6 @@ export const useSelectionBox = () => {
                 notesToSelect.forEach(({ trackId, noteId }) => {
                     // Only select if not already selected
                     if (!selectedNotesRef.current.has(noteId)) {
-                        console.log(`Selecting note: ${noteId}`);
                         dispatch(selectNote({
                             trackId,
                             noteId,
@@ -152,24 +166,28 @@ export const useSelectionBox = () => {
             }
         };
 
-        const handleMouseUp = () => {
-            console.log('Selection ended');
-            setIsSelecting(false);
+        const handleMouseUp = (e: MouseEvent) => {
+            e.preventDefault();
+            
+            // Always clear the selection box when mouse is released
             setSelectionBox(null);
+            setIsSelecting(false);
         };
 
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
+        // Add event listeners to window to ensure we catch all mouse events
+        window.addEventListener('mousemove', handleMouseMove, { capture: true });
+        window.addEventListener('mouseup', handleMouseUp, { capture: true });
 
         return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('mousemove', handleMouseMove, { capture: true });
+            window.removeEventListener('mouseup', handleMouseUp, { capture: true });
         };
-    }, [isSelecting, startPoint, dispatch, shiftKey]);
+    }, [isSelecting, selectionBox, dispatch, shiftKey]);
 
     return {
         selectionBox,
         handleSelectionStart,
-        gridRef
+        gridRef,
+        isSelecting
     };
 };

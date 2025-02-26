@@ -3,7 +3,7 @@
 import { TIMING } from '../utils/time.utils';
 import keyboardAudioManager from '../../../features/audio/engine/synthesis/keyboardEngine';
 import type { NoteEvent } from '../types';
-import {Track} from "../store/player";
+import {Track} from "../store/player/types/track";
 
 export interface PlaybackEvents {
     onPositionChange?: (positionInMs: number) => void;
@@ -18,6 +18,10 @@ interface PlaybackState {
     startTime: number;        // Reference point for audio timing
     tempo: number;           // Current tempo in BPM
     lastScheduledTime: number; // Last time we scheduled notes
+    loopEnabled: boolean;
+    loopStart: number;
+    loopEnd: number;
+    loopIteration: number;   // Track how many times we've looped
 }
 
 interface ScheduledNote {
@@ -67,7 +71,11 @@ export class PlaybackService {
                 audioContext,
                 startTime: audioContext.currentTime - startTimeInSeconds,
                 tempo: TIMING.DEFAULT_TEMPO,
-                lastScheduledTime: audioContext.currentTime
+                lastScheduledTime: audioContext.currentTime,
+                loopEnabled: false,
+                loopStart: 0,
+                loopEnd: 60 * 1000, // Default 60 seconds
+                loopIteration: 0
             };
 
             this.isPlaying = true;
@@ -93,7 +101,19 @@ export class PlaybackService {
             // Calculate tempo-adjusted position
             const rawTime = performance.now() - this.playbackStartTime;
             const tempoScaleFactor = TIMING.DEFAULT_TEMPO / this.state.tempo;
-            const adjustedTime = rawTime * tempoScaleFactor;
+            let adjustedTime = rawTime * tempoScaleFactor;
+
+            // Handle looping
+            if (this.state.loopEnabled && adjustedTime >= this.state.loopEnd) {
+                // Reset timing when loop point is reached
+                const loopDuration = this.state.loopEnd - this.state.loopStart;
+                const timeIntoLoop = (adjustedTime - this.state.loopStart) % loopDuration;
+                adjustedTime = this.state.loopStart + timeIntoLoop;
+                
+                // Update playback start time to maintain loop position
+                const newRawTime = adjustedTime / tempoScaleFactor;
+                this.playbackStartTime = performance.now() - newRawTime;
+            }
 
             this.events.onPositionChange?.(adjustedTime);
             this.animationFrameId = requestAnimationFrame(updateTimeline);
@@ -109,24 +129,62 @@ export class PlaybackService {
         const currentTime = this.state.audioContext.currentTime;
         const scheduleUntil = currentTime + this.SCHEDULE_AHEAD_TIME;
 
-        // Process each track's notes for scheduling
+        // Get current playback position in milliseconds
+        const currentPositionMs = this.getCurrentTimeInMs();
+
         this.tracks.forEach(track => {
             track.notes.forEach(note => {
-                const absoluteStartTime = this.state!.startTime + (note.timestamp / 1000);
-                const scheduleId = `${track.id}-${note.id}-${absoluteStartTime.toFixed(3)}`;
+                if (!this.state) return;
 
-                // Schedule notes within our look-ahead window
-                if (absoluteStartTime >= this.state!.lastScheduledTime &&
-                    absoluteStartTime < scheduleUntil &&
-                    !this.isNoteScheduled(scheduleId)) {
-                    this.scheduleNote(note, track.id, absoluteStartTime, scheduleId);
+                const noteTimestampMs = note.timestamp;
+                
+                // Handle looping logic
+                if (this.state.loopEnabled) {
+                    // Skip notes outside the loop region
+                    if (noteTimestampMs < this.state.loopStart || noteTimestampMs >= this.state.loopEnd) {
+                        return;
+                    }
+
+                    const loopDuration = this.state.loopEnd - this.state.loopStart;
+                    const currentLoopIteration = Math.floor((currentPositionMs - this.state.loopStart) / loopDuration);
+                    
+                    // Schedule this note for the current iteration and the next TWO iterations
+                    // This ensures continuous playback across loop boundaries
+                    for (let iteration = currentLoopIteration; iteration <= currentLoopIteration + 2; iteration++) {
+                        // Calculate the effective timestamp for this iteration
+                        const effectiveTimestamp = noteTimestampMs - this.state.loopStart + (loopDuration * iteration);
+                        
+                        // Calculate absolute start time for the note
+                        const absoluteStartTime = this.state.startTime + (effectiveTimestamp / 1000);
+                        const scheduleId = `${track.id}-${note.id}-${iteration}-${absoluteStartTime.toFixed(3)}`;
+
+                        // Only schedule if within our look-ahead window and not already scheduled
+                        if (absoluteStartTime >= this.state.lastScheduledTime &&
+                            absoluteStartTime < scheduleUntil &&
+                            !this.isNoteScheduled(scheduleId)) {
+                            
+                            this.scheduleNote(note, track.id, absoluteStartTime, scheduleId);
+                        }
+                    }
+                } else {
+                    // Non-loop mode: schedule notes normally
+                    const absoluteStartTime = this.state.startTime + (noteTimestampMs / 1000);
+                    const scheduleId = `${track.id}-${note.id}-${absoluteStartTime.toFixed(3)}`;
+
+                    if (absoluteStartTime >= this.state.lastScheduledTime &&
+                        absoluteStartTime < scheduleUntil &&
+                        !this.isNoteScheduled(scheduleId)) {
+                        
+                        this.scheduleNote(note, track.id, absoluteStartTime, scheduleId);
+                    }
                 }
             });
         });
 
-        // Clean up notes that have already played
+        // Clean up notes that have already played, but keep more history for loop mode
+        const historyWindow = this.state.loopEnabled ? 2 : 1;
         this.scheduledNotes = this.scheduledNotes.filter(
-            scheduled => scheduled.absoluteStartTime >= currentTime
+            scheduled => scheduled.absoluteStartTime >= currentTime - historyWindow
         );
 
         // Update scheduling window and continue
@@ -138,13 +196,10 @@ export class PlaybackService {
     }
 
     private scheduleNote(note: NoteEvent, trackId: string, absoluteStartTime: number, scheduleId: string) {
+        if (!this.state) return;
+        
         try {
             const previousMode = keyboardAudioManager.getCurrentMode();
-
-            // Calculate tempo-adjusted timing
-            const tempoScaleFactor = TIMING.DEFAULT_TEMPO / this.state!.tempo;
-            const adjustedStartTime = absoluteStartTime * tempoScaleFactor;
-            const adjustedDuration = (note.duration / 1000) * tempoScaleFactor;
 
             // Configure synthesis for this note
             if (note.synthesis.mode === 'tunable') {
@@ -161,10 +216,21 @@ export class PlaybackService {
                 keyboardAudioManager.setMode('drums');
             }
 
-            // Schedule the note to play with adjusted timing
+            // Calculate tempo-adjusted timing
+            const tempoScaleFactor = TIMING.DEFAULT_TEMPO / this.state.tempo;
+            const adjustedDuration = (note.duration / 1000) * tempoScaleFactor;
+
+            console.log('Scheduling note:', {
+                note: note.note,
+                time: absoluteStartTime,
+                audioContextTime: this.state.audioContext.currentTime,
+                scheduleId
+            });
+
+            // Schedule the note to play
             keyboardAudioManager.playExactNote({
                 ...note,
-                timestamp: adjustedStartTime,
+                timestamp: absoluteStartTime,
                 duration: adjustedDuration,
                 synthesis: {
                     ...note.synthesis,
@@ -176,14 +242,14 @@ export class PlaybackService {
                         release: 0.005
                     }
                 }
-            }, adjustedStartTime);
+            }, absoluteStartTime);
 
-            // Remember that we scheduled this note with adjusted timing
+            // Remember that we scheduled this note
             this.scheduledNotes.push({
                 id: scheduleId,
                 note,
                 trackId,
-                absoluteStartTime: adjustedStartTime
+                absoluteStartTime
             });
 
             // Restore previous synthesis state
@@ -201,6 +267,24 @@ export class PlaybackService {
         }
     }
 
+    public getCurrentTimeInMs(): number {
+        // Use wall clock time for smooth visual timing
+        if (!this.isPlaying || !this.state) return 0;
+        
+        const rawTime = performance.now() - this.playbackStartTime;
+        const tempoScaleFactor = TIMING.DEFAULT_TEMPO / this.state.tempo;
+        let adjustedTime = rawTime * tempoScaleFactor;
+        
+        // Handle looping for accurate time reporting
+        if (this.state.loopEnabled && adjustedTime >= this.state.loopEnd) {
+            const loopDuration = this.state.loopEnd - this.state.loopStart;
+            const timeIntoLoop = (adjustedTime - this.state.loopStart) % loopDuration;
+            adjustedTime = this.state.loopStart + timeIntoLoop;
+        }
+        
+        return adjustedTime;
+    }
+
     public stop() {
         if (!this.isPlaying) return;
 
@@ -211,21 +295,11 @@ export class PlaybackService {
     }
 
     public setTracks(tracks: Track[]) {
-        console.log('Setting tracks:', tracks.map(track => ({
-            id: track.id,
-            noteCount: track.notes.length
-        })));
         this.tracks = tracks;
     }
 
     private isNoteScheduled(scheduleId: string): boolean {
         return this.scheduledNotes.some(scheduled => scheduled.id === scheduleId);
-    }
-
-    public getCurrentTimeInMs(): number {
-        // Use wall clock time for smooth visual timing
-        if (!this.isPlaying) return 0;
-        return performance.now() - this.playbackStartTime;
     }
 
     public setTempo(newTempo: number) {
@@ -243,12 +317,6 @@ export class PlaybackService {
 
         // Clear scheduled notes to prevent timing conflicts
         this.scheduledNotes = [];
-
-        console.log('Tempo changed:', {
-            from: oldTempo,
-            to: newTempo,
-            adjustmentRatio: tempoRatio
-        });
     }
 
     public seek(timeInMs: number) {
@@ -280,5 +348,37 @@ export class PlaybackService {
     public dispose() {
         this.stop();
         this.state = null;
+    }
+
+    public setLoopState(enabled: boolean, start?: number, end?: number) {
+        if (!this.state) return;
+
+        const wasEnabled = this.state.loopEnabled;
+        this.state.loopEnabled = enabled;
+        
+        // Ensure we have valid loop points
+        if (start !== undefined) this.state.loopStart = Math.max(0, start);
+        if (end !== undefined) this.state.loopEnd = Math.max(this.state.loopStart + 100, end);
+        
+        // If we're enabling looping and current time is outside the loop region,
+        // move playback position to the loop start
+        if (enabled && !wasEnabled) {
+            const currentTime = this.getCurrentTimeInMs();
+            if (currentTime < this.state.loopStart || currentTime >= this.state.loopEnd) {
+                this.seek(this.state.loopStart);
+            }
+        }
+
+        // Reset scheduling when loop state changes
+        this.state.lastScheduledTime = this.state.audioContext.currentTime;
+        this.scheduledNotes = [];
+
+        console.log('Loop state updated:', {
+            enabled,
+            wasEnabled,
+            start: this.state.loopStart,
+            end: this.state.loopEnd,
+            currentTime: this.getCurrentTimeInMs()
+        });
     }
 }

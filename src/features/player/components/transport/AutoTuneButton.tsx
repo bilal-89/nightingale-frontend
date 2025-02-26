@@ -4,7 +4,7 @@ import { selectMultiSelectedNotes, selectSelectedNote } from '../../store/player
 import { autoTuneSelectedNotes } from '../../store/player/slice';
 
 const TUNING_SYSTEMS = [
-    { value: 'equal', label: 'Equal Temperament' }
+    { value: 'equal', label: 'ET' }
     // Future tuning systems can be added here:
     // { value: 'just', label: 'Just Intonation' },
     // { value: 'pythagorean', label: 'Pythagorean' },

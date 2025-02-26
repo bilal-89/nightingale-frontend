@@ -40,4 +40,8 @@ export interface PlaybackSliceState {
    metronomeEnabled: boolean;
    countInEnabled: boolean;
    prerollBars: number;
+   // Loop state
+   loopEnabled: boolean;
+   loopStart: number;
+   loopEnd: number;
 }
