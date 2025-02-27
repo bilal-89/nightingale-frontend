@@ -25,6 +25,11 @@ export interface KeyParameters {
     release: Parameter;
     filterCutoff: Parameter;
     filterResonance: Parameter;
+    
+    // New unison parameters
+    unisonCount: Parameter;
+    unisonDetune: Parameter;
+    unisonWidth: Parameter;
 }
 
 export type SynthMode = 'tunable' | 'drums';
@@ -54,7 +59,12 @@ const defaultParameters: KeyParameters = {
     sustain: { value: 70, defaultValue: 70 },
     release: { value: 150, defaultValue: 150 },
     filterCutoff: { value: 20000, defaultValue: 20000 },
-    filterResonance: { value: 0.707, defaultValue: 0.707 }
+    filterResonance: { value: 0.707, defaultValue: 0.707 },
+    
+    // Add unison default parameters
+    unisonCount: { value: 1, defaultValue: 1 },
+    unisonDetune: { value: 10, defaultValue: 10 },
+    unisonWidth: { value: 50, defaultValue: 50 }
 };
 
 const initialState: KeyboardState = {

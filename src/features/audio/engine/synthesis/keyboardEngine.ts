@@ -39,6 +39,18 @@ class KeyboardAudioManager {
         resonance: number;
     }>();
 
+    // Add unison settings for each note
+    private unisonSettings = new Map<number, {
+        count: number;         // Number of unison voices (1-8)
+        detune: number;        // Detune amount in cents (0-100)
+        width: number;         // Stereo width (0-100%)
+    }>();
+
+    // Default unison settings
+    private readonly DEFAULT_UNISON_COUNT = 1;
+    private readonly DEFAULT_UNISON_DETUNE = 10;
+    private readonly DEFAULT_UNISON_WIDTH = 50;
+
     // Add filter node storage to active voices
     private activeVoices = new Map<number, {
         oscillator: OscillatorNode;
@@ -60,6 +72,11 @@ class KeyboardAudioManager {
             cutoff: number;
             resonance: number;
         };
+        unisonVoices?: Array<{
+            oscillator: OscillatorNode;
+            gainNode: GainNode;
+            panNode: StereoPannerNode | PannerNode;
+        }>;
     }>();
 
 
@@ -72,11 +89,13 @@ class KeyboardAudioManager {
         if (!this.audioContext) throw new Error('Audio context not initialized');
 
         const now = this.audioContext.currentTime;
+        
+        // Create main oscillator and nodes
         const oscillator = this.audioContext.createOscillator();
         const filterNode = this.audioContext.createBiquadFilter();
         const gainNode = this.audioContext.createGain();
 
-        // Get all parameters
+        // Get parameters
         const baseFrequency = this.getFrequency(note);
         const envelope = this.getEnvelopeParams(note);
         const synthesis = this.getCurrentSynthesis(note);
@@ -85,6 +104,7 @@ class KeyboardAudioManager {
             cutoff: this.DEFAULT_FILTER_CUTOFF,
             resonance: this.DEFAULT_FILTER_RESONANCE
         };
+        const unisonSettings = this.getUnisonSettings(note);
 
         // Configure oscillator
         oscillator.type = waveform;
@@ -95,8 +115,8 @@ class KeyboardAudioManager {
         filterNode.frequency.setValueAtTime(filterParams.cutoff, now);
         filterNode.Q.setValueAtTime(filterParams.resonance, now);
 
-        // Configure envelope
-        const maxGain = this.velocityToGain(velocity);
+        // Configure envelope - adjust gain based on unison count
+        const maxGain = this.velocityToGain(velocity) / Math.max(1, unisonSettings.count);
         gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.linearRampToValueAtTime(maxGain, now + envelope.attack);
         gainNode.gain.linearRampToValueAtTime(
@@ -104,14 +124,8 @@ class KeyboardAudioManager {
             now + envelope.attack + envelope.decay
         );
 
-        // Connect audio path: oscillator -> filter -> gain -> output
-        oscillator.connect(filterNode);
-        filterNode.connect(gainNode);
-        gainNode.connect(this.mainGain!);
-        oscillator.start(now);
-
-        // Store voice information
-        this.activeVoices.set(note, {
+        // Create main voice - if unison count is 1, this will be the only voice
+        const voice = {
             oscillator,
             filterNode,
             gainNode,
@@ -122,16 +136,34 @@ class KeyboardAudioManager {
             noteStartTime: now,
             envelope,
             waveform,
-            filter: filterParams
-        });
+            filter: filterParams,
+            unisonVoices: []
+        };
+
+        // Store voice
+        this.activeVoices.set(note, voice);
+
+        // Connect audio path for main oscillator
+        oscillator.connect(filterNode);
+        filterNode.connect(gainNode);
+        gainNode.connect(this.mainGain!);
+        
+        // Start the main oscillator
+        oscillator.start(now);
+
+        // If unison is enabled (count > 1), create additional voices
+        if (unisonSettings.count > 1) {
+            for (let i = 0; i < unisonSettings.count; i++) {
+                this.addUnisonVoice(note, i, unisonSettings.count, baseFrequency);
+            }
+        }
 
         return {
             note,
             timestamp: now,
             velocity,
             duration: 0,
-            tuning: this.tunings.get(note) || 0,  // Add this line
-
+            tuning: this.tunings.get(note) || 0,
             synthesis
         };
     }
@@ -154,6 +186,15 @@ class KeyboardAudioManager {
                 break;
             case 'filterResonance':
                 this.setFilterResonance(note, value);
+                break;
+            case 'unisonCount':
+                this.setUnisonParameter(note, 'count', value);
+                break;
+            case 'unisonDetune':
+                this.setUnisonParameter(note, 'detune', value);
+                break;
+            case 'unisonWidth':
+                this.setUnisonParameter(note, 'width', value);
                 break;
             case 'attack':
             case 'decay':
@@ -442,17 +483,38 @@ class KeyboardAudioManager {
             const now = this.audioContext.currentTime;
             const releaseTime = voice.envelope.release;
 
-            // Cancel scheduled changes and start release phase
+            // Cancel scheduled changes and start release phase for main voice
             voice.gainNode.gain.cancelScheduledValues(now);
             voice.gainNode.gain.setValueAtTime(voice.gainNode.gain.value, now);
             voice.gainNode.gain.linearRampToValueAtTime(0, now + releaseTime);
 
+            // Handle unison voices release
+            if (voice.unisonVoices && voice.unisonVoices.length > 0) {
+                voice.unisonVoices.forEach(unisonVoice => {
+                    unisonVoice.gainNode.gain.cancelScheduledValues(now);
+                    unisonVoice.gainNode.gain.setValueAtTime(unisonVoice.gainNode.gain.value, now);
+                    unisonVoice.gainNode.gain.linearRampToValueAtTime(0, now + releaseTime);
+                });
+            }
+
             // Schedule cleanup
             setTimeout(() => {
                 try {
+                    // Stop and disconnect main oscillator
                     voice.oscillator.stop(now + releaseTime + 0.1);
                     voice.oscillator.disconnect();
                     voice.gainNode.disconnect();
+                    voice.filterNode.disconnect();
+                    
+                    // Stop and disconnect unison voices
+                    if (voice.unisonVoices) {
+                        voice.unisonVoices.forEach(unisonVoice => {
+                            unisonVoice.oscillator.stop(now + releaseTime + 0.1);
+                            unisonVoice.oscillator.disconnect();
+                            unisonVoice.gainNode.disconnect();
+                            unisonVoice.panNode.disconnect();
+                        });
+                    }
                 } catch (error) {
                     console.error('Error cleaning up note:', error);
                 }
@@ -461,8 +523,25 @@ class KeyboardAudioManager {
             this.activeVoices.delete(note);
         } catch (error) {
             console.error('Error stopping note:', error);
+            
+            // Force cleanup on error
             voice.oscillator.disconnect();
             voice.gainNode.disconnect();
+            voice.filterNode.disconnect();
+            
+            // Cleanup unison voices
+            if (voice.unisonVoices) {
+                voice.unisonVoices.forEach(unisonVoice => {
+                    try {
+                        unisonVoice.oscillator.disconnect();
+                        unisonVoice.gainNode.disconnect();
+                        unisonVoice.panNode.disconnect();
+                    } catch (e) {
+                        console.error('Error cleaning up unison voice:', e);
+                    }
+                });
+            }
+            
             this.activeVoices.delete(note);
         }
     }
@@ -517,6 +596,7 @@ class KeyboardAudioManager {
             cutoff: this.DEFAULT_FILTER_CUTOFF,
             resonance: this.DEFAULT_FILTER_RESONANCE
         };
+        const unisonSettings = this.getUnisonSettings(note);
 
         if (this.currentMode === 'drums') {
             return {
@@ -581,6 +661,7 @@ class KeyboardAudioManager {
         this.envelopeParams.clear();
         this.filterParams.clear();  // Add this
         this.waveforms.clear();
+        this.unisonSettings.clear(); // Clear unison settings
         this.globalWaveform = 'sine';
 
         if (this.audioContext) {
@@ -619,6 +700,205 @@ class KeyboardAudioManager {
             }).catch(err => {
                 console.error(`[DIAG] Failed to resume audio context:`, err);
             });
+        }
+    }
+
+    // Method to get unison settings for a note
+    private getUnisonSettings(note: number) {
+        return this.unisonSettings.get(note) || {
+            count: this.DEFAULT_UNISON_COUNT,
+            detune: this.DEFAULT_UNISON_DETUNE,
+            width: this.DEFAULT_UNISON_WIDTH
+        };
+    }
+
+    // Method to set unison parameters
+    setUnisonParameter(note: number, parameter: string, value: number): void {
+        if (this.currentMode === 'drums') return;
+        
+        const currentSettings = this.getUnisonSettings(note);
+        
+        switch (parameter) {
+            case 'count':
+                currentSettings.count = Math.max(1, Math.min(8, Math.floor(value)));
+                break;
+            case 'detune':
+                currentSettings.detune = Math.max(0, Math.min(100, value));
+                break;
+            case 'width':
+                currentSettings.width = Math.max(0, Math.min(100, value));
+                break;
+        }
+        
+        this.unisonSettings.set(note, currentSettings);
+        
+        // If the note is currently playing, update unison voices
+        if (this.activeVoices.has(note)) {
+            this.updateUnisonVoices(note);
+        }
+    }
+
+    // Update the active voices for a note when unison parameters change
+    private updateUnisonVoices(note: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        const unisonSettings = this.getUnisonSettings(note);
+        const currentCount = voice.unisonVoices ? voice.unisonVoices.length : 0;
+        
+        // If unison count has decreased, remove excess voices
+        if (currentCount > unisonSettings.count) {
+            for (let i = unisonSettings.count; i < currentCount; i++) {
+                if (voice.unisonVoices && voice.unisonVoices[i]) {
+                    voice.unisonVoices[i].oscillator.stop();
+                    voice.unisonVoices[i].oscillator.disconnect();
+                    voice.unisonVoices[i].gainNode.disconnect();
+                    voice.unisonVoices[i].panNode.disconnect();
+                }
+            }
+            
+            if (voice.unisonVoices) {
+                voice.unisonVoices = voice.unisonVoices.slice(0, unisonSettings.count);
+            }
+        }
+        
+        // If unison count has increased, add new voices
+        if (currentCount < unisonSettings.count) {
+            if (!voice.unisonVoices) {
+                voice.unisonVoices = [];
+            }
+            
+            const baseFrequency = voice.baseFrequency;
+            
+            for (let i = currentCount; i < unisonSettings.count; i++) {
+                this.addUnisonVoice(note, i, unisonSettings.count, baseFrequency);
+            }
+        }
+        
+        // Update detune and stereo width for all unison voices
+        if (voice.unisonVoices) {
+            for (let i = 0; i < voice.unisonVoices.length; i++) {
+                this.updateUnisonVoiceParameters(voice.unisonVoices[i], i, unisonSettings);
+            }
+        }
+    }
+
+    // Add a new unison voice to the active voice
+    private addUnisonVoice(note: number, index: number, totalVoices: number, baseFrequency: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        const unisonSettings = this.getUnisonSettings(note);
+        const now = this.audioContext.currentTime;
+        
+        // Create oscillator for unison voice
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        const panNode = this.audioContext.createStereoPanner ? 
+            this.audioContext.createStereoPanner() : 
+            this.audioContext.createPanner();
+        
+        // Set oscillator type to match main oscillator
+        oscillator.type = voice.waveform || 'sine';
+        
+        // Configure oscillator with base frequency
+        oscillator.frequency.setValueAtTime(baseFrequency, now);
+        
+        // Apply envelope to gain
+        const maxGain = this.velocityToGain(voice.currentVelocity) / unisonSettings.count;
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(maxGain, now + voice.envelope.attack);
+        gainNode.gain.linearRampToValueAtTime(
+            maxGain * voice.envelope.sustain,
+            now + voice.envelope.attack + voice.envelope.decay
+        );
+        
+        // Connect nodes
+        oscillator.connect(gainNode);
+        
+        // Connect panning based on browser support
+        if (this.audioContext.createStereoPanner) {
+            gainNode.connect(panNode);
+            panNode.connect(voice.filterNode);
+        } else {
+            // Fallback for older browsers
+            gainNode.connect(panNode);
+            panNode.connect(voice.filterNode);
+            
+            // Set panning method for older API
+            (panNode as any).panningModel = 'equalpower';
+        }
+        
+        // Start oscillator
+        oscillator.start(now);
+        
+        // Create unison voice object
+        const unisonVoice = {
+            oscillator,
+            gainNode,
+            panNode
+        };
+        
+        // Update parameters for the new voice
+        this.updateUnisonVoiceParameters(unisonVoice, index, unisonSettings);
+        
+        // Add unison voice to the active voice
+        if (!voice.unisonVoices) {
+            voice.unisonVoices = [];
+        }
+        voice.unisonVoices.push(unisonVoice);
+    }
+
+    // Update parameters for a unison voice
+    private updateUnisonVoiceParameters(
+        unisonVoice: { oscillator: OscillatorNode, gainNode: GainNode, panNode: any },
+        index: number,
+        settings: { count: number, detune: number, width: number }
+    ): void {
+        if (!this.audioContext) return;
+        
+        const now = this.audioContext.currentTime;
+        
+        // Calculate factors for voice position
+        const totalVoices = settings.count;
+        
+        // If only one voice, center it and don't detune
+        if (totalVoices === 1) {
+            unisonVoice.oscillator.detune.setValueAtTime(0, now);
+            
+            if (this.audioContext.createStereoPanner) {
+                (unisonVoice.panNode as StereoPannerNode).pan.setValueAtTime(0, now);
+            } else {
+                (unisonVoice.panNode as PannerNode).setPosition(0, 0, 0.1);
+            }
+            return;
+        }
+        
+        // Calculate normalized position (-1 to 1) for this voice
+        // We use a special distribution to avoid bunching voices in the center
+        let normalizedPosition;
+        if (totalVoices === 2) {
+            // For 2 voices, place them symmetrically
+            normalizedPosition = index === 0 ? -0.5 : 0.5;
+        } else {
+            // For 3+ voices, distribute them across the range
+            normalizedPosition = (index / (totalVoices - 1)) * 2 - 1;
+        }
+        
+        // Apply detuning based on position and detune amount
+        // Scale detune to be (+/- settings.detune)
+        const detuneAmount = normalizedPosition * settings.detune;
+        unisonVoice.oscillator.detune.setValueAtTime(detuneAmount, now);
+        
+        // Apply stereo width based on position and width amount
+        const panPosition = normalizedPosition * (settings.width / 100);
+        
+        // Set panning based on browser support
+        if (this.audioContext.createStereoPanner) {
+            (unisonVoice.panNode as StereoPannerNode).pan.setValueAtTime(panPosition, now);
+        } else {
+            // For older browsers using PannerNode
+            (unisonVoice.panNode as PannerNode).setPosition(panPosition, 0, 0.1);
         }
     }
 }

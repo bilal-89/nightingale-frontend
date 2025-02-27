@@ -37,6 +37,7 @@ export interface CompleteNoteEvent {
     timestamp: number;
     velocity: number;
     duration: number;
+    tuning?: number;
     synthesis: SynthesisParameters;
     parameterChanges?: {
         parameter: string;

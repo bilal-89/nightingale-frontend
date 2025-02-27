@@ -6,8 +6,7 @@ import { selectIsPanelVisible, togglePanel } from '../../keyboard/store/slices/k
 import { useParameterValues } from '../hooks/useParameterValues';
 import { parameters } from '../constants/parameters';
 import { ParameterContext } from '../types/types';
-import FilterGroup from './groups/FilterGroup';
-import EnvelopeGroup from './groups/EnvelopeGroup';
+import UnisonControls from '../../keyboard/components/UnisonControls';
 
 const ParameterPanel: React.FC = () => {
     const dispatch = useAppDispatch();
@@ -57,96 +56,46 @@ const ParameterPanel: React.FC = () => {
         })
     });
 
-    // Note parameters are still rendered directly since they're simpler
-    const noteParameters = parameters.filter(p => p.group === 'note' && p.contexts.includes(context));
-    const envelopeParameters = parameters.filter(p => p.group === 'envelope' && p.contexts.includes(context));
-    const filterParameters = parameters.filter(p => p.group === 'filter' && p.contexts.includes(context));
+    // Get all parameters for the current context
+    const allParameters = parameters.filter(p => p.contexts.includes(context));
 
-    const renderParameterGroup = (params: typeof parameters) => (
-        <div className="space-y-4">
-            {params.map(param => (
+    const renderParameter = (param: typeof parameters[0]) => (
+        <div key={param.id} className="parameter-control mb-4">
+            <div className="flex justify-between mb-1">
+                <span className="text-xs font-medium text-gray-500">
+                    {param.label || param.id}
+                </span>
+                <span className="text-sm font-medium text-gray-700">
+                    {parameterValues[param.id]?.value.toFixed(param.precision || 0)} {param.unit}
+                </span>
+            </div>
+            <div
+                className="relative h-2 bg-[#e5e9ec] rounded-full"
+                style={{
+                    boxShadow: 'inset 2px 2px 4px #c8ccd0, inset -2px -2px 4px #ffffff'
+                }}
+            >
+                <input
+                    type="range"
+                    min={param.min}
+                    max={param.max}
+                    step={param.step}
+                    value={parameterValues[param.id]?.value ?? param.defaultValue}
+                    onChange={(e) => handleParameterUpdate(param.id, parseFloat(e.target.value))}
+                    className="absolute w-full h-full opacity-0 cursor-pointer"
+                />
                 <div
-                    key={param.id}
-                    className="p-4 rounded-2xl bg-[#e5e9ec]"
+                    className="absolute h-full rounded-full"
                     style={{
-                        boxShadow: 'inset 4px 4px 8px #c8ccd0, inset -4px -4px 8px #ffffff'
+                        width: `${((parameterValues[param.id]?.value ?? param.defaultValue) - param.min) /
+                        (param.max - param.min) * 100}%`,
+                        backgroundColor: currentTrackColor,
+                        boxShadow: '2px 2px 4px rgba(0,0,0,0.1)',
+                        opacity: parameterValues[param.id]?.isMixed ? 0.5 : 0.8,
+                        transition: 'background-color 300ms ease-in-out, opacity 300ms ease-in-out'
                     }}
-                >
-                    <div className="flex justify-between items-center mb-2">
-                        <label className="text-sm font-medium text-gray-700">
-                            {param.name}
-                        </label>
-                        <div className="flex items-center gap-2">
-                            {param.extraControls && context === 'note' && (
-                                <>
-                                    <button
-                                        onClick={() => handleParameterUpdate(
-                                            param.id,
-                                            (parameterValues[param.id]?.value ?? param.defaultValue) - param.step
-                                        )}
-                                        className="px-2 py-1 rounded text-xs"
-                                        style={{
-                                            backgroundColor: currentTrackColor,
-                                            color: 'white'
-                                        }}
-                                    >
-                                        ←
-                                    </button>
-                                    <button
-                                        onClick={() => handleParameterUpdate(
-                                            param.id,
-                                            (parameterValues[param.id]?.value ?? param.defaultValue) + param.step
-                                        )}
-                                        className="px-2 py-1 rounded text-xs"
-                                        style={{
-                                            backgroundColor: currentTrackColor,
-                                            color: 'white'
-                                        }}
-                                    >
-                                        →
-                                    </button>
-                                </>
-                            )}
-                            <span className="text-sm text-gray-600 tabular-nums min-w-[3rem] text-right">
-                                {parameterValues[param.id]?.isMixed ?
-                                    '---' :
-                                    `${parameterValues[param.id]?.value ?? param.defaultValue}${param.unit}`
-                                }
-                            </span>
-                        </div>
-                    </div>
-
-                    <div
-                        className={`relative h-2 bg-[#e5e9ec] rounded-full ${
-                            parameterValues[param.id]?.isMixed ? 'opacity-50' : ''
-                        }`}
-                        style={{
-                            boxShadow: 'inset 2px 2px 4px #c8ccd0, inset -2px -2px 4px #ffffff'
-                        }}
-                    >
-                        <input
-                            type="range"
-                            min={param.min}
-                            max={param.max}
-                            step={param.step}
-                            value={parameterValues[param.id]?.value ?? param.defaultValue}
-                            onChange={(e) => handleParameterUpdate(param.id, Number(e.target.value))}
-                            className="absolute w-full h-full opacity-0 cursor-pointer"
-                        />
-                        <div
-                            className="absolute h-full rounded-full"
-                            style={{
-                                width: `${((parameterValues[param.id]?.value ?? param.defaultValue) - param.min) /
-                                (param.max - param.min) * 100}%`,
-                                backgroundColor: currentTrackColor,
-                                boxShadow: '2px 2px 4px rgba(0,0,0,0.1)',
-                                opacity: parameterValues[param.id]?.isMixed ? 0.5 : 0.8,
-                                transition: 'background-color 300ms ease-in-out, opacity 300ms ease-in-out'
-                            }}
-                        />
-                    </div>
-                </div>
-            ))}
+                />
+            </div>
         </div>
     );
 
@@ -159,7 +108,7 @@ const ParameterPanel: React.FC = () => {
             style={getContainerStyle()}
         >
             <div
-                className="space-y-6"
+                className="space-y-4"
                 style={{
                     opacity: isPanelVisible && !isPressed ? 1 : 0,
                     transition: 'opacity 150ms ease-in-out',
@@ -167,26 +116,22 @@ const ParameterPanel: React.FC = () => {
                 }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-2">
                     <div className="text-sm font-medium text-gray-700">
-                        {context === 'note' ? 'Note' : 'Key'}
+                        {context === 'note' ? 'Note Parameters' : 'Key Parameters'}
                     </div>
                 </div>
 
-                <div className="space-y-6">
-                    {/* Note parameters */}
-                    {renderParameterGroup(noteParameters)}
-
-                    {/* Envelope parameters */}
-                    {renderParameterGroup(envelopeParameters)}
-
-                    {/* Filter parameters */}
-                    {renderParameterGroup(filterParameters)}
+                <div>
+                    {/* Render all parameters in a flat list */}
+                    {allParameters.map(renderParameter)}
+                    
+                    {/* Add Unison Controls - show in both contexts */}
+                    <UnisonControls />
                 </div>
             </div>
         </div>
     );
 };
-
 
 export default ParameterPanel;
