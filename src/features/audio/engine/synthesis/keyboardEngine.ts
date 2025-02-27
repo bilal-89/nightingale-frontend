@@ -1,7 +1,6 @@
 import { SynthesisParameters, CompleteNoteEvent } from '../../api/types';
 import { drumSoundManager } from './drumEngine';
 import { Waveform } from '../../../keyboard/store/slices/keyboard.slice';
-import { LAYOUT } from '../../../../constants';
 
 class KeyboardAudioManager {
     // Core audio settings

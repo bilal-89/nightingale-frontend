@@ -37,7 +37,7 @@ export const QuantizeButton: React.FC = () => {
                         : '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'
                 }}
             >
-                Quantize
+                Quant
             </button>
 
             {isOpen && (

@@ -38,7 +38,7 @@ export const AutoTuneButton: React.FC = () => {
                         : '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'
                 }}
             >
-                Auto-Tune
+                Tune
             </button>
 
             {isOpen && (
