@@ -334,6 +334,16 @@ class KeyboardAudioManager {
     playExactNote(noteEvent: CompleteNoteEvent, time: number) {
         if (!this.audioContext) return;
 
+        console.log(`[DIAG] KeyboardAudioManager.playExactNote:`, {
+            note: noteEvent.note,
+            scheduledTime: time.toFixed(4),
+            currentTime: this.audioContext.currentTime.toFixed(4),
+            timeDelta: (time - this.audioContext.currentTime).toFixed(4),
+            audioContextState: this.audioContext.state,
+            synthesisMode: noteEvent.synthesis.mode,
+            waveform: noteEvent.synthesis.waveform
+        });
+
         const previousMode = this.currentMode;
         this.currentMode = noteEvent.synthesis.mode;
 
@@ -400,9 +410,10 @@ class KeyboardAudioManager {
                 }, (releaseEndTime + 0.02 - this.audioContext.currentTime) * 1000);
             }
         } catch (error) {
-            console.error('Error in playExactNote:', error);
+            console.error('[DIAG] Error in playExactNote:', error);
         } finally {
             this.currentMode = previousMode;
+            console.log(`[DIAG] Note scheduled successfully`);
         }
     }
 
@@ -585,6 +596,31 @@ class KeyboardAudioManager {
         const normalizedVelocity = velocity / 127;
         // Use cubic curve for more natural velocity response
         return Math.pow(normalizedVelocity, 3) * this.DEFAULT_GAIN;
+    }
+
+    // Add this function to check audio context state
+    checkAudioContextState() {
+        if (!this.audioContext) {
+            console.log(`[DIAG] Audio context doesn't exist!`);
+            return;
+        }
+        
+        console.log(`[DIAG] Audio context state:`, {
+            state: this.audioContext.state,
+            sampleRate: this.audioContext.sampleRate,
+            currentTime: this.audioContext.currentTime.toFixed(4),
+            baseLatency: this.audioContext.baseLatency?.toFixed(4) || 'N/A',
+        });
+        
+        // Check if in suspended state and try to resume
+        if (this.audioContext.state === 'suspended') {
+            console.log(`[DIAG] Attempting to resume suspended audio context...`);
+            this.audioContext.resume().then(() => {
+                console.log(`[DIAG] Audio context resumed:`, this.audioContext.state);
+            }).catch(err => {
+                console.error(`[DIAG] Failed to resume audio context:`, err);
+            });
+        }
     }
 }
 

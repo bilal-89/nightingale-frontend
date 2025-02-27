@@ -5,7 +5,7 @@ import { Circle } from 'lucide-react';
 import TimelineGrid from './timeline/TimelineGrid/index';
 import TransportControls from './transport/TransportControls';
 import { startRecording, stopRecording } from '../store/player';
-
+import { useLoopWatcher } from '../hooks/useLoopWatcher';
 import { ColorPickerPanel } from './ColorPickerPanel';
 
 interface RecordButtonProps {
@@ -36,6 +36,9 @@ const RecordButton = memo<RecordButtonProps>(({ isRecording, onRecordToggle }) =
 export const Player = () => {
     const dispatch = useAppDispatch();
     const isRecording = useAppSelector(state => state.player.isRecording);
+
+    // Add the loop watcher hook
+    useLoopWatcher();
 
     // Memoized record toggle handler
     const handleRecordToggle = useCallback(() => {

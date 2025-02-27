@@ -475,112 +475,22 @@ export class PlaybackService {
 
     // Diagnostic method to force replay of all notes in the loop region
     public forcePlayLoopRegionNotes() {
-        const startTime = performance.now();
-        const debugInfo = {
+        console.log(`[DIAG] forcePlayLoopRegionNotes called`, {
             stateExists: !!this.state,
+            audioContextTime: this.state?.audioContext.currentTime.toFixed(4),
             isPlaying: this.isPlaying,
             loopEnabled: this.state?.loopEnabled,
-            audioContextState: this.state?.audioContext.state,
-            currentTime: this.state?.audioContext.currentTime,
-            tracksCount: this.tracks.length,
-            scheduledNotesCount: this.scheduledNotes.length
-        };
-
-        if (!this.state || !this.isPlaying || !this.state.loopEnabled) {
-            console.warn("Cannot force play loop region - invalid state:", debugInfo);
-            return;
-        }
+            loopStart: this.state?.loopStart,
+            loopEnd: this.state?.loopEnd,
+            scheduledNotes: this.scheduledNotes.length,
+            stackTrace: new Error().stack?.split('\n').slice(0, 3).join('\n')
+        });
         
-        try {
-            console.log("Starting force play of loop region notes:", {
-                ...debugInfo,
-                loopStart: this.state.loopStart,
-                loopEnd: this.state.loopEnd,
-                loopDuration: this.state.loopEnd - this.state.loopStart,
-                tempo: this.state.tempo
-            });
-            
-            // Use a small staggered delay to ensure notes play properly
-            const baseDelay = 0.1; // 100ms delay before first note
-            let totalNotesScheduled = 0;
-            let notesPerTrack: { [trackId: string]: number } = {};
-            
-            // Play all notes in the loop region
-            this.tracks.forEach((track, trackIndex) => {
-                try {
-                    const loopRegionNotes = track.notes.filter(note => 
-                        note.timestamp >= this.state!.loopStart && 
-                        note.timestamp < this.state!.loopEnd
-                    );
-                    
-                    notesPerTrack[track.id] = loopRegionNotes.length;
-                    totalNotesScheduled += loopRegionNotes.length;
-                    
-                    console.debug(`Processing track ${track.id} (${trackIndex + 1}/${this.tracks.length}):`, {
-                        totalNotes: track.notes.length,
-                        notesInLoopRegion: loopRegionNotes.length,
-                        trackType: (track as any).type || 'unknown',
-                        isEnabled: (track as any).enabled !== false
-                    });
-                    
-                    if (loopRegionNotes.length === 0) {
-                        return; // Skip empty tracks
-                    }
-                    
-                    // Sort notes by timestamp to maintain order
-                    loopRegionNotes.sort((a, b) => a.timestamp - b.timestamp);
-                    
-                    // Play each note with appropriate timing
-                    loopRegionNotes.forEach((note, index) => {
-                        try {
-                            // Calculate a slight staggered delay to prevent audio conflicts
-                            const noteDelay = baseDelay + (index * 0.02); 
-                            const scheduleTimeInSeconds = this.state!.audioContext.currentTime + noteDelay;
-                            
-                            // Create a unique ID for this scheduled note
-                            const scheduleId = `loop-${track.id}-${note.id}-${Date.now()}`;
-                            
-                            console.debug(`Scheduling note in track ${track.id}:`, {
-                                noteId: note.id,
-                                note: note.note,
-                                timestamp: note.timestamp,
-                                scheduleTime: scheduleTimeInSeconds,
-                                delay: noteDelay,
-                                synthesis: note.synthesis
-                            });
-                            
-                            // Schedule the note
-                            this.scheduleNote(note, track.id, scheduleTimeInSeconds, scheduleId);
-                        } catch (noteError) {
-                            console.error(`Failed to schedule note ${note.id} in track ${track.id}:`, noteError);
-                        }
-                    });
-                } catch (trackError) {
-                    console.error(`Failed to process track ${track.id}:`, trackError);
-                }
-            });
-            
-            // Also reset the audio scheduler's time base to ensure future notes get scheduled
-            this.state.lastScheduledTime = this.state.audioContext.currentTime;
-            if (this.state && this.state.audioContext) {
-                this.scheduledNotes = this.scheduledNotes.filter(
-                    n => n.absoluteStartTime >= this.state!.audioContext.currentTime
-                );
-            }
-            
-            const endTime = performance.now();
-            console.log("Completed force playing loop region notes:", {
-                executionTimeMs: endTime - startTime,
-                totalNotesScheduled,
-                notesPerTrack,
-                remainingScheduledNotes: this.scheduledNotes.length,
-                audioContextTime: this.state.audioContext.currentTime
-            });
-            
-        } catch (error) {
-            console.error("Critical error in forcePlayLoopRegionNotes:", error);
-            this.events.onError?.(error instanceof Error ? error : new Error('Failed to force play loop region notes'));
-        }
+        if (!this.state) return;
+        
+        const now = this.state.audioContext.currentTime;
+        console.log("[DIAG] Force playing loop region notes at", now.toFixed(4));
+        this.scheduleLoopStartNotes(now);
     }
 
     public setLoopState(enabled: boolean, start?: number, end?: number) {
@@ -676,64 +586,106 @@ export class PlaybackService {
 
     // Create a new method that will be called when reaching the loop end
     private handleLoopTransition() {
-        if (!this.state || !this.isPlaying || !this.state.loopEnabled) return;
-        
-        console.log('Handling loop transition - forcing immediate playback');
-        
-        // 1. Calculate precise loop timing
-        const now = this.state.audioContext.currentTime;
-        const loopStartInSeconds = this.state.loopStart / 1000;
-        const loopDurationInSeconds = (this.state.loopEnd - this.state.loopStart) / 1000;
-        
-        // 2. Reset timing references - critical for correct scheduling
-        const newStartTime = now - loopStartInSeconds;
-        this.state.startTime = newStartTime;
-        this.state.lastScheduledTime = now; // Reset scheduling window
-        
-        // 3. Clear all currently scheduled notes to prevent duplicates
-        this.scheduledNotes = [];
-        
-        // 4. DIRECT PLAYBACK APPROACH: Immediately schedule notes near loop start
-        try {
-            // Get notes in the first 500ms of the loop
-            const immediatePlayWindow = 0.5; // 500ms
-            let notesScheduled = 0;
-            
-            this.tracks.forEach(track => {
-                // Find notes at the beginning of the loop
-                const notesToPlay = track.notes.filter(note => {
-                    const noteOffsetFromStart = note.timestamp - this.state!.loopStart;
-                    return (
-                        note.timestamp >= this.state!.loopStart && 
-                        note.timestamp < this.state!.loopEnd &&
-                        noteOffsetFromStart < 1000 // Notes in first 1 second
-                    );
-                });
-                
-                notesToPlay.forEach(note => {
-                    const noteOffsetInSeconds = (note.timestamp - this.state!.loopStart) / 1000;
-                    const playTime = now + noteOffsetInSeconds;
-                    const scheduleId = `immediate-loop-${track.id}-${note.id}-${Date.now()}`;
-                    
-                    console.log(`Directly scheduling loop note ${note.note} at ${playTime.toFixed(4)}s`);
-                    this.scheduleNote(note, track.id, playTime, scheduleId);
-                    notesScheduled++;
-                });
+        if (!this.state || !this.isPlaying || !this.state.loopEnabled) {
+            console.log(`[DIAG] handleLoopTransition called but conditions not met:`, {
+                stateExists: !!this.state,
+                isPlaying: this.isPlaying,
+                loopEnabled: this.state?.loopEnabled
             });
-            
-            console.log(`Directly scheduled ${notesScheduled} notes at loop boundary`);
-        } catch (error) {
-            console.error("Error scheduling immediate loop notes:", error);
+            return;
         }
         
-        // 5. Force scheduler to run again immediately and then soon after
+        // Get detailed state before transition
+        const now = this.state.audioContext.currentTime;
+        const audioState = {
+            contextTime: now.toFixed(4),
+            contextState: this.state.audioContext.state,
+            startTime: this.state.startTime.toFixed(4),
+            timeSinceStart: (now - this.state.startTime).toFixed(4),
+            schedulerLastTime: this.state.lastScheduledTime.toFixed(4),
+            loopStart: this.state.loopStart,
+            loopEnd: this.state.loopEnd,
+            scheduledNotes: this.scheduledNotes.length
+        };
+        
+        console.log(`[DIAG] LOOP TRANSITION - BEFORE:`, audioState);
+        
+        // 1. Calculate precise time values
+        const loopDurationInSeconds = (this.state.loopEnd - this.state.loopStart) / 1000;
+        const timeSinceStart = now - this.state.startTime;
+        const currentLoopCount = Math.floor(timeSinceStart / loopDurationInSeconds);
+        const newStartTime = this.state.startTime + (currentLoopCount * loopDurationInSeconds);
+        
+        // 2. Update timing references
+        this.state.startTime = newStartTime;
+        this.state.lastScheduledTime = now - 0.01;
+        
+        // 3. Clear scheduled notes that would overlap
+        this.scheduledNotes = this.scheduledNotes.filter(note => 
+            note.absoluteStartTime >= now
+        );
+        
+        // 4. Force scheduler to run immediately 
         if (this.schedulerTimer !== null) {
             clearTimeout(this.schedulerTimer);
             this.schedulerTimer = null;
         }
         
-        // Immediate check plus a follow-up check
+        // 5. Schedule immediate notes at loop start
+        this.scheduleLoopStartNotes(now);
         this.startScheduler();
-        setTimeout(() => this.startScheduler(), 50);
+        
+        // 6. Call onLoopEnd callback if provided
+        if (this.onLoopEnd) {
+            try {
+                this.onLoopEnd();
+            } catch (error) {
+                console.error("Error in onLoopEnd callback:", error);
+                // Continue playback even if callback fails
+            }
+        }
+        
+        // After transition:
+        console.log(`[DIAG] LOOP TRANSITION - AFTER:`, {
+            ...audioState,
+            newStartTime: this.state.startTime.toFixed(4),
+            scheduledNotesAfter: this.scheduledNotes.length
+        });
+    }
+
+    // Add new method to schedule loop start notes:
+    private scheduleLoopStartNotes(now: number) {
+        if (!this.state) return;
+        
+        // Find and immediately schedule notes at the beginning of the loop (first 500ms)
+        const immediateWindow = 0.5; // 500ms
+        const loopStartTimeMs = this.state.loopStart;
+        let scheduledCount = 0;
+        
+        this.tracks.forEach(track => {
+            const notesToSchedule = track.notes.filter(note => {
+                const offsetFromLoopStart = note.timestamp - loopStartTimeMs;
+                return note.timestamp >= loopStartTimeMs && 
+                       offsetFromLoopStart < immediateWindow * 1000;
+            });
+            
+            notesToSchedule.forEach(note => {
+                // Calculate precise scheduling time
+                const offsetInSeconds = (note.timestamp - loopStartTimeMs) / 1000;
+                const scheduleTime = now + offsetInSeconds;
+                const scheduleId = `loop-start-${track.id}-${note.id}-${Date.now()}`;
+                
+                // Increase gain slightly for clearer playback at loop start
+                const boostedNote = {...note};
+                if (boostedNote.synthesis && boostedNote.synthesis.gain) {
+                    boostedNote.synthesis.gain *= 1.05; // 5% volume boost
+                }
+                
+                this.scheduleNote(boostedNote, track.id, scheduleTime, scheduleId);
+                scheduledCount++;
+            });
+        });
+        
+        console.log(`Directly scheduled ${scheduledCount} notes at loop start`);
     }
 }
