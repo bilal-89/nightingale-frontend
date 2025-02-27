@@ -116,7 +116,10 @@ class KeyboardAudioManager {
         filterNode.Q.setValueAtTime(filterParams.resonance, now);
 
         // Configure envelope - adjust gain based on unison count
-        const maxGain = this.velocityToGain(velocity) / Math.max(1, unisonSettings.count);
+        // For single voice, use normal gain. For unison, we'll handle gain in the unison voices
+        const maxGain = this.velocityToGain(velocity);
+        
+        // Apply envelope to main oscillator
         gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.linearRampToValueAtTime(maxGain, now + envelope.attack);
         gainNode.gain.linearRampToValueAtTime(
@@ -124,7 +127,7 @@ class KeyboardAudioManager {
             now + envelope.attack + envelope.decay
         );
 
-        // Create main voice - if unison count is 1, this will be the only voice
+        // Create main voice
         const voice = {
             oscillator,
             filterNode,
@@ -153,6 +156,8 @@ class KeyboardAudioManager {
 
         // If unison is enabled (count > 1), create additional voices
         if (unisonSettings.count > 1) {
+            console.log(`Creating ${unisonSettings.count} unison voices for note ${note}`);
+            
             for (let i = 0; i < unisonSettings.count; i++) {
                 this.addUnisonVoice(note, i, unisonSettings.count, baseFrequency);
             }
@@ -417,16 +422,16 @@ class KeyboardAudioManager {
 
                 // Set envelope stages using linearRampToValueAtTime instead
                 gainNode.gain.setValueAtTime(0, time);
-                
+
                 // Attack
                 gainNode.gain.linearRampToValueAtTime(maxGain, attackEndTime);
-                
+
                 // Decay to sustain
                 const sustainLevel = maxGain * envelope.sustain;
                 gainNode.gain.linearRampToValueAtTime(sustainLevel, decayEndTime);
-                
+
                 // Sustain (no automation needed, stays at sustainLevel)
-                
+
                 // Release
                 gainNode.gain.setValueAtTime(sustainLevel, releaseStartTime);
                 gainNode.gain.linearRampToValueAtTime(0, releaseEndTime);
@@ -505,7 +510,7 @@ class KeyboardAudioManager {
                     voice.oscillator.disconnect();
                     voice.gainNode.disconnect();
                     voice.filterNode.disconnect();
-                    
+
                     // Stop and disconnect unison voices
                     if (voice.unisonVoices) {
                         voice.unisonVoices.forEach(unisonVoice => {
@@ -523,12 +528,12 @@ class KeyboardAudioManager {
             this.activeVoices.delete(note);
         } catch (error) {
             console.error('Error stopping note:', error);
-            
+
             // Force cleanup on error
             voice.oscillator.disconnect();
             voice.gainNode.disconnect();
             voice.filterNode.disconnect();
-            
+
             // Cleanup unison voices
             if (voice.unisonVoices) {
                 voice.unisonVoices.forEach(unisonVoice => {
@@ -541,7 +546,7 @@ class KeyboardAudioManager {
                     }
                 });
             }
-            
+
             this.activeVoices.delete(note);
         }
     }
@@ -684,14 +689,14 @@ class KeyboardAudioManager {
             console.log(`[DIAG] Audio context doesn't exist!`);
             return;
         }
-        
+
         console.log(`[DIAG] Audio context state:`, {
             state: this.audioContext.state,
             sampleRate: this.audioContext.sampleRate,
             currentTime: this.audioContext.currentTime.toFixed(4),
             baseLatency: this.audioContext.baseLatency?.toFixed(4) || 'N/A',
         });
-        
+
         // Check if in suspended state and try to resume
         if (this.audioContext.state === 'suspended') {
             console.log(`[DIAG] Attempting to resume suspended audio context...`);
@@ -715,7 +720,7 @@ class KeyboardAudioManager {
     // Method to set unison parameters
     setUnisonParameter(note: number, parameter: string, value: number): void {
         if (this.currentMode === 'drums') return;
-        
+
         const currentSettings = this.getUnisonSettings(note);
         
         switch (parameter) {
@@ -804,8 +809,8 @@ class KeyboardAudioManager {
         // Configure oscillator with base frequency
         oscillator.frequency.setValueAtTime(baseFrequency, now);
         
-        // Apply envelope to gain
-        const maxGain = this.velocityToGain(voice.currentVelocity) / unisonSettings.count;
+        // Apply envelope to gain - divide by square root of count for better volume scaling
+        const maxGain = this.velocityToGain(voice.currentVelocity) / Math.sqrt(unisonSettings.count);
         gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.linearRampToValueAtTime(maxGain, now + voice.envelope.attack);
         gainNode.gain.linearRampToValueAtTime(
@@ -819,14 +824,11 @@ class KeyboardAudioManager {
         // Connect panning based on browser support
         if (this.audioContext.createStereoPanner) {
             gainNode.connect(panNode);
-            panNode.connect(voice.filterNode);
+            panNode.connect(this.mainGain!); // Connect directly to main gain, not through filter
         } else {
             // Fallback for older browsers
             gainNode.connect(panNode);
-            panNode.connect(voice.filterNode);
-            
-            // Set panning method for older API
-            (panNode as any).panningModel = 'equalpower';
+            panNode.connect(this.mainGain!); // Connect directly to main gain
         }
         
         // Start oscillator
@@ -879,7 +881,7 @@ class KeyboardAudioManager {
         let normalizedPosition;
         if (totalVoices === 2) {
             // For 2 voices, place them symmetrically
-            normalizedPosition = index === 0 ? -0.5 : 0.5;
+            normalizedPosition = index === 0 ? -1 : 1;
         } else {
             // For 3+ voices, distribute them across the range
             normalizedPosition = (index / (totalVoices - 1)) * 2 - 1;
@@ -892,6 +894,9 @@ class KeyboardAudioManager {
         
         // Apply stereo width based on position and width amount
         const panPosition = normalizedPosition * (settings.width / 100);
+        
+        // Log the detune and pan values for debugging
+        console.log(`Unison voice ${index}/${totalVoices-1}: detune=${detuneAmount.toFixed(1)} cents, pan=${panPosition.toFixed(2)}`);
         
         // Set panning based on browser support
         if (this.audioContext.createStereoPanner) {
