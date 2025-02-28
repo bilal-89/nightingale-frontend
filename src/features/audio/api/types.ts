@@ -7,37 +7,27 @@ export type BiquadFilterType = 'lowpass' | 'highpass' | 'bandpass';
 // Update src/features/audio/api/types.ts
 
 export interface SynthesisParameters {
-    mode: 'tunable' | 'drums';
-    waveform: OscillatorType;
-
+    mode?: 'tunable' | 'sampler';
+    waveform?: 'sine' | 'square' | 'sawtooth' | 'triangle';
     envelope: {
         attack: number;
         decay: number;
         sustain: number;
         release: number;
     };
-
-    frequencyModulation?: {
-        initialFrequency: number;
-        targetFrequency: number;
-        modulationTime: number;
-    };
-
-    gain: number;
-
-    effects: {
-        filter?: {
-            type: BiquadFilterType;
-            frequency: number;
-            Q: number;
-        };
-    };
-
-    // Add unison parameters
+    gain?: number;
     unison?: {
         count: number;
         detune: number;
         width: number;
+    };
+    effects?: {
+        filter?: {
+            type: string;
+            frequency: number;
+            Q: number;
+        };
+        // Other effects...
     };
 }
 
