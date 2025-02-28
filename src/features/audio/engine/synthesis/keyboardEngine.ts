@@ -379,15 +379,10 @@ class KeyboardAudioManager {
     playExactNote(noteEvent: CompleteNoteEvent, time: number) {
         if (!this.audioContext) return;
 
-        console.log(`[DIAG] KeyboardAudioManager.playExactNote:`, {
-            note: noteEvent.note,
-            scheduledTime: time.toFixed(4),
-            currentTime: this.audioContext.currentTime.toFixed(4),
-            timeDelta: (time - this.audioContext.currentTime).toFixed(4),
-            audioContextState: this.audioContext.state,
-            synthesisMode: noteEvent.synthesis.mode,
-            waveform: noteEvent.synthesis.waveform
-        });
+        console.log('Playing note with synthesis:', noteEvent.synthesis);
+        if (noteEvent.synthesis?.unison) {
+            console.log('Unison parameters:', noteEvent.synthesis.unison);
+        }
 
         const previousMode = this.currentMode;
         this.currentMode = noteEvent.synthesis.mode;
@@ -453,6 +448,43 @@ class KeyboardAudioManager {
                         console.error('Error cleaning up note:', error);
                     }
                 }, (releaseEndTime + 0.02 - this.audioContext.currentTime) * 1000);
+
+                // Apply unison settings if available
+                if (noteEvent.synthesis?.unison) {
+                    const { count, detune, width } = noteEvent.synthesis.unison;
+                    
+                    // Create multiple oscillators for unison effect
+                    if (count > 1) {
+                        const unisonOscillators = [];
+                        
+                        for (let i = 1; i < count; i++) {
+                            const unisonOsc = this.audioContext.createOscillator();
+                            unisonOsc.type = noteEvent.synthesis.waveform || 'sine';
+                            
+                            // Calculate detune value based on position in unison spread
+                            const spreadFactor = (i / (count - 1)) * 2 - 1; // Range from -1 to 1
+                            const detuneValue = spreadFactor * detune;
+                            unisonOsc.detune.value = detuneValue;
+                            
+                            // Calculate pan position for stereo width
+                            const panPosition = spreadFactor * (width / 100);
+                            
+                            // Create stereo panner for width
+                            const panner = this.audioContext.createStereoPanner();
+                            panner.pan.value = panPosition;
+                            
+                            // Connect oscillator to panner to gain
+                            unisonOsc.connect(panner);
+                            panner.connect(gainNode);
+                            
+                            // Start oscillator
+                            unisonOsc.start(time);
+                            unisonOsc.stop(releaseEndTime);
+                            
+                            unisonOscillators.push(unisonOsc);
+                        }
+                    }
+                }
             }
         } catch (error) {
             console.error('[DIAG] Error in playExactNote:', error);

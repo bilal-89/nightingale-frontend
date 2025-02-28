@@ -25,7 +25,7 @@ const UnisonGroup: React.FC<UnisonGroupProps> = ({
 
   return (
     <div className="parameter-group mb-6">
-      <h3 className="text-sm font-medium text-gray-700 mb-3">Unison</h3>
+      {/*<h3 className="text-sm font-medium text-gray-700 mb-3">Unison</h3>*/}
       <div className="space-y-4">
         {filteredParams.map(param => (
           <div key={param.id} className="parameter-control">
