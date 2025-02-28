@@ -4,31 +4,30 @@
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 export type BiquadFilterType = 'lowpass' | 'highpass' | 'bandpass';
 
-export interface SynthesisParameters {
-    mode: 'tunable' | 'drums';
-    waveform: OscillatorType;
+// Update src/features/audio/api/types.ts
 
+export interface SynthesisParameters {
+    mode?: 'tunable' | 'sampler';
+    waveform?: 'sine' | 'square' | 'sawtooth' | 'triangle';
     envelope: {
         attack: number;
         decay: number;
         sustain: number;
         release: number;
     };
-
-    frequencyModulation?: {
-        initialFrequency: number;
-        targetFrequency: number;
-        modulationTime: number;
+    gain?: number;
+    unison?: {
+        count: number;
+        detune: number;
+        width: number;
     };
-
-    gain: number;
-
-    effects: {
+    effects?: {
         filter?: {
-            type: BiquadFilterType;
+            type: string;
             frequency: number;
             Q: number;
         };
+        // Other effects...
     };
 }
 
@@ -37,6 +36,7 @@ export interface CompleteNoteEvent {
     timestamp: number;
     velocity: number;
     duration: number;
+    tuning?: number;
     synthesis: SynthesisParameters;
     parameterChanges?: {
         parameter: string;

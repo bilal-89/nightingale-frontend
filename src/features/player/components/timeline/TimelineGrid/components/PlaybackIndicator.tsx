@@ -47,7 +47,7 @@ export const PlaybackIndicator: React.FC<PlaybackIndicatorProps> = ({
 
     return (
         <div
-            className={`absolute top-[31px] bottom-[47px] w-px pointer-events-none transform-gpu ${
+            className={`absolute top-[31px] bottom-0 w-px pointer-events-none transform-gpu ${
                 isRecording ? 'bg-red-300' : 'bg-stone-300'
             } z-20`}
             style={{

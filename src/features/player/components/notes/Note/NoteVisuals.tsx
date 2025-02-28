@@ -55,7 +55,7 @@ export const NoteVisuals: React.FC<NoteVisualsProps> = ({
 
     // Enhanced selection styling with more distinct states
     const getSelectionClasses = () => {
-        const baseClasses = 'note absolute rounded-lg transition-shadow duration-75 cursor-move select-none';
+        const baseClasses = 'note absolute rounded-md transition-shadow duration-75 cursor-move select-none';
 
         if (isLocalDragging) {
             return `${baseClasses} scale-[1.02] z-30 ring-2 ring-blue-400 shadow-lg`;

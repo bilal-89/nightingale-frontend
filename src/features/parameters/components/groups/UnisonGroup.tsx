@@ -1,34 +1,31 @@
+// src/features/parameters/components/groups/UnisonGroup.tsx
 import React from 'react';
-import { noteParameters } from '../../constants/noteParameters';
+import { useAppSelector } from '../../../../store/hooks';
+import { selectSelectedNote } from '../../../player/store/player';
+import { useParameters } from '../../../player/hooks/useParameters';
+import { unisonParameters } from '../../constants/unisonParameters';
 
-interface NoteGroupProps {
+interface UnisonGroupProps {
   context: 'keyboard' | 'note';
   values: Record<string, { value: number; isMixed?: boolean }>;
   onParameterChange: (parameterId: string, value: number) => void;
   currentTrackColor?: string;
 }
 
-/**
- * NoteGroup manages the fundamental properties of a note such as tuning and velocity.
- * These parameters form the foundation of how a note sounds and behaves:
- * - Tuning adjusts the pitch deviation from standard tuning in cents
- * - Velocity determines how hard the note is struck, affecting its dynamics
- * - Micro-timing (in note context) allows for subtle rhythmic adjustments
- */
-const NoteGroup: React.FC<NoteGroupProps> = ({
+const UnisonGroup: React.FC<UnisonGroupProps> = ({
   context,
   values,
   onParameterChange,
   currentTrackColor
 }) => {
-  // Filter parameters to get only note parameters for the current context
-  const filteredParams = noteParameters.filter(
+  // Filter parameters to get only unison parameters for the current context
+  const filteredParams = unisonParameters.filter(
     param => param.contexts.includes(context)
   );
 
   return (
     <div className="parameter-group mb-6">
-      <h3 className="text-sm font-medium text-gray-700 mb-3">Note</h3>
+      {/*<h3 className="text-sm font-medium text-gray-700 mb-3">Unison</h3>*/}
       <div className="space-y-4">
         {filteredParams.map(param => (
           <div key={param.id} className="parameter-control">
@@ -72,4 +69,4 @@ const NoteGroup: React.FC<NoteGroupProps> = ({
   );
 };
 
-export default NoteGroup;
+export default UnisonGroup;

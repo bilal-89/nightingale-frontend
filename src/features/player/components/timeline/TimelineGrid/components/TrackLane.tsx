@@ -45,14 +45,16 @@ export const TrackLane: React.FC<TrackLaneProps> = ({
         const isMultiSelected = multiSelectedNoteIds.includes(note.id);
         const isFocused = selectedNoteId === note.id && multiSelectedNoteIds.length === 0;
 
-        console.log('Note selection state:', {
-            noteId: note.id,
-            selectedNoteId,
-            isSelected,
-            isMultiSelected,
-            isFocused,
-            multiSelectedNoteIds
-        });
+        // Only log if there's an actual selection
+        if (isSelected || isMultiSelected || isFocused) {
+            console.log('Note selection state:', {
+                noteId: note.id,
+                selectedNoteId,
+                isSelected,
+                isMultiSelected,
+                isFocused
+            });
+        }
 
         return (
             <Note

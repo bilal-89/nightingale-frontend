@@ -16,6 +16,19 @@ export interface NoteEvent {
             sustain: number;
             release: number;
         };
+        waveform?: string;
+        unison?: {
+            count: number;
+            detune: number;
+            width: number;
+        };
+        effects?: {
+            filter?: {
+                type: string;
+                frequency: number;
+                Q: number;
+            };
+        };
     };
     color?: NoteColor;
 

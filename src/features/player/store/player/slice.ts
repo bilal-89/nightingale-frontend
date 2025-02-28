@@ -226,16 +226,84 @@ export const playerSlice = createSlice({
             noteId: string;
             updates: Partial<NoteEvent>;
         }>) => {
-            const track = state.tracks.find(t => t.id === action.payload.trackId);
+            const { trackId, noteId, updates } = action.payload;
+            console.log('Updating note parameters:', { trackId, noteId, updates });
+            
+            // Find the track and note
+            const track = state.tracks.find(t => t.id === trackId);
             if (!track) return;
-
-            const noteIndex = track.notes.findIndex(n => n.id === action.payload.noteId);
+            
+            const noteIndex = track.notes.findIndex(n => n.id === noteId);
             if (noteIndex === -1) return;
-
-            track.notes[noteIndex] = {
-                ...track.notes[noteIndex],
-                ...action.payload.updates
-            };
+            
+            // Apply updates
+            if (updates.synthesis) {
+                // Make sure synthesis object exists
+                if (!track.notes[noteIndex].synthesis) {
+                    track.notes[noteIndex].synthesis = {
+                        mode: 'tunable',
+                        waveform: 'sine',
+                        envelope: { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 },
+                        gain: 1,
+                        effects: {}
+                    };
+                }
+                
+                // Apply envelope updates
+                if (updates.synthesis.envelope) {
+                    track.notes[noteIndex].synthesis.envelope = {
+                        ...track.notes[noteIndex].synthesis.envelope,
+                        ...updates.synthesis.envelope
+                    };
+                }
+                
+                // Apply filter updates
+                if (updates.synthesis.effects?.filter) {
+                    if (!track.notes[noteIndex].synthesis.effects.filter) {
+                        track.notes[noteIndex].synthesis.effects.filter = {
+                            type: 'lowpass',
+                            frequency: 20000,
+                            Q: 0.707
+                        };
+                    }
+                    
+                    track.notes[noteIndex].synthesis.effects.filter = {
+                        ...track.notes[noteIndex].synthesis.effects.filter,
+                        ...updates.synthesis.effects.filter
+                    };
+                }
+                
+                // Apply unison updates
+                if (updates.synthesis?.unison) {
+                    console.log('Applying unison updates:', updates.synthesis.unison);
+                    
+                    // Make sure unison object exists
+                    if (!track.notes[noteIndex].synthesis.unison) {
+                        track.notes[noteIndex].synthesis.unison = {
+                            count: 1,
+                            detune: 10,
+                            width: 50
+                        };
+                    }
+                    
+                    // Apply each unison parameter
+                    track.notes[noteIndex].synthesis.unison = {
+                        ...track.notes[noteIndex].synthesis.unison,
+                        ...updates.synthesis.unison
+                    };
+                    
+                    console.log('Updated unison:', track.notes[noteIndex].synthesis.unison);
+                }
+            }
+            
+            // Apply other updates (velocity, tuning, etc.)
+            if (updates.velocity !== undefined) {
+                track.notes[noteIndex].velocity = updates.velocity;
+            }
+            
+            if (updates.tuning !== undefined) {
+                track.notes[noteIndex].tuning = updates.tuning;
+            }
         },
 
         deleteNote: (state, action: PayloadAction<{

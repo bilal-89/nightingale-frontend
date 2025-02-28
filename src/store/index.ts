@@ -3,7 +3,7 @@
 import { configureStore, Middleware } from '@reduxjs/toolkit';
 import keyboardReducer from '../features/keyboard/store/slices/keyboard.slice';
 import playerReducer from '../features/player/store/player';
-import playbackReducer from '../features/player/store/playback';
+import playbackReducer from '../features/player/store/playback/slice';
 import arrangementReducer from '../features/player/store/slices/arrangement/slice';
 import audioReducer from '../features/audio/store/slice';
 import audioMiddleware from '../features/audio/store/middleware';

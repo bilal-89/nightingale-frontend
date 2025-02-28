@@ -21,6 +21,20 @@ export class TimingService {
 
     // Track which notes we've already scheduled
     private scheduledNotes = new Set<string>();
+    
+    // Add property to track last loop transition
+    private lastLoopTransitionTime: number = 0;
+    
+    // Add property to store loop state
+    private state = {
+        loopStart: 0
+    };
+
+    // Add these properties to the class
+    private loopEnabled = false;
+    private loopStart = 0;
+    private loopEnd = 60000;
+    private lastScheduledTime = 0;
 
     constructor(
         private config = {
@@ -35,6 +49,33 @@ export class TimingService {
         initialTempo: number = 120
     ) {
         this.tempo = initialTempo;
+        
+        // Listen for loop transitions from PlaybackService to prevent conflicts
+        window.addEventListener('playback-loop-transition', (event: CustomEvent) => {
+            // Extract time information from the event
+            const { time, newStartTime } = event.detail;
+            
+            console.log('TimingService received loop transition event:', {
+                time: time.toFixed(4),
+                newStartTime: newStartTime.toFixed(4),
+                currentIsPlaying: this.isPlaying
+            });
+            
+            // CRITICAL: Update our timing references but DON'T stop playback
+            if (this.isPlaying && this.audioContext) {
+                const currentMusicalTime = this.getCurrentMusicalTime();
+                this.startTimeRef = performance.now() - this.convertToRealTime(this.state.loopStart);
+                this.lastTickTime = performance.now();
+                this.scheduledNotes.clear();
+                this.lastLoopTransitionTime = performance.now();
+                
+                console.log('TimingService adjusted for loop:', {
+                    previousMusicalTime: currentMusicalTime,
+                    newStartTimeRef: this.startTimeRef,
+                    loopStart: this.state.loopStart
+                });
+            }
+        });
     }
 
     /**
@@ -149,16 +190,84 @@ export class TimingService {
         }
 
         const scheduleNotes = () => {
-            if (!this.isPlaying || !this.audioContext) return;
+            if (!this.isPlaying || !this.audioContext) {
+                console.log(`[DIAG] scheduleNotes: Not scheduling - isPlaying:${this.isPlaying}`);
+                return;
+            }
 
-            // Calculate our scheduling window in seconds with tempo adjustment
+            // Current time calculation
+            const now = this.audioContext.currentTime;
             const elapsedRealSeconds = (performance.now() - this.startTimeRef) / 1000;
             const elapsedMusicalSeconds = this.convertToMusicalTime(elapsedRealSeconds * 1000) / 1000;
             const endTimeSeconds = elapsedMusicalSeconds + this.config.scheduleAheadTime;
+            this.lastScheduledTime = endTimeSeconds;
 
-            // Schedule notes within our window
-            if (this.callbacks.onScheduleNotes) {
-                this.callbacks.onScheduleNotes(elapsedMusicalSeconds, endTimeSeconds);
+            console.log(`[DIAG] TimingService scheduling window:`, {
+                windowStart: (elapsedMusicalSeconds * 1000).toFixed(1) + 'ms',
+                windowEnd: (endTimeSeconds * 1000).toFixed(1) + 'ms',
+                windowSize: ((endTimeSeconds - elapsedMusicalSeconds) * 1000).toFixed(1) + 'ms',
+                audioContextTime: now.toFixed(4),
+                audioContextState: this.audioContext.state,
+                scheduledNotes: this.scheduledNotes.size
+            });
+
+            // Check if we're going to cross a loop boundary during this scheduling window
+            const isApproachingLoopBoundary = this.loopEnabled && 
+                                              elapsedMusicalSeconds * 1000 < this.loopEnd &&
+                                              endTimeSeconds * 1000 >= this.loopEnd;
+
+            // Log when we detect a potential loop boundary crossing
+            if (isApproachingLoopBoundary) {
+                console.log('[DIAG] TimingService: Approaching loop boundary', {
+                    currentTime: elapsedMusicalSeconds * 1000,
+                    lookAheadEnd: endTimeSeconds * 1000,
+                    loopEnd: this.loopEnd,
+                    timeToLoopEnd: (this.loopEnd - elapsedMusicalSeconds * 1000).toFixed(1) + 'ms'
+                });
+            }
+
+            // If we're crossing a loop boundary, adjust the scheduling window
+            if (isApproachingLoopBoundary) {
+                // First, schedule notes up to the loop boundary
+                if (this.callbacks.onScheduleNotes) {
+                    // Schedule notes up to loop end
+                    this.callbacks.onScheduleNotes(
+                        elapsedMusicalSeconds, 
+                        this.loopEnd / 1000
+                    );
+                }
+
+                // Then schedule notes from the loop start 
+                // We use a small offset to avoid scheduling the same note twice
+                const loopStartSeconds = this.loopStart / 1000 + 0.001;
+                const loopWrappedEndTime = loopStartSeconds + (endTimeSeconds - (this.loopEnd / 1000));
+                
+                console.log('TimingService: Loop scheduling window', {
+                    loopStartTime: loopStartSeconds,
+                    wrappedEndTime: loopWrappedEndTime
+                });
+
+                // Clear previous scheduled notes at loop boundary
+                this.scheduledNotes.clear();
+
+                // Schedule notes from the beginning of the loop with high priority
+                if (this.callbacks.onScheduleNotes) {
+                    this.callbacks.onScheduleNotes(
+                        loopStartSeconds, 
+                        loopWrappedEndTime
+                    );
+                }
+
+                // Force immediate scheduling again after a short delay
+                // This ensures continuous playback across the loop boundary
+                setTimeout(() => {
+                    if (this.isPlaying) scheduleNotes();
+                }, 10);
+            } else {
+                // Normal scheduling (not crossing loop boundary)
+                if (this.callbacks.onScheduleNotes) {
+                    this.callbacks.onScheduleNotes(elapsedMusicalSeconds, endTimeSeconds);
+                }
             }
 
             // Schedule next check
@@ -166,6 +275,8 @@ export class TimingService {
                 scheduleNotes,
                 this.config.schedulerInterval
             );
+
+            console.log(`[DIAG] Scheduling complete. Notes in set: ${this.scheduledNotes.size}`);
         };
 
         scheduleNotes();
@@ -175,9 +286,13 @@ export class TimingService {
      * Stop playback and clean up all timing systems.
      */
     public stop(): void {
-        console.log('Stopping playback');
+        console.log('TimingService stop called', {
+            isPlaying: this.isPlaying,
+            stackTrace: new Error().stack
+        });
+        
         this.isPlaying = false;
-
+        
         if (this.schedulerTimer !== null) {
             clearTimeout(this.schedulerTimer);
             this.schedulerTimer = null;
@@ -204,7 +319,9 @@ export class TimingService {
      * Get the current playback position in milliseconds
      */
     public getCurrentTime(): number {
-        return this.getCurrentMusicalTime();
+        if (!this.isPlaying) return 0;
+        const realTime = performance.now() - this.startTimeRef;
+        return this.convertToMusicalTime(realTime);
     }
 
     /**
@@ -213,5 +330,73 @@ export class TimingService {
     public dispose(): void {
         this.stop();
         this.audioContext = null;
+    }
+
+    // Update or add this method to properly handle loop settings
+    public setLoopState(enabled: boolean, start?: number, end?: number) {
+        const previousState = {
+            enabled: this.loopEnabled,
+            start: this.loopStart,
+            end: this.loopEnd
+        };
+        
+        this.loopEnabled = enabled;
+        if (start !== undefined) this.loopStart = start;
+        if (end !== undefined) this.loopEnd = end;
+        
+        console.log('[LOOP] TimingService loop state updated', {
+            previous: previousState,
+            current: {
+                enabled: this.loopEnabled,
+                start: this.loopStart,
+                end: this.loopEnd
+            }
+        });
+    }
+
+    // Add this method to reset the time reference at loop points
+    public resetTimeReference(timeMs: number) {
+        if (!this.isPlaying || !this.audioContext) return;
+        
+        console.log(`[LOOP] TimingService time reference reset from ${this.getCurrentTime()}ms to ${timeMs}ms`);
+        
+        // Reset time reference to the new position
+        this.startTimeRef = performance.now() - this.convertToRealTime(timeMs);
+        this.scheduledNotes.clear(); // Clear scheduled notes to prevent duplicates
+        
+        // Force immediate scheduling to ensure notes play at the loop start
+        if (this.schedulerTimer !== null) {
+            clearTimeout(this.schedulerTimer);
+            this.schedulerTimer = null;
+            this.startAudioScheduling();
+        }
+    }
+
+    // Add this method to handle direct loop transitions
+    public handleLoopTransition(loopStartTime: number): void {
+        if (!this.isPlaying || !this.audioContext) {
+            console.log('[LOOP] Cannot handle loop transition - not playing or no audio context');
+            return;
+        }
+        
+        console.log(`[LOOP] TimingService handling loop transition to ${loopStartTime}ms`);
+        
+        // Reset our time reference to the loop start position
+        this.startTimeRef = performance.now() - this.convertToRealTime(loopStartTime);
+        
+        // Clear all scheduled notes to prevent duplicates
+        this.scheduledNotes.clear();
+        
+        // Force immediate scheduling to ensure notes play at the loop start
+        if (this.schedulerTimer !== null) {
+            clearTimeout(this.schedulerTimer);
+            this.schedulerTimer = null;
+            this.startAudioScheduling();
+        }
+        
+        // Update last tick time to ensure visual updates are in sync
+        this.lastTickTime = performance.now();
+        
+        console.log(`[LOOP] TimingService loop transition complete, new reference time: ${this.startTimeRef}`);
     }
 }

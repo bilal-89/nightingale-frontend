@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
-import { useAppDispatch, useAppSelector } from './useStore';
-import { ParameterService } from '../parameters/parameter.service';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { ParameterService } from '../../parameters/services/parameter.service';
 import { updateNoteParameters, selectSelectedNote } from '../store/player';
-
+import { NoteEvent } from '../types/noteEvent';
 
 const parameterService = new ParameterService();
 
@@ -23,33 +23,43 @@ export const useParameters = () => {
             displayValue
         });
 
-        const internalValue = parameterService.convertToInternal(parameterId, displayValue);
+        console.log('Selected note:', selectedNote);
 
+        const internalValue = parameterService.convertToInternal(parameterId, displayValue);
         console.log('Converted to internal:', {
             displayValue,
             internalValue
         });
 
-        const updates: any = {};
+        let updates: Partial<NoteEvent> = {};
 
-        // Handle different parameter types
-        switch (parameterService.getDefinition(parameterId)?.group) {
-            case 'envelope':
-                updates.synthesis = {
-                    ...selectedNote?.note.synthesis,  // Preserve existing synthesis state
-                    envelope: {
-                        ...selectedNote?.note.synthesis?.envelope,  // Preserve existing envelope state
-                        [parameterId]: internalValue
-                    }
-                };
-                break;
+        const paramDef = parameterService.getDefinition(parameterId);
+        const group = paramDef?.group;
 
+        switch (group) {
             case 'note':
                 if (parameterId === 'velocity') {
                     updates.velocity = Math.round(internalValue * 127);
                 } else if (parameterId === 'tuning') {
                     updates.tuning = internalValue;
                 }
+                break;
+
+            case 'envelope':
+                updates.synthesis = {
+                    envelope: {
+                        [parameterId]: internalValue
+                    }
+                };
+                break;
+
+            case 'unison':
+                const unisonParamName = parameterId.replace('unison', '').toLowerCase();
+                updates.synthesis = {
+                    unison: {
+                        [unisonParamName]: internalValue || displayValue
+                    }
+                };
                 break;
         }
 
