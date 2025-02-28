@@ -119,7 +119,7 @@ const UnisonControls: React.FC = () => {
               width: `${localUnisonDetune}%`,
               backgroundColor: currentTrackColor || '#6366f1',
               boxShadow: '2px 2px 4px rgba(0,0,0,0.1)',
-              opacity: localUnisonCount > 1 ? 0.8 : 0.4,
+              opacity: 0.8,
               transition: 'all 100ms ease-out'
             }}
           />
@@ -150,7 +150,7 @@ const UnisonControls: React.FC = () => {
               width: `${localUnisonWidth}%`,
               backgroundColor: currentTrackColor || '#6366f1',
               boxShadow: '2px 2px 4px rgba(0,0,0,0.1)',
-              opacity: localUnisonCount > 1 ? 0.8 : 0.4,
+              opacity: 0.8,
               transition: 'all 100ms ease-out'
             }}
           />

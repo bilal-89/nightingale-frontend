@@ -1,4 +1,4 @@
-// useParameterValues.ts
+// src/features/parameters/hooks/useParameterValues.ts
 
 import { useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
@@ -11,8 +11,10 @@ import {
     isValidParameterId,
     isEnvelopeParam,
     isNoteProperty,
+    isUnisonParam,
     NoteEvent,
     KeyParameterState,
+    mapUnisonParamToProperty,
 } from '../types/types';
 
 interface SelectedNoteState {
@@ -51,6 +53,17 @@ export const useParameterValues = (activeContext: ParameterContext) => {
                             return internalValue * 100;
                         }
                         return internalValue;
+                    }
+                }
+                break;
+            }
+            case 'unison': {
+                if (isUnisonParam(param.id)) {
+                    const propName = mapUnisonParamToProperty(param.id);
+                    if (propName) {
+                        return note.synthesis?.unison?.[propName] ?? 
+                            (propName === 'count' ? 1 : 
+                             propName === 'detune' ? 10 : 50);
                     }
                 }
                 break;

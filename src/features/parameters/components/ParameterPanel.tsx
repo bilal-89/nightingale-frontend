@@ -2,11 +2,17 @@
 
 import React, { useState, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { selectIsPanelVisible, togglePanel } from '../../keyboard/store/slices/keyboard.slice';
+import {
+    selectIsPanelVisible,
+    togglePanel,
+    setParameterContext
+} from '../../keyboard/store/slices/keyboard.slice';
 import { useParameterValues } from '../hooks/useParameterValues';
 import { parameters } from '../constants/parameters';
 import { ParameterContext } from '../types/types';
-import UnisonControls from '../../keyboard/components/UnisonControls';
+import EnvelopeGroup from './groups/EnvelopeGroup';
+import FilterGroup from './groups/FilterGroup';
+import UnisonGroup from './groups/UnisonGroup';
 
 const ParameterPanel: React.FC = () => {
     const dispatch = useAppDispatch();
@@ -14,6 +20,7 @@ const ParameterPanel: React.FC = () => {
     const currentTrack = useAppSelector(state => state.player.currentTrack);
     const tracks = useAppSelector(state => state.player.tracks);
     const currentTrackColor = tracks[currentTrack]?.color;
+    const reduxParameterContext = useAppSelector(state => state.keyboard.parameterContext);
 
     const [isPressed, setIsPressed] = useState(false);
     const [context, setContext] = useState<ParameterContext>('keyboard');
@@ -32,16 +39,26 @@ const ParameterPanel: React.FC = () => {
 
     const handleMouseUp = useCallback(() => {
         if (isPressed && clickedContainer) {
-            setContext(prev => prev === 'keyboard' ? 'note' : 'keyboard');
+            const newContext = context === 'keyboard' ? 'note' : 'keyboard';
+            setContext(newContext);
+            // Update Redux state too
+            dispatch(setParameterContext(newContext));
         }
         setIsPressed(false);
         setClickedContainer(false);
-    }, [isPressed, clickedContainer]);
+    }, [isPressed, clickedContainer, context, dispatch]);
 
     const handleMouseLeave = useCallback(() => {
         setIsPressed(false);
         setClickedContainer(false);
     }, []);
+
+    // Keep local and Redux state in sync
+    React.useEffect(() => {
+        if (reduxParameterContext !== context) {
+            setContext(reduxParameterContext);
+        }
+    }, [reduxParameterContext]);
 
     const getContainerStyle = () => ({
         transition: 'all 100ms ease-in-out',
@@ -56,17 +73,19 @@ const ParameterPanel: React.FC = () => {
         })
     });
 
-    // Get all parameters for the current context
+    // Get parameters by group for the current context
     const allParameters = parameters.filter(p => p.contexts.includes(context));
 
     const renderParameter = (param: typeof parameters[0]) => (
         <div key={param.id} className="parameter-control mb-4">
             <div className="flex justify-between mb-1">
                 <span className="text-xs font-medium text-gray-500">
-                    {param.label || param.id}
+                    {param.name}
                 </span>
                 <span className="text-sm font-medium text-gray-700">
-                    {parameterValues[param.id]?.value.toFixed(param.precision || 0)} {param.unit}
+                    {parameterValues[param.id]?.isMixed
+                        ? '---'
+                        : `${(parameterValues[param.id]?.value || 0).toFixed(param.precision || 0)}${param.unit || ''}`}
                 </span>
             </div>
             <div
@@ -99,6 +118,14 @@ const ParameterPanel: React.FC = () => {
         </div>
     );
 
+    // Make sure unison parameters are included in the parameter groups for note mode
+    const parameterGroups = [
+        { id: 'note', title: 'Note' },
+        { id: 'envelope', title: 'Envelope' },
+        { id: 'filter', title: 'Filter' },
+        { id: 'unison', title: 'Unison' }  // Make sure this is included
+    ];
+
     return (
         <div
             onMouseDown={handleMouseDown}
@@ -124,10 +151,15 @@ const ParameterPanel: React.FC = () => {
 
                 <div>
                     {/* Render all parameters in a flat list */}
-                    {allParameters.map(renderParameter)}
-                    
+                    {allParameters.filter(p => p.group !== 'unison').map(renderParameter)}
+
                     {/* Add Unison Controls - show in both contexts */}
-                    <UnisonControls />
+                    <UnisonGroup
+                        context={context}
+                        values={parameterValues}
+                        onParameterChange={handleParameterUpdate}
+                        currentTrackColor={currentTrackColor}
+                    />
                 </div>
             </div>
         </div>

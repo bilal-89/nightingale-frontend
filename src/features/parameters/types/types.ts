@@ -1,8 +1,9 @@
-//src/features/parameters/types/types.ts
+// src/features/parameters/types/types.ts
 import { KeyParameters } from '../../keyboard/store/slices/keyboard.slice';
 
 export type ParameterContext = 'keyboard' | 'note';
-export type ParameterGroup = 'envelope' | 'note' | 'filter';
+// Update to include 'unison' in the ParameterGroup type
+export type ParameterGroup = 'envelope' | 'note' | 'filter' | 'unison';
 
 // Define base note properties that can be accessed by parameter id
 export interface NoteProperties {
@@ -24,13 +25,22 @@ export interface FilterParameters {
     Q: number;
 }
 
+// Add an interface for Unison parameters
+export interface UnisonParameters {
+    count: number;
+    detune: number;
+    width: number;
+}
+
 export interface SynthesisEffects {
     filter: FilterParameters;
 }
 
+// Update NoteSynthesis to include unison
 export interface NoteSynthesis {
     envelope: EnvelopeParameters;
     effects: SynthesisEffects;
+    unison?: UnisonParameters;  // Make it optional since not all notes might have it
 }
 
 // Now NoteEvent includes both synthesis data and parameter properties
@@ -69,10 +79,39 @@ export const isNoteProperty = (id: string): id is keyof NoteProperties => {
     return ['tuning', 'velocity'].includes(id);
 };
 
+// Update to include unison parameters
 export const isValidParameterId = (id: string): id is keyof KeyParameters => {
-    return ['tuning', 'velocity', 'attack', 'decay', 'sustain', 'release', 'filterCutoff', 'filterResonance'].includes(id);
+    return [
+        'tuning', 'velocity',
+        'attack', 'decay', 'sustain', 'release',
+        'filterCutoff', 'filterResonance',
+        'unisonCount', 'unisonDetune', 'unisonWidth'
+    ].includes(id);
 };
 
 export const isEnvelopeParam = (id: string): id is keyof EnvelopeParameters => {
     return ['attack', 'decay', 'sustain', 'release'].includes(id);
+};
+
+// Add a helper function for unison parameters
+export const isUnisonParam = (id: string): id is keyof UnisonParameters => {
+    // Map from UI parameter IDs to internal property names
+    const mapping: Record<string, keyof UnisonParameters> = {
+        'unisonCount': 'count',
+        'unisonDetune': 'detune',
+        'unisonWidth': 'width'
+    };
+    
+    return id in mapping;
+};
+
+// Add a helper function to convert UI parameter IDs to internal property names
+export const mapUnisonParamToProperty = (id: string): keyof UnisonParameters | undefined => {
+    const mapping: Record<string, keyof UnisonParameters> = {
+        'unisonCount': 'count',
+        'unisonDetune': 'detune',
+        'unisonWidth': 'width'
+    };
+    
+    return mapping[id];
 };

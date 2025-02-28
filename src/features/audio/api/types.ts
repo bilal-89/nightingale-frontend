@@ -4,6 +4,8 @@
 export type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
 export type BiquadFilterType = 'lowpass' | 'highpass' | 'bandpass';
 
+// Update src/features/audio/api/types.ts
+
 export interface SynthesisParameters {
     mode: 'tunable' | 'drums';
     waveform: OscillatorType;
@@ -29,6 +31,13 @@ export interface SynthesisParameters {
             frequency: number;
             Q: number;
         };
+    };
+
+    // Add unison parameters
+    unison?: {
+        count: number;
+        detune: number;
+        width: number;
     };
 }
 
