@@ -1,8 +1,11 @@
+// TunableKey.tsx - Updated with enhanced neumorphic styling and improved pressed state
 import React, { useRef } from 'react';
 import { KeyProps } from './keyboard.types';
 import { drumSounds } from '../../audio/constants/drumSounds.ts';
 import { getColorWithOpacity } from '../../../shared/constants/colors';
+import { NoteColor } from '../../../shared/types/NoteColor';
 
+// Add new props for SVG-specific attributes
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
     mode: 'tunable' | 'drums';
     note: number;
@@ -14,6 +17,10 @@ interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
     onPanelClick: () => void;
     isPanelVisible: boolean;
     trackColor?: string;
+    // New SVG props
+    pathData?: string;
+    keyLabel?: string;
+    noteName?: string;
 }
 
 const TunableKey: React.FC<ExtendedKeyProps> = ({
@@ -22,7 +29,9 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                                                     onNoteOn,
                                                     onNoteOff,
                                                     mode,
-                                                    trackColor
+                                                    trackColor,
+                                                    pathData,
+                                                    noteName
                                                 }) => {
     const isTuningRef = useRef(false);
     const drumSound = mode === 'drums' ? drumSounds[note] : null;
@@ -38,68 +47,103 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
         }
     };
 
-    // Define visual styles with more subtle unpressed colors
+    // Enhanced neumorphic styles for a more distinct raised/pressed effect
+    // while maintaining visible borders in both states
     const modeStyles = {
         tunable: {
-            bg: trackColor ? getColorWithOpacity(trackColor, 0.25) : '#e5e9ec',  // Very subtle when not pressed
-            bgPressed: trackColor ? getColorWithOpacity(trackColor, 0.4) : '#dde1e4',  // More intense when pressed
-            shadow1: '#c8ccd0',
-            shadow2: '#ffffff',
-            keySize: 'w-16 h-24',
-            borderRadius: 'rounded-[14px]',
-            translation: 'translate-y-[3px]',
-            shadowSize: '3px'
+            // Default state (raised)
+            fill: trackColor
+                ? getColorWithOpacity(trackColor, isPressed ? 0.40 : 0.25)
+                : (isPressed ? 'url(#keyGradientPressed)' : 'url(#keyGradient)'),
+            stroke: isPressed ? '#e0dbd6' : '#f0f0f0',
+            strokeOpacity: 0.9, // Maintain same opacity for both states
+            strokeWidth: 1.5, // Consistent stroke width for both states
+            // Less translation for subtler effect
+            transform: isPressed ? 'translate(1.5px, 1.5px)' : '',
+            // Transition for smooth state changes
+            transition: 'all 120ms cubic-bezier(0.4, 0, 0.2, 1)',
+            // Filter reference
+            filter: isPressed ? `url(#inner-shadow-${note % 12})` : `url(#outer-shadow-${note % 12})`
         },
         drums: {
-            bg: trackColor ? getColorWithOpacity(trackColor, 0.2) : '#ece4e4',  // Very subtle when not pressed
-            bgPressed: trackColor ? getColorWithOpacity(trackColor, 0.3) : '#e4dcdc',  // More intense when pressed
-            shadow1: '#d1cdc4',
-            shadow2: '#ffffff',
-            keySize: 'w-20 h-20',
-            borderRadius: 'rounded-[14px]',
-            translation: 'translate-y-[3px]',
-            shadowSize: '3px'
+            fill: trackColor
+                ? getColorWithOpacity(trackColor, isPressed ? 0.40 : 0.25)
+                : (isPressed ? 'url(#keyGradientPressed)' : 'url(#keyGradient)'),
+            stroke: isPressed ? '#e0dbd6' : '#f0f0f0',
+            strokeOpacity: 0.9,
+            strokeWidth: 1.5,
+            transform: isPressed ? 'translate(1.5px, 1.5px)' : '',
+            transition: 'all 120ms cubic-bezier(0.4, 0, 0.2, 1)',
+            filter: isPressed ? `url(#inner-shadow-${note % 12})` : `url(#outer-shadow-${note % 12})`
         }
     };
 
-    const currentStyle = modeStyles[mode];
+    const styles = modeStyles[mode];
 
+    // If we have path data, render the SVG version
+    if (pathData) {
+        return (
+            <g
+                transform={styles.transform}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                style={{ cursor: 'pointer', transition: styles.transition }}
+                className="group"
+            >
+                {/* Main key shape */}
+                <path
+                    d={pathData}
+                    fill={styles.fill}
+                    stroke={styles.stroke}
+                    strokeOpacity={styles.strokeOpacity}
+                    strokeWidth={styles.strokeWidth}
+                    filter={styles.filter}
+                    className="transition-all duration-120"
+                />
+                
+                {/* All text labels removed */}
+            </g>
+        );
+    }
+
+    // Original div-based rendering for backward compatibility
     return (
         <div className="relative flex flex-col items-center">
             <div
                 className={`
                     select-none cursor-pointer
-                    transition-all duration-300 ease-in-out transform
-                    ${currentStyle.keySize}
-                    ${currentStyle.borderRadius}
-                    ${isPressed ? currentStyle.translation : ''}
+                    transition-all duration-120 ease-in-out transform
+                    ${mode === 'tunable' ? 'w-16 h-24' : 'w-20 h-20'}
+                    rounded-[14px]
+                    ${isPressed ? 'translate-y-[2px]' : ''}
                     ${mode === 'drums' ? 'flex items-center justify-center' : ''}
-                    hover:brightness-110
+                    hover:brightness-105
                 `}
                 onMouseDown={handleMouseDown}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
                 style={{
-                    background: isPressed ? currentStyle.bgPressed : currentStyle.bg,
+                    background: isPressed
+                        ? (trackColor ? getColorWithOpacity(trackColor, mode === 'tunable' ? 0.5 : 0.4) : (mode === 'tunable' ? '#e0dbd6' : '#e1d9d9'))
+                        : (trackColor ? getColorWithOpacity(trackColor, mode === 'tunable' ? 0.25 : 0.2) : (mode === 'tunable' ? '#f2f0eb' : '#f1e9e9')),
                     boxShadow: isPressed
-                        ? `inset ${currentStyle.shadowSize} ${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow1}, 
-                           inset -${currentStyle.shadowSize} -${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow2}`
-                        : `${currentStyle.shadowSize} ${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow1}, 
-                           -${currentStyle.shadowSize} -${currentStyle.shadowSize} ${parseInt(currentStyle.shadowSize) * 2}px ${currentStyle.shadow2}`,
-                    transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)'
+                        ? `inset 3px 3px 6px ${mode === 'tunable' ? '#c1c5c9' : '#cac6bd'}, 
+                           inset -2px -2px 4px #ffffff,
+                           0px 0px 0px 1px rgba(224, 219, 214, 0.5)`
+                        : `4px 4px 8px ${mode === 'tunable' ? '#c8ccd0' : '#d1cdc4'}, 
+                           -3px -3px 6px #ffffff,
+                           0px 0px 0px 1px rgba(240, 240, 240, 0.5)`,
+                    transition: 'all 120ms cubic-bezier(0.4, 0, 0.2, 1)',
+                    border: isPressed
+                        ? '1px solid rgba(224, 219, 214, 0.7)'
+                        : '1px solid rgba(240, 240, 240, 0.7)'
                 }}
             >
-                {mode === 'drums' && drumSound && (
-                    <span className={`
-                        text-sm font-medium transition-opacity duration-300
-                        ${isPressed ? 'opacity-10' : 'opacity-30'}
-                    `}>
-                        {drumSound.label}
-                    </span>
-                )}
+                {/* No labels as per request */}
             </div>
         </div>
     );
 };
 
-export default React.memo(TunableKey);
+export default TunableKey;
