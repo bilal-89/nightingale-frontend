@@ -1,9 +1,8 @@
-// TunableKey.tsx - Updated with enhanced neumorphic styling and improved pressed state
+// TunableKey.tsx - Extracted key component
 import React, { useRef } from 'react';
 import { KeyProps } from './keyboard.types';
 import { drumSounds } from '../../audio/constants/drumSounds.ts';
 import { getColorWithOpacity } from '../../../shared/constants/colors';
-import { NoteColor } from '../../../shared/types/NoteColor';
 
 // Add new props for SVG-specific attributes
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
@@ -17,9 +16,8 @@ interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
     onPanelClick: () => void;
     isPanelVisible: boolean;
     trackColor?: string;
-    // New SVG props
+    // SVG props
     pathData?: string;
-    keyLabel?: string;
     noteName?: string;
 }
 
@@ -48,7 +46,6 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
     };
 
     // Enhanced neumorphic styles for a more distinct raised/pressed effect
-    // while maintaining visible borders in both states
     const modeStyles = {
         tunable: {
             // Default state (raised)
@@ -90,6 +87,7 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                 onMouseLeave={handleMouseUp}
                 style={{ cursor: 'pointer', transition: styles.transition }}
                 className="group"
+                data-note={note % 12}
             >
                 {/* Main key shape */}
                 <path
@@ -99,27 +97,25 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                     strokeOpacity={styles.strokeOpacity}
                     strokeWidth={styles.strokeWidth}
                     filter={styles.filter}
-                    className="transition-all duration-120"
+                    className={`transition-all duration-120 ${isPressed ? 'pressed' : ''}`}
                 />
-                
-                {/* All text labels removed */}
             </g>
         );
     }
 
-    // Original div-based rendering for backward compatibility
+    // Fallback div-based rendering
     return (
         <div className="relative flex flex-col items-center">
             <div
                 className={`
-                    select-none cursor-pointer
-                    transition-all duration-120 ease-in-out transform
-                    ${mode === 'tunable' ? 'w-16 h-24' : 'w-20 h-20'}
-                    rounded-[14px]
-                    ${isPressed ? 'translate-y-[2px]' : ''}
-                    ${mode === 'drums' ? 'flex items-center justify-center' : ''}
-                    hover:brightness-105
-                `}
+          select-none cursor-pointer
+          transition-all duration-120 ease-in-out transform
+          ${mode === 'tunable' ? 'w-16 h-24' : 'w-20 h-20'}
+          rounded-[14px]
+          ${isPressed ? 'translate-y-[2px]' : ''}
+          ${mode === 'drums' ? 'flex items-center justify-center' : ''}
+          hover:brightness-105
+        `}
                 onMouseDown={handleMouseDown}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
@@ -129,19 +125,17 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
                         : (trackColor ? getColorWithOpacity(trackColor, mode === 'tunable' ? 0.25 : 0.2) : (mode === 'tunable' ? '#f2f0eb' : '#f1e9e9')),
                     boxShadow: isPressed
                         ? `inset 3px 3px 6px ${mode === 'tunable' ? '#c1c5c9' : '#cac6bd'}, 
-                           inset -2px -2px 4px #ffffff,
-                           0px 0px 0px 1px rgba(224, 219, 214, 0.5)`
+               inset -2px -2px 4px #ffffff,
+               0px 0px 0px 1px rgba(224, 219, 214, 0.5)`
                         : `4px 4px 8px ${mode === 'tunable' ? '#c8ccd0' : '#d1cdc4'}, 
-                           -3px -3px 6px #ffffff,
-                           0px 0px 0px 1px rgba(240, 240, 240, 0.5)`,
+               -3px -3px 6px #ffffff,
+               0px 0px 0px 1px rgba(240, 240, 240, 0.5)`,
                     transition: 'all 120ms cubic-bezier(0.4, 0, 0.2, 1)',
                     border: isPressed
                         ? '1px solid rgba(224, 219, 214, 0.7)'
                         : '1px solid rgba(240, 240, 240, 0.7)'
                 }}
-            >
-                {/* No labels as per request */}
-            </div>
+            />
         </div>
     );
 };
