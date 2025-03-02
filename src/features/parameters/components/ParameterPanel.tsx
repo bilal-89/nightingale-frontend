@@ -1,7 +1,6 @@
 // src/features/parameters/components/ParameterPanel.tsx
 
 import React, { useState, useCallback } from 'react';
-import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import {
     selectIsPanelVisible,
     togglePanel,
@@ -10,9 +9,66 @@ import {
 import { useParameterValues } from '../hooks/useParameterValues';
 import { parameters } from '../constants/parameters';
 import { ParameterContext } from '../types/types';
-import EnvelopeGroup from './groups/EnvelopeGroup';
-import FilterGroup from './groups/FilterGroup';
+import { NoteColor } from '../../../shared/constants/colors.ts';
+import { ColorStrip } from '../../../shared/components/ui/ColorStrip';
+import { setTrackSettings } from '../../player/store/player';
+
 import UnisonGroup from './groups/UnisonGroup';
+
+import {toggleKeyboardLayout} from '../../keyboard/store/slices/keyboard.slice';
+import {useAppDispatch, useAppSelector} from "../../player/hooks";
+import {Keyboard} from "lucide-react";
+
+// Simple Keyboard Layout Toggle Component
+const KeyboardLayoutToggle = () => {
+    const dispatch = useAppDispatch();
+    const usingFigmaLayout = useAppSelector(state => state.keyboard.usingFigmaLayout);
+
+    return (
+        <div className="flex items-center">
+            <button
+                onClick={() => dispatch(toggleKeyboardLayout())}
+                className="p-2 rounded-lg bg-[#e8e4dc] hover:bg-[#f0ece6] transition-all"
+                style={{boxShadow: '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'}}
+                title={`Switch to ${usingFigmaLayout ? 'Single' : 'Split'} Layout`}
+            >
+                <Keyboard className="w-4 h-4 text-[#4a4543]" />
+            </button>
+            <span className="ml-2 text-xs text-[#6c6661]">
+                {usingFigmaLayout ? 'A' : 'B'}
+            </span>
+        </div>
+    );
+};
+
+// Color Picker Component (moved from Player)
+const ColorPicker = () => {
+    const dispatch = useAppDispatch();
+    const currentTrack = useAppSelector(state => state.player.currentTrack);
+    const tracks = useAppSelector(state => state.player.tracks);
+    const currentTrackData = tracks[currentTrack];
+
+    const handleColorSelect = (color: NoteColor) => {
+        if (currentTrackData) {
+            dispatch(setTrackSettings({
+                trackId: currentTrackData.id,
+                updates: { color }
+            }));
+        }
+    };
+
+    if (!currentTrackData) return null;
+
+    return (
+        <div className="mt-4">
+            <div className="text-xs font-medium text-gray-500 mb-2">Track Color</div>
+            <ColorStrip
+                selectedColor={currentTrackData.color}
+                onColorSelect={handleColorSelect}
+            />
+        </div>
+    );
+};
 
 const ParameterPanel: React.FC = () => {
     const dispatch = useAppDispatch();
@@ -160,6 +216,13 @@ const ParameterPanel: React.FC = () => {
                         onParameterChange={handleParameterUpdate}
                         currentTrackColor={currentTrackColor}
                     />
+                    
+                    {/* Layout and Color Controls */}
+                    <div className="mt-6 pt-4 border-t border-gray-200">
+                        <div className="text-xs font-medium text-gray-500 mb-3">Interface Controls</div>
+                        <KeyboardLayoutToggle />
+                        <ColorPicker />
+                    </div>
                 </div>
             </div>
         </div>

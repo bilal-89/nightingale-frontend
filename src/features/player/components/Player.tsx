@@ -6,7 +6,6 @@ import TimelineGrid from './timeline/TimelineGrid/index';
 import TransportControls from './transport/TransportControls';
 import { startRecording, stopRecording } from '../store/player';
 import { useLoopWatcher } from '../hooks/useLoopWatcher';
-import { ColorPickerPanel } from './ColorPickerPanel';
 
 interface RecordButtonProps {
     isRecording: boolean;
@@ -56,8 +55,6 @@ export const Player = () => {
             </div>
 
             <TimelineGrid />
-            <ColorPickerPanel/>
-
         </Card>
     );
 };

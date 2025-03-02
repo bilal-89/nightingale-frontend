@@ -1,5 +1,5 @@
-// TunableKeyboard.tsx - Refactored to use extracted components
-import React, { useEffect, useCallback, useState } from 'react';
+// TunableKeyboard.tsx - Updated with Redux layout state
+import React, { useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { useAppDispatch } from '../../../store/hooks';
 import { Card } from '../../../shared/components/ui/card';
@@ -12,12 +12,14 @@ import {
     setMode,
     setGlobalWaveform,
     togglePanel,
+    toggleKeyboardLayout,
     selectActiveNotes,
     selectIsInitialized,
     selectMode,
     selectIsPanelVisible,
     selectGlobalWaveform,
     selectCurrentOctave,
+    selectUsingFigmaLayout,
     SynthMode,
     Waveform
 } from '../store/slices/keyboard.slice';
@@ -25,7 +27,16 @@ import { initializeAudioContext } from '../../audio/store/actions.ts';
 import { RootState } from '../../../store';
 import { useTiming } from '../../player/hooks/useTiming.ts';
 import keyboardAudioManager from '../../audio/engine/synthesis/keyboardEngine';
-import { KEY_TO_NOTE, WAVEFORM_LABELS, MODE_STYLES, CONTAINER_LAYOUT } from '../data/keyboardData';
+import {
+    KEY_TO_NOTE,
+    WAVEFORM_LABELS,
+    MODE_STYLES,
+    FIGMA_CONTAINER_LAYOUT,
+    ORIGINAL_CONTAINER_LAYOUT,
+    FIGMA_KEY_DATA,
+    ORIGINAL_KEY_DATA
+} from '../data/keyboardData';
+
 // Main component
 const TunableKeyboard: React.FC = () => {
     const dispatch = useAppDispatch();
@@ -38,8 +49,11 @@ const TunableKeyboard: React.FC = () => {
     const tracks = useSelector((state: RootState) => state.player.tracks);
     const currentTrackColor = tracks[currentTrack]?.color;
     const currentOctave = useSelector(selectCurrentOctave);
+    const usingFigmaLayout = useSelector(selectUsingFigmaLayout);
 
-    const [isContainerPressed, setIsContainerPressed] = useState(false);
+    // Derive keyboard layout data based on Redux state
+    const containerLayout = usingFigmaLayout ? FIGMA_CONTAINER_LAYOUT : ORIGINAL_CONTAINER_LAYOUT;
+    const keyData = usingFigmaLayout ? FIGMA_KEY_DATA : ORIGINAL_KEY_DATA;
 
     // Initialize audio context if needed
     const initializeAudio = useCallback(() => {
@@ -104,6 +118,13 @@ const TunableKeyboard: React.FC = () => {
             if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
             if (e.repeat) return; // Prevent key repeat
 
+            // Special key for layout toggle - use Tab key
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                dispatch(toggleKeyboardLayout());
+                return;
+            }
+
             const note = KEY_TO_NOTE[e.key.toLowerCase()];
             if (note !== undefined) {
                 e.preventDefault();
@@ -114,6 +135,7 @@ const TunableKeyboard: React.FC = () => {
         const handleKeyUp = (e: KeyboardEvent) => {
             // Skip if modifier keys are pressed
             if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+            if (e.key === 'Tab') return; // Skip tab key up event
 
             const note = KEY_TO_NOTE[e.key.toLowerCase()];
             if (note !== undefined) {
@@ -131,12 +153,12 @@ const TunableKeyboard: React.FC = () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [currentOctave, handleNoteOn, handleNoteOff]);
+    }, [currentOctave, handleNoteOn, handleNoteOff, dispatch]);
 
     const currentStyle = MODE_STYLES[currentMode];
 
     return (
-        <Card className={`p-8 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background}`}>
+        <Card className={`p-4 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background} max-w-[800px] mx-auto`}>
             <div className="flex flex-row gap-6">
                 {/* Octave Controls */}
                 <div className="flex-none">
@@ -145,7 +167,7 @@ const TunableKeyboard: React.FC = () => {
 
                 {/* Main Keyboard Area */}
                 <div className="flex-1 relative">
-                    {/* Keyboard Layout Component */}
+                    {/* Keyboard Layout Component with dynamic layout props */}
                     <KeyboardLayout
                         notes={notes}
                         currentMode={currentMode}
@@ -156,7 +178,8 @@ const TunableKeyboard: React.FC = () => {
                         handleTuningChange={handleTuningChange}
                         handlePanelClick={handlePanelClick}
                         handleContainerClick={handleContainerClick}
-                        isContainerPressed={isContainerPressed}
+                        containerLayout={containerLayout}
+                        keyData={keyData}
                     />
 
                     {/* Waveform controls - only displayed in tunable mode */}
