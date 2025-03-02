@@ -158,7 +158,7 @@ const TunableKeyboard: React.FC = () => {
     const currentStyle = MODE_STYLES[currentMode];
 
     return (
-        <Card className={`p-4 bg-gradient-to-br transition-all duration-300 ease-in-out ${currentStyle.background} max-w-[800px] mx-auto`}>
+        <Card className="p-4 bg-transparent shadow-none border-none transition-all duration-300 ease-in-out max-w-[800px] mx-auto">
             <div className="flex flex-row gap-6">
                 {/* Octave Controls */}
                 <div className="flex-none">
@@ -184,30 +184,32 @@ const TunableKeyboard: React.FC = () => {
 
                     {/* Waveform controls - only displayed in tunable mode */}
                     {currentMode === 'tunable' && (
-                        <div className="flex justify-center gap-3 mt-4">
-                            {(['sine', 'square', 'sawtooth', 'triangle'] as const).map((waveform) => (
-                                <button
-                                    key={waveform}
-                                    onClick={() => handleWaveformChange(waveform as Waveform)}
-                                    className={`
-                                        px-4 py-2 rounded-lg text-sm
-                                        transition-all duration-300 ease-in-out
-                                        ${currentWaveform === waveform
-                                        ? 'bg-[#e8e4dc] shadow-lg scale-105'
-                                        : 'bg-[#f0ece6] opacity-70 scale-100'
-                                    }
-                                        text-[#4a4543]
-                                        hover:opacity-90
-                                    `}
-                                    style={{
-                                        boxShadow: currentWaveform === waveform
-                                            ? '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff'
-                                            : 'none'
-                                    }}
-                                >
-                                    {WAVEFORM_LABELS[waveform as Waveform]}
-                                </button>
-                            ))}
+                        <div className="mt-4 flex justify-center">
+                            <div className="flex gap-2 p-2 rounded-lg bg-transparent">
+                                {Object.keys(WAVEFORM_LABELS).map(waveform => (
+                                    <button
+                                        key={waveform}
+                                        onClick={() => handleWaveformChange(waveform as Waveform)}
+                                        className={`
+                                            px-4 py-2 rounded-lg text-sm
+                                            transition-all duration-300 ease-in-out
+                                            ${currentWaveform === waveform
+                                            ? 'bg-[#e8e4dc] shadow-lg scale-105'
+                                            : 'bg-[#f0ece6] opacity-70 scale-100'
+                                        }
+                                            text-[#4a4543]
+                                            hover:opacity-90
+                                        `}
+                                        style={{
+                                            boxShadow: currentWaveform === waveform
+                                                ? '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff'
+                                                : 'none'
+                                        }}
+                                    >
+                                        {WAVEFORM_LABELS[waveform as Waveform]}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>

@@ -2,12 +2,12 @@
 
 export enum NoteColor {
     Brown = '#9e4206',    // Brown
-    Red = '#bd0000',      // Red
-    Orange = '#ff6a1b',   // Orange
+    Red = '#dc322f',      // Solarized Red
+    Orange = '#cb4b16',   // Solarized Orange
     Green = '#9fc102',    // Green
-    Blue = '#297dff',     // Blue
-    Purple = '#9332f6',   // Purple
-    Magenta = '#ff4f9e'   // Magenta
+    Blue = '#268bd2',     // Solarized Blue
+    Purple = '#6c71c4',   // Solarized Violet (for Purple)
+    Magenta = '#d33682'   // Solarized Magenta
 }
 
 export const ColorOptions = Object.values(NoteColor);

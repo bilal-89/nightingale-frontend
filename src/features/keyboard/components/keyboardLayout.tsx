@@ -25,6 +25,12 @@ interface KeyboardLayoutProps {
         containerPath: string;
         keysTransform: string;
         svgViewBox: string;
+        containerStyle?: {
+            fill: string;
+            filter: string;
+            stroke: string | null;
+        };
+        gradientDefs?: string;
     };
     keyData: Record<number, {
         path: string;
@@ -43,13 +49,13 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                                                                   handlePanelClick,
                                                                   handleContainerClick,
                                                                   isContainerPressed = false,
-                                                                  containerLayout, // Added missing prop
-                                                                  keyData // Added missing prop
+                                                                  containerLayout,
+                                                                  keyData
                                                               }) => {
     const activeNotes = useSelector(selectActiveNotes);
 
     return (
-        <div className="relative w-full h-auto max-h-[400px]">
+        <div className="relative w-full h-auto max-h-[400px] overflow-visible">
             <svg
                 viewBox={containerLayout.svgViewBox}
                 width="100%"
@@ -57,21 +63,7 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                 preserveAspectRatio="xMidYMid meet"
                 className="relative z-0"
             >
-                {/* Background container shape with consistent color */}
-                <path
-                    opacity="0.2"
-                    d={containerLayout.containerPath}
-                    fill="url(#keyGradient)"
-                    stroke="#B5D16B"
-                    strokeWidth="9"
-                    filter={isContainerPressed ? "url(#container-inner-shadow)" : "url(#container-shadow)"}
-                    className={`cursor-pointer transition-all duration-75 ${isContainerPressed ? 'translate-y-1 opacity-40' : ''}`}
-                    onClick={handleContainerClick}
-                    data-role="container"
-                    style={{ pointerEvents: 'all' }}
-                />
-
-                {/* Define SVG filters and gradients */}
+                {/* Add custom gradient definitions if provided */}
                 <defs>
                     {/* Key gradients */}
                     <linearGradient id="keyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -82,6 +74,11 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                         <stop offset="0%" stopColor="#E5E0DB" />
                         <stop offset="100%" stopColor="#D8D3CE" />
                     </linearGradient>
+
+                    {/* Add custom gradient definitions if provided */}
+                    {containerLayout.gradientDefs && (
+                        <g dangerouslySetInnerHTML={{ __html: containerLayout.gradientDefs }} />
+                    )}
 
                     {/* Container shadow filters */}
                     <filter id="container-shadow" x="-10%" y="-10%" width="120%" height="120%">
@@ -144,6 +141,24 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                         </React.Fragment>
                     ))}
                 </defs>
+
+                {/* Background container shape with custom styling */}
+                <path
+                    d={containerLayout.containerPath}
+                    className={`cursor-pointer transition-all duration-75 ${isContainerPressed ? 'translate-y-1 opacity-40' : ''}`}
+                    onClick={handleContainerClick}
+                    data-role="container"
+                    style={{ 
+                        pointerEvents: 'all',
+                        ...(containerLayout.containerStyle || {
+                            opacity: "0.2",
+                            fill: "url(#keyGradient)",
+                            stroke: "#B5D16B",
+                            strokeWidth: "9",
+                            filter: isContainerPressed ? "url(#container-inner-shadow)" : "url(#container-shadow)"
+                        })
+                    }}
+                />
 
                 {/* Add a transform group to position the keys properly within the container */}
                 <g transform={containerLayout.keysTransform}>
