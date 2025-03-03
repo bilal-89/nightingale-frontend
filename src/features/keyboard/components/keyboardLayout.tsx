@@ -1,9 +1,10 @@
 // KeyboardLayout.tsx - Updated for switchable layouts with fixed click effect
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import TunableKey from './TunableKey';
 import { useSelector } from 'react-redux';
-import { selectActiveNotes, selectParameter } from '../store/slices/keyboard.slice';
-import { RootState } from '../../../store';
+import { selectActiveNotes, selectParameter, selectCurrentOctave } from '../store/slices/keyboard.slice';
+import { RootState } from '../../../store/store';
+import { KeyProps } from './Key';
 
 interface KeyboardLayoutProps {
     notes: Array<{
@@ -38,6 +39,35 @@ interface KeyboardLayoutProps {
     }>;
 }
 
+// Helper function to map MIDI note numbers to keyboard positions
+const mapNoteToKeyPosition = (note: number, octave: number): number => {
+    // Calculate the base note (C in the current octave)
+    const baseNote = (octave + 1) * 12;
+    
+    // Map the note to the correct key position
+    const noteInOctave = note % 12;
+    const octaveOffset = Math.floor(note / 12) - (octave + 1);
+    
+    // Create a consistent mapping from note to key position
+    const keyPositionMap: Record<number, number> = {
+        0: 0,  // C
+        1: 1,  // C#
+        2: 2,  // D
+        3: 3,  // D#
+        4: 4,  // E
+        5: 5,  // F
+        6: 6,  // F#
+        7: 7,  // G
+        8: 8,  // G#
+        9: 9,  // A
+        10: 10, // A#
+        11: 11  // B
+    };
+    
+    // Return the mapped position plus any octave offset
+    return keyPositionMap[noteInOctave] + (octaveOffset * 12);
+};
+
 export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                                                                   notes,
                                                                   currentMode,
@@ -53,12 +83,24 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                                                                   keyData
                                                               }) => {
     const activeNotes = useSelector(selectActiveNotes);
+    const currentOctave = useSelector(selectCurrentOctave);
 
     // Add local state to track click state for more responsive feedback
     const [isLocalPressed, setIsLocalPressed] = useState(false);
 
     // Combined pressed state (from props or local)
     const isPressed = isContainerPressed || isLocalPressed;
+
+    // Create a mapping of note numbers to pressed state
+    const notePressedMap = React.useMemo(() => {
+        const map: Record<number, boolean> = {};
+        activeNotes.forEach(note => {
+            // Map each active note to its correct key position
+            const keyPosition = mapNoteToKeyPosition(note, currentOctave);
+            map[keyPosition] = true;
+        });
+        return map;
+    }, [activeNotes, currentOctave]);
 
     // Event handlers for local click feedback
     const handleMouseDown = useCallback((e) => {
@@ -71,6 +113,7 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
         setIsLocalPressed(false);
         // Call the provided click handler
         handleContainerClick();
+        // Prevent event from bubbling up to parent elements
         e.stopPropagation();
     }, [handleContainerClick]);
 
@@ -194,13 +237,19 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                         const currentKeyData = keyData[baseNote];
                         if (!currentKeyData) return null;
 
+                        // Calculate the actual note number for this key
+                        const noteNumber = (currentOctave + 1) * 12 + baseNote % 12;
+                        
+                        // Check if this key should be shown as pressed
+                        const isKeyPressed = notePressedMap[mapNoteToKeyPosition(noteNumber, currentOctave)] || false;
+
                         return (
                             <TunableKey
                                 key={note}
-                                note={note}
-                                isPressed={activeNotes.includes(note)}
+                                note={noteNumber}
+                                isPressed={isKeyPressed}
                                 tuning={useSelector((state: RootState) =>
-                                    selectParameter(state, note, 'tuning'))}
+                                    selectParameter(state, noteNumber, 'tuning'))}
                                 onNoteOn={handleNoteOn}
                                 onNoteOff={handleNoteOff}
                                 onTuningChange={handleTuningChange}
