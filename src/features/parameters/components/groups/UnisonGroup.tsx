@@ -4,6 +4,7 @@ import { useAppSelector } from '../../../../store/hooks';
 import { selectSelectedNote } from '../../../player/store/player';
 import { useParameters } from '../../../player/hooks/useParameters';
 import { unisonParameters } from '../../constants/unisonParameters';
+import { getMutedColor } from '../../../../shared/constants/colors';
 
 interface UnisonGroupProps {
   context: 'keyboard' | 'note';
@@ -22,6 +23,8 @@ const UnisonGroup: React.FC<UnisonGroupProps> = ({
   const filteredParams = unisonParameters.filter(
     param => param.contexts.includes(context)
   );
+
+  const displayColor = currentTrackColor ? getMutedColor(currentTrackColor) : '#b5d16b';
 
   return (
     <div className="parameter-group mb-6">
@@ -55,7 +58,7 @@ const UnisonGroup: React.FC<UnisonGroupProps> = ({
                 className="absolute h-full rounded-full"
                 style={{
                   width: `${((values[param.id]?.value ?? param.defaultValue) - param.min) / (param.max - param.min) * 100}%`,
-                  backgroundColor: currentTrackColor || '#6366f1',
+                  backgroundColor: displayColor,
                   boxShadow: '2px 2px 4px rgba(0,0,0,0.1)',
                   opacity: values[param.id]?.isMixed ? 0.5 : 0.8,
                   transition: 'background-color 300ms ease-in-out, opacity 300ms ease-in-out'

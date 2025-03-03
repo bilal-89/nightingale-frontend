@@ -2,7 +2,7 @@
 import React, { useRef } from 'react';
 import { KeyProps } from './keyboard.types';
 import { drumSounds } from '../../audio/constants/drumSounds.ts';
-import { getColorWithOpacity } from '../../../shared/constants/colors';
+import { getColorWithOpacity, getMutedColor } from '../../../shared/constants/colors';
 
 // Add new props for SVG-specific attributes
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {
@@ -104,6 +104,9 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
     }
 
     // Fallback div-based rendering
+    const defaultColor = mode === 'tunable' ? '#f2f0eb' : '#f1e9e9';
+    const displayColor = trackColor ? getMutedColor(trackColor) : defaultColor;
+
     return (
         <div className="relative flex flex-col items-center">
             <div

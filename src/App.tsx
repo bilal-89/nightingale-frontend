@@ -27,13 +27,15 @@ const App = () => {
                             </div>
                         </div>
 
-                        {/* Right side parameter panel */}
-                        <div className="w-64 flex-shrink-0 h-fit self-start sticky top-8 rounded-3xl p-3 bg-[#e5e9ec]"
-                             style={{
-                                 boxShadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff'
-                             }}>
-                            <ParameterPanel />
-                        </div>
+                        {/*/!* Right side parameter panel *!/*/}
+                        {/*<div className="w-64 flex-shrink-0 h-fit self-start sticky top-8 rounded-2xl p-3"*/}
+                        {/*     style={{*/}
+                        {/*         background: 'transparent',*/}
+                        {/*         boxShadow: '8px 8px 16px #c8ccd0, -8px -8px 16px #ffffff'*/}
+                        {/*     }}>*/}
+                        {/*    */}
+                        {/*</div>*/}
+                        <ParameterPanel />
                     </div>
                 </div>
             </div>

@@ -1,5 +1,5 @@
-// KeyboardLayout.tsx - Updated for switchable layouts
-import React from 'react';
+// KeyboardLayout.tsx - Updated for switchable layouts with fixed click effect
+import React, { useState, useCallback } from 'react';
 import TunableKey from './TunableKey';
 import { useSelector } from 'react-redux';
 import { selectActiveNotes, selectParameter } from '../store/slices/keyboard.slice';
@@ -53,6 +53,30 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                                                                   keyData
                                                               }) => {
     const activeNotes = useSelector(selectActiveNotes);
+
+    // Add local state to track click state for more responsive feedback
+    const [isLocalPressed, setIsLocalPressed] = useState(false);
+
+    // Combined pressed state (from props or local)
+    const isPressed = isContainerPressed || isLocalPressed;
+
+    // Event handlers for local click feedback
+    const handleMouseDown = useCallback((e) => {
+        setIsLocalPressed(true);
+        // Prevent event from bubbling up to parent elements
+        e.stopPropagation();
+    }, []);
+
+    const handleMouseUp = useCallback((e) => {
+        setIsLocalPressed(false);
+        // Call the provided click handler
+        handleContainerClick();
+        e.stopPropagation();
+    }, [handleContainerClick]);
+
+    const handleMouseLeave = useCallback(() => {
+        setIsLocalPressed(false);
+    }, []);
 
     return (
         <div className="relative w-full h-auto max-h-[400px] overflow-visible">
@@ -145,17 +169,20 @@ export const KeyboardLayout: React.FC<KeyboardLayoutProps> = ({
                 {/* Background container shape with custom styling */}
                 <path
                     d={containerLayout.containerPath}
-                    className={`cursor-pointer transition-all duration-75 ${isContainerPressed ? 'translate-y-1 opacity-40' : ''}`}
-                    onClick={handleContainerClick}
+                    className="cursor-pointer transition-all duration-75"
+                    onMouseDown={handleMouseDown}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseLeave}
                     data-role="container"
-                    style={{ 
+                    style={{
                         pointerEvents: 'all',
+                        transform: isPressed ? 'translateY(2px)' : 'translateY(0px)',
                         ...(containerLayout.containerStyle || {
-                            opacity: "0.2",
+                            opacity: isPressed ? "0.30" : "0.20",
                             fill: "url(#keyGradient)",
                             stroke: "#B5D16B",
-                            strokeWidth: "9",
-                            filter: isContainerPressed ? "url(#container-inner-shadow)" : "url(#container-shadow)"
+                            strokeWidth: isPressed ? "6" : "9",
+                            filter: isPressed ? "url(#container-inner-shadow)" : "url(#container-shadow)"
                         })
                     }}
                 />
