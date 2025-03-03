@@ -72,9 +72,8 @@ const ColorPicker = () => {
     );
 };
 
-// SVG Slider that stretches from a circle instead of filling a background
+// SVG Slider with labels and values removed
 const SVGSlider: React.FC<{
-    label: string;
     value: number;
     min: number;
     max: number;
@@ -86,7 +85,6 @@ const SVGSlider: React.FC<{
     trackColor?: string;
     className?: string;
 }> = ({
-          label,
           value,
           min,
           max,
@@ -100,15 +98,15 @@ const SVGSlider: React.FC<{
       }) => {
     // Calculate the percentage filled based on current value
     const percentage = ((value - min) / (max - min)) * 100;
-    
+
     // Track if we're currently dragging to bypass animation
     const [isDragging, setIsDragging] = React.useState(false);
-    
+
     // Animation state for transitions
     const [animatedPercentage, setAnimatedPercentage] = React.useState(percentage);
     const [isAnimating, setIsAnimating] = React.useState(false);
     const animationRef = React.useRef<number | null>(null);
-    
+
     // For smooth transitions when value changes (but not during dragging)
     React.useEffect(() => {
         if (!isMixed && !isDragging) {
@@ -120,7 +118,7 @@ const SVGSlider: React.FC<{
     }, [percentage, isMixed, isDragging]);
 
     // Calculate the width of the slider based on animated percentage
-    const sliderWidth = Math.max(8, isDragging ? percentage : animatedPercentage);
+    const sliderWidth = Math.max(6, isDragging ? percentage : animatedPercentage);
 
     // Animation for mixed values
     React.useEffect(() => {
@@ -228,19 +226,10 @@ const SVGSlider: React.FC<{
 
     return (
         <div className={`mb-3 ${className}`}>
-            <div className="flex justify-between mb-1">
-                <span className="text-xs font-medium text-gray-500">
-                    {label}
-                </span>
-                <span className="text-xs font-medium text-gray-700">
-                    {isMixed ? '---' : `${value.toFixed(precision)}${unit}`}
-                </span>
-            </div>
-
             {/* Slider container with hidden range input */}
             <div
                 ref={sliderRef}
-                className="relative h-4 cursor-pointer"
+                className="relative h-3 cursor-pointer"
                 onMouseDown={handleSliderMouseDown}
                 style={{ touchAction: 'none' }}
             >
@@ -257,7 +246,7 @@ const SVGSlider: React.FC<{
                     style={{ cursor: 'pointer' }}
                 />
 
-                {/* SVG Slider with faster transitions */}
+                {/* SVG Slider with faster transitions - thinner version */}
                 <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
@@ -268,14 +257,14 @@ const SVGSlider: React.FC<{
                     <svg
                         width="100%"
                         height="100%"
-                        viewBox={`0 0 ${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07)} 8`}
+                        viewBox={`0 0 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 6`}
                         preserveAspectRatio="none"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
                         style={{ transition: isDragging ? 'none' : 'all 150ms ease-out' }}
                     >
                         <path
-                            d={`M${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07) - 4} 0H4C1.79086 0 0 1.79086 0 4C0 6.20914 1.79086 8 4 8H${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07) - 4}C${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07) - 4 + 2.20914} 8 ${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07)} 6.20914 ${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07)} 4C${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07)} 1.79086 ${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07) - 4 + 2.20914} 0 ${Math.max(8, (isDragging ? percentage : animatedPercentage) * 1.07) - 4} 0Z`}
+                            d={`M${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3} 0H3C1.34315 0 0 1.34315 0 3C0 4.65685 1.34315 6 3 6H${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3}C${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3 + 1.65685} 6 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 4.65685 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 3C${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 1.34315 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3 + 1.65685} 0 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3} 0Z`}
                             fill={trackColor}
                             fillOpacity="0.45"
                             style={{ transition: isDragging ? 'none' : 'all 150ms ease-out' }}
@@ -287,7 +276,7 @@ const SVGSlider: React.FC<{
     );
 };
 
-// Updated Unison Group component with SVG sliders
+// Updated Unison Group component with SVG sliders - labels removed
 const SVGUnisonGroup: React.FC<{
     context: ParameterContext;
     values: Record<string, { value: number; isMixed: boolean }>;
@@ -308,7 +297,6 @@ const SVGUnisonGroup: React.FC<{
             {unisonParams.map(param => (
                 <SVGSlider
                     key={param.id}
-                    label={param.name}
                     value={values[param.id]?.value ?? param.defaultValue}
                     min={param.min}
                     max={param.max}
@@ -480,10 +468,8 @@ const ParameterPanel: React.FC = () => {
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <div className="space-y-3">
+                                    {/* Remove the context header text */}
                                     <div className="flex justify-between items-center mb-1">
-                                        <div className="text-sm font-medium text-gray-700">
-                                            {context === 'note' ? 'Note Parameters' : 'Key Parameters'}
-                                        </div>
                                     </div>
 
                                     <div>
@@ -492,7 +478,6 @@ const ParameterPanel: React.FC = () => {
                                             {allParameters.map(param => (
                                                 <SVGSlider
                                                     key={param.id}
-                                                    label={param.name}
                                                     value={parameterValues[param.id]?.value ?? param.defaultValue}
                                                     min={param.min}
                                                     max={param.max}
