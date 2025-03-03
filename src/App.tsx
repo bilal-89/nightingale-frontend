@@ -17,12 +17,12 @@ const App = () => {
                         {/* Left content column containing Player and KeyboardWorkspace */}
                         <div className="flex-1 flex flex-col space-y-6">
                             {/* Player component - add max-width constraint */}
-                            <div className="max-w-[900px] mx-auto w-full">
+                            <div className="max-w-[890px] mx-auto w-full">
                                 <Player />
                             </div>
 
                             {/* KeyboardWorkspace component - constrained size */}
-                            <div>
+                            <div >
                                 <KeyboardWorkspace />
                             </div>
                         </div>

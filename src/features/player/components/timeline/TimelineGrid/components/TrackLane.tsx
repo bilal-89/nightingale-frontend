@@ -82,7 +82,7 @@ export const TrackLane: React.FC<TrackLaneProps> = ({
         }
 
         return recordingBuffer.map(note => {
-            const duration = note.isActive 
+            const duration = note.isActive
                 ? Date.now() - recordingStartTime - note.timestamp
                 : note.duration || 0;
 
@@ -110,12 +110,52 @@ export const TrackLane: React.FC<TrackLaneProps> = ({
         });
     };
 
-
     return (
-        <div className="relative h-24 border-b border-[#d1cdc4] bg-[#f5f2ed]">
-            {renderTrackNotes()}
-            {renderRecordingNotes()}
-        </div>
+        <svg
+            width="100%"
+            height={LAYOUT.TRACK_HEIGHT}
+            className="relative"
+            preserveAspectRatio="none"
+        >
+            <defs>
+                <linearGradient id={`trackLaneGradient-${track.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#F5F2ED" />
+                    <stop offset="100%" stopColor="#E8E4DF" />
+                </linearGradient>
+            </defs>
+
+            {/* Background rectangle with gradient */}
+            <rect
+                width="100%"
+                height={LAYOUT.TRACK_HEIGHT}
+                fill={`url(#trackLaneGradient-${track.id})`}
+            />
+
+            {/* Bottom border line */}
+            <line
+                x1="0"
+                y1={LAYOUT.TRACK_HEIGHT - 1}
+                x2="100%"
+                y2={LAYOUT.TRACK_HEIGHT - 1}
+                stroke="#d1cdc4"
+                strokeWidth="1"
+            />
+
+            {/* Foreign object to contain notes */}
+            <foreignObject
+                width="100%"
+                height={LAYOUT.TRACK_HEIGHT}
+                style={{ overflow: 'visible' }}
+            >
+                <div
+                    xmlns="http://www.w3.org/1999/xhtml"
+                    className="relative w-full h-full"
+                >
+                    {renderTrackNotes()}
+                    {renderRecordingNotes()}
+                </div>
+            </foreignObject>
+        </svg>
     );
 };
 

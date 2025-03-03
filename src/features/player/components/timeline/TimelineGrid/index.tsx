@@ -30,15 +30,15 @@ export const TimelineGrid: React.FC = () => {
     } = useTrackInteraction();
 
     // Loop state and handlers
-    const { 
-        loopEnabled, 
-        toggleLooping, 
-        loopStart, 
-        loopEnd, 
+    const {
+        loopEnabled,
+        toggleLooping,
+        loopStart,
+        loopEnd,
         updateLoopStart,
         updateLoopEnd
     } = usePlayback();
-    
+
     // State for managing loop point setting
     const [isSettingLoopPoints, setIsSettingLoopPoints] = useState(false);
     const [loopPointBeingSet, setLoopPointBeingSet] = useState<'start' | 'end' | null>(null);
@@ -53,7 +53,7 @@ export const TimelineGrid: React.FC = () => {
     const timelineSettings = useAppSelector(selectTimelineSettings);
     const selectedNote = useAppSelector(selectSelectedNote);
     const multiSelectedNotes = useAppSelector(selectMultiSelectedNotes);
-    
+
     // Get note IDs from selected notes for highlighting
     const selectedNoteId = selectedNote ? selectedNote.note.id : null;
     const multiSelectedNoteIds = multiSelectedNotes
@@ -91,27 +91,27 @@ export const TimelineGrid: React.FC = () => {
         // Prevent default selection behavior when setting loop points
         e.stopPropagation();
         e.preventDefault();
-        
+
         // Find the grid area element (the actual timeline part, not including headers)
         const gridArea = gridRef.current?.querySelector('.relative.flex-grow');
         if (!gridArea) return;
-        
+
         // Get accurate grid area position
         const rect = gridArea.getBoundingClientRect();
-        
+
         // Calculate exact click position relative to grid area
         const exactX = e.clientX - rect.left;
-        
+
         // Convert exact pixel position to time
         const timePosition = Math.round(exactX / timelineSettings.zoom);
-        
+
         console.log('Setting loop point:', {
             point: loopPointBeingSet,
             exactX,
             timePosition,
             zoom: timelineSettings.zoom
         });
-        
+
         if (loopPointBeingSet === 'start') {
             // Set start point and reset end point to default
             updateLoopStart(timePosition);
@@ -193,7 +193,7 @@ export const TimelineGrid: React.FC = () => {
         <div className="timeline-grid-container">
             <div
                 ref={gridRef}
-                className="w-full bg-white rounded-lg shadow-sm overflow-hidden relative"
+                className="w-full bg-[#f5f2ed] rounded-lg shadow-sm overflow-hidden relative"
                 onMouseDown={(e) => {
                     // If we're setting loop points, handle that; otherwise do selection
                     if (loopEnabled && isSettingLoopPoints) {

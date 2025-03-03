@@ -1,11 +1,8 @@
-// src/features/player/components/timeline/TimelineGrid/components/TrackHeaders.tsx
-
 import React from 'react';
 import { useAppDispatch } from '../../../../hooks';
 import { addTrack } from '../../../../store/player';
-// import { TrackHeaderProps } from '../types';
 import { cn } from '../../../../../../core/utils/styles.utils';
-import {Track} from "../../../../store/player";
+import { Track } from "../../../../store/player";
 
 interface TrackHeadersProps {
     tracks: Track[];
@@ -25,6 +22,20 @@ export const TrackHeaders: React.FC<TrackHeadersProps> = ({
                                                               onTrackMouseLeave
                                                           }) => {
     const dispatch = useAppDispatch();
+    const [isAddButtonPressed, setIsAddButtonPressed] = React.useState(false);
+
+    const handleAddTrackMouseDown = () => {
+        setIsAddButtonPressed(true);
+    };
+
+    const handleAddTrackMouseUp = () => {
+        setIsAddButtonPressed(false);
+        dispatch(addTrack());
+    };
+
+    const handleAddTrackMouseLeave = () => {
+        setIsAddButtonPressed(false);
+    };
 
     return (
         <div className="w-32 flex-shrink-0 border-r border-[#d1cdc4]">
@@ -68,18 +79,71 @@ export const TrackHeaders: React.FC<TrackHeadersProps> = ({
                 </button>
             ))}
 
-            {/* Add Track Button */}
-            <button
-                onClick={() => dispatch(addTrack())}
-                className={cn(
-                    "w-full h-12 px-3",
-                    "flex items-center justify-center",
-                    "text-sm font-medium text-gray-600",
-                    "shadow-[2px_2px_4px_#d1cdc4,_-2px_-2px_4px_#ffffff]"
-                )}
+            {/* Add Track Button as SVG */}
+            <div
+                className="w-full h-12 cursor-pointer relative"
+                onMouseDown={handleAddTrackMouseDown}
+                onMouseUp={handleAddTrackMouseUp}
+                onMouseLeave={handleAddTrackMouseLeave}
             >
-                + Add Track
-            </button>
+                <svg
+                    width="100%"
+                    height="48"
+                    viewBox="0 0 128 48"
+                    preserveAspectRatio="none"
+                    className="transition-all duration-100"
+                    style={{
+                        transform: isAddButtonPressed ? 'translateY(1px)' : 'translateY(0)',
+                    }}
+                >
+                    <defs>
+                        <linearGradient id="addTrackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#F5F2ED" />
+                            <stop offset="100%" stopColor="#E8E4DF" />
+                        </linearGradient>
+
+                        <filter id="addTrackShadow" x="-10%" y="-10%" width="120%" height="120%">
+                            <feDropShadow dx="2" dy="2" stdDeviation="1" floodColor="#d1cdc4" floodOpacity="0.4" />
+                            <feDropShadow dx="-2" dy="-2" stdDeviation="1" floodColor="#ffffff" floodOpacity="0.5" />
+                        </filter>
+
+                        <filter id="addTrackInnerShadow" x="-5%" y="-5%" width="110%" height="110%">
+                            <feOffset dx="1" dy="1" />
+                            <feGaussianBlur stdDeviation="1" result="offset-blur" />
+                            <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse" />
+                            <feFlood floodColor="#c8c4bb" floodOpacity="0.5" result="color" />
+                            <feComposite operator="in" in="color" in2="inverse" result="shadow" />
+                            <feComposite operator="over" in="shadow" in2="SourceGraphic" />
+                        </filter>
+                    </defs>
+
+                    {/* Button background */}
+                    <rect
+                        width="128"
+                        height="48"
+                        rx="4"
+                        fill="url(#addTrackGradient)"
+                        filter={isAddButtonPressed ? "url(#addTrackInnerShadow)" : "url(#addTrackShadow)"}
+                        stroke={isAddButtonPressed ? "#d1cdc4" : "#ffffff"}
+                        strokeOpacity="0.7"
+                        strokeWidth="1"
+                    />
+
+                    {/* Text content */}
+                    <foreignObject width="128" height="48">
+                        <div
+                            xmlns="http://www.w3.org/1999/xhtml"
+                            className="w-full h-full flex items-center justify-center"
+                        >
+                            <span className="text-sm font-medium text-gray-600">
+                                + Add Track
+                            </span>
+                        </div>
+                    </foreignObject>
+                </svg>
+            </div>
         </div>
     );
 };
+
+export default TrackHeaders;

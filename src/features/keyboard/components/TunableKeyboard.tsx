@@ -162,7 +162,7 @@ const TunableKeyboard: React.FC = () => {
             <div className="flex flex-row gap-6">
                 {/* Octave Controls */}
                 <div className="flex-none">
-                    <OctaveControls className="p-4" />
+                    <OctaveControls className="p-4"  />
                 </div>
 
                 {/* Main Keyboard Area */}

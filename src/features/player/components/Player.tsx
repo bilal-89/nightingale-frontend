@@ -6,7 +6,6 @@ import TimelineGrid from './timeline/TimelineGrid/index';
 import TransportControls from './transport/TransportControls';
 import { startRecording, stopRecording } from '../store/player';
 import { useLoopWatcher } from '../hooks/useLoopWatcher';
-import { getMutedColor } from '../../../shared/constants/colors';
 
 interface RecordButtonProps {
     isRecording: boolean;
