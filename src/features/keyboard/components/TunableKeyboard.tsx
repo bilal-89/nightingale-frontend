@@ -1,10 +1,11 @@
-// TunableKeyboard.tsx - Updated with Redux layout state
+// TunableKeyboard.tsx - Updated with Redux layout state and SVG waveform controls
 import React, { useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { useAppDispatch } from '../../../store/hooks';
 import { Card } from '../../../shared/components/ui/card';
 import { KeyboardLayout } from './KeyboardLayout';
 import { OctaveControls } from './OctaveControls';
+import WaveformControls from './WaveformControls'; // Import the new component
 import {
     noteOn,
     noteOff,
@@ -29,7 +30,6 @@ import { useTiming } from '../../player/hooks/useTiming.ts';
 import keyboardAudioManager from '../../audio/engine/synthesis/keyboardEngine';
 import {
     KEY_TO_NOTE,
-    WAVEFORM_LABELS,
     MODE_STYLES,
     FIGMA_CONTAINER_LAYOUT,
     ORIGINAL_CONTAINER_LAYOUT,
@@ -162,7 +162,7 @@ const TunableKeyboard: React.FC = () => {
             <div className="flex flex-row gap-6">
                 {/* Octave Controls */}
                 <div className="flex-none">
-                    <OctaveControls className="p-4"  />
+                    <OctaveControls className="p-4" size={1.8} />
                 </div>
 
                 {/* Main Keyboard Area */}
@@ -184,33 +184,10 @@ const TunableKeyboard: React.FC = () => {
 
                     {/* Waveform controls - only displayed in tunable mode */}
                     {currentMode === 'tunable' && (
-                        <div className="mt-4 flex justify-center">
-                            <div className="flex gap-2 p-2 rounded-lg bg-transparent">
-                                {Object.keys(WAVEFORM_LABELS).map(waveform => (
-                                    <button
-                                        key={waveform}
-                                        onClick={() => handleWaveformChange(waveform as Waveform)}
-                                        className={`
-                                            px-4 py-2 rounded-lg text-sm
-                                            transition-all duration-300 ease-in-out
-                                            ${currentWaveform === waveform
-                                            ? 'bg-[#e8e4dc] shadow-lg scale-105'
-                                            : 'bg-[#f0ece6] opacity-70 scale-100'
-                                        }
-                                            text-[#4a4543]
-                                            hover:opacity-90
-                                        `}
-                                        style={{
-                                            boxShadow: currentWaveform === waveform
-                                                ? '3px 3px 6px #d1cdc4, -3px -3px 6px #ffffff'
-                                                : 'none'
-                                        }}
-                                    >
-                                        {WAVEFORM_LABELS[waveform as Waveform]}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                        <WaveformControls
+                            currentWaveform={currentWaveform}
+                            onWaveformChange={handleWaveformChange}
+                        />
                     )}
                 </div>
             </div>

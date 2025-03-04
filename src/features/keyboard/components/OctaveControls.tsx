@@ -34,7 +34,7 @@ const modeStyles: Record<SynthMode, {
 
 export const OctaveControls: React.FC<OctaveControlsProps> = ({
     className = '',
-    size = 2.1
+    size = 1.5
 }) => {
     const dispatch = useAppDispatch();
     const currentMode = useSelector(selectMode);
@@ -78,11 +78,11 @@ export const OctaveControls: React.FC<OctaveControlsProps> = ({
     const currentStyle = modeStyles[currentMode];
 
     // Calculate SVG dimensions based on size prop
-    const svgWidth = 33 * size;
+    const svgWidth = 28 * size;
     const svgHeight = 46 * size;
 
     return (
-        <div className={`flex flex-col ${className}`} style={{ gap: '0.1rem', marginLeft: '0px' }}>
+        <div className={`flex flex-col ${className}`} style={{ gap: '0.0rem' }}> {/* Even smaller gap */}
             {/* Up/Increment Octave SVG Button */}
             <div
                 className="cursor-pointer transition-all duration-100 relative"
@@ -93,25 +93,25 @@ export const OctaveControls: React.FC<OctaveControlsProps> = ({
                 }}
                 onMouseLeave={() => setPressed(prev => ({ ...prev, up: false }))}
                 style={{
-                    transform: pressed.up ? 'scale(0.98) translateY(1px)' : 'scale(1)',
+                    transform: pressed.up ? 'scale(0.95) translateY(1px)' : 'scale(1)',
                     filter: pressed.up
-                        ? 'drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.05))'
-                        : 'drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.1))',
-                    marginLeft: '0px'
+                        ? 'drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.1))'
+                        : 'drop-shadow(2px 2px 3px rgba(0, 0, 0, 0.15))',
+                    marginLeft: '-19px', // This shifts the top button to the right
                 }}
             >
                 <svg
                     width={svgWidth}
                     height={svgHeight}
-                    viewBox="0 0 33 46"
+                    viewBox="0 0 28 46"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                 >
-                    <path d="M24.8208 10.1943L24.5204 10.8482C23.9316 12.13 24.1646 13.6396 25.1125 14.6842L26.6935 16.4265C27.6099 17.4363 27.8096 18.9062 27.1958 20.1238C26.328 21.8458 24.1718 22.4567 22.5283 21.4482C21.1089 20.5772 19.2614 20.9001 18.2231 22.2022L15.445 25.686C15.0502 26.1811 14.4536 26.4724 13.8204 26.4793C12.4001 26.4947 11.3716 25.1291 11.7787 23.7683L13.2419 18.877C13.7367 17.2229 13.0933 15.4396 11.6563 14.4824L10.3866 13.6367C8.98634 12.7041 8.78593 10.725 9.97079 9.53058C10.6943 8.80128 11.7717 8.55123 12.7424 8.88737L15.803 9.94717C17.3139 10.4704 18.9814 9.82267 19.743 8.41679L20.0674 7.81811C20.824 6.42141 22.6286 5.99558 23.9298 6.90666C24.982 7.6434 25.357 9.02709 24.8208 10.1943Z" fill="#f5f2ed"/>
+                    <path d="M16.3291 4.27749L16.3388 5.80102C16.3516 7.82156 18.0542 9.41931 20.0715 9.3039L20.8556 9.25903C22.3444 9.17386 23.6265 10.2981 23.7366 11.7852C23.8596 13.4464 22.4804 14.8301 20.8189 14.7125L20.0248 14.6563C18.0453 14.5163 16.3624 16.0844 16.3624 18.0688L16.3624 20.4108C16.3624 21.9072 15.0996 23.0932 13.6061 22.9994C12.2394 22.9136 11.1749 21.7801 11.1749 20.4108L11.1749 18.0377C11.1749 16.0271 9.54497 14.3972 7.53441 14.3972L6.34287 14.3972C5.00163 14.3972 3.91172 13.3149 3.90236 11.9737C3.8929 10.6192 4.98832 9.5161 6.34287 9.5161L7.5188 9.5161C9.51163 9.5161 11.1271 7.90059 11.1271 5.90777L11.1271 4.29401C11.1271 2.7858 12.4058 1.59377 13.9103 1.69937C15.2664 1.79456 16.3205 2.91804 16.3291 4.27749Z" fill="#EEE3D6"/>
                 </svg>
             </div>
 
-            {/* Down/Decrement Octave SVG Button */}
+            {/* Down/Decrement Octave SVG Button - moved up by 10px */}
             <div
                 className="cursor-pointer transition-all duration-100 relative"
                 onMouseDown={() => setPressed(prev => ({ ...prev, down: true }))}
@@ -121,22 +121,22 @@ export const OctaveControls: React.FC<OctaveControlsProps> = ({
                 }}
                 onMouseLeave={() => setPressed(prev => ({ ...prev, down: false }))}
                 style={{
-                    transform: pressed.down ? 'scale(0.98) translateY(1px)' : 'scale(1)',
+                    transform: pressed.down ? 'scale(0.95) translateY(1px)' : 'scale(1)',
                     filter: pressed.down
-                        ? 'drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.05))'
-                        : 'drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.1))',
-                    marginLeft: '0px',
-                    marginTop: '-81px'
+                        ? 'drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.1))'
+                        : 'drop-shadow(2px 2px 3px rgba(0, 0, 0, 0.15))',
+                    marginLeft: '-19px', // This shifts the bottom button to the right
+                    marginTop: '-70px' // Bring buttons even closer together
                 }}
             >
                 <svg
                     width={svgWidth}
                     height={svgHeight}
-                    viewBox="0 0 33 46"
+                    viewBox="0 0 28 46"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                 >
-                    <path d="M6.31898 31.2731L13.9789 35.9191C15.3085 36.7256 15.8946 38.3508 15.3858 39.8203C14.6779 41.8649 12.2269 42.6865 10.4298 41.4815L2.98878 36.4925C1.84788 35.7275 1.34731 34.3024 1.75925 32.992C2.36171 31.0756 4.60134 30.2313 6.31898 31.2731Z" fill="#f5f2ed"/>
+                    <path d="M8.1282 28.5935L20.5312 28.9131C22.4072 28.9615 23.9029 30.4962 23.9029 32.3728C23.9029 34.3155 22.3042 35.8776 20.3621 35.8327L7.95829 35.5461C6.09256 35.503 4.59352 33.9949 4.56175 32.1289C4.52808 30.1503 6.15 28.5425 8.1282 28.5935Z" fill="#EEE3D6"/>
                 </svg>
             </div>
         </div>

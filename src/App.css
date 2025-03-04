@@ -1,0 +1,9 @@
+/* Add to App.css */
+.logo-container {
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.logo-container:hover {
+  opacity: 1;
+} 
