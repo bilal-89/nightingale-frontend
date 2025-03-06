@@ -4,7 +4,12 @@ import React, { useState, useCallback } from 'react';
 import {
     selectIsPanelVisible,
     togglePanel,
-    setParameterContext
+    setParameterContext,
+    selectParameterContext,
+    setGlobalWaveform,
+    selectGlobalWaveform,
+    selectSelectedKey,
+    setKeyWaveform
 } from '../../keyboard/store/slices/keyboard.slice';
 import { useParameterValues } from '../hooks/useParameterValues';
 import { parameters } from '../constants/parameters';
@@ -13,10 +18,11 @@ import { NoteColor } from '../../../shared/constants/colors.ts';
 import { ColorStrip } from '../../../shared/components/ui/ColorStrip';
 import { setTrackSettings } from '../../player/store/player';
 import { getMutedColor } from '../../../shared/constants/colors';
-
-
+import WaveformControls from '../../keyboard/components/WaveformControls';
+import { useAppDispatch, useAppSelector } from "../../player/hooks";
+import { selectSelectedNote } from '../../player/store/player';
+import { useParameters } from '../../player/hooks/useParameters';
 import {toggleKeyboardLayout} from '../../keyboard/store/slices/keyboard.slice';
-import {useAppDispatch, useAppSelector} from "../../player/hooks";
 import {Keyboard} from "lucide-react";
 
 // Simple Keyboard Layout Toggle Component
@@ -318,7 +324,11 @@ const ParameterPanel: React.FC = () => {
     const currentTrack = useAppSelector(state => state.player.currentTrack);
     const tracks = useAppSelector(state => state.player.tracks);
     const currentTrackColor = tracks[currentTrack]?.color;
-    const reduxParameterContext = useAppSelector(state => state.keyboard.parameterContext);
+    const reduxParameterContext = useAppSelector(selectParameterContext);
+    const globalWaveform = useAppSelector(selectGlobalWaveform);
+    const selectedKey = useAppSelector(selectSelectedKey);
+    const selectedNote = useAppSelector(selectSelectedNote);
+    const { handleParameterChange } = useParameters();
 
     const [isPressed, setIsPressed] = useState(false);
     const [context, setContext] = useState<ParameterContext>('keyboard');
@@ -330,6 +340,42 @@ const ParameterPanel: React.FC = () => {
     // Define the SVG path for the container shape - updated to match PARAMS (3).svg
     const containerPath = "M0 78.813V31C0 13.8792 13.8792 0 31 0H58.6091H174.829H202.713C219.834 0 233.713 13.8792 233.713 31V78.813V215.009V441.004V666.999V803.195L234.539 859.546C234.793 876.842 220.841 891 203.542 891H176.591H65.3636H31C13.8792 891 0 877.121 0 860V803.195V666.999V441.004V215.009V78.813Z";
 
+    // Handle waveform changes based on context
+    const handleWaveformChange = useCallback((waveform) => {
+        if (context === 'keyboard') {
+            if (selectedKey !== null) {
+                // Set waveform for specific key when a key is selected
+                dispatch(setKeyWaveform({ keyNumber: selectedKey, waveform }));
+            } else {
+                // Set global waveform when no specific key is selected
+                dispatch(setGlobalWaveform(waveform));
+            }
+        } else if (context === 'note' && selectedNote) {
+            // For note context, update the selected note's waveform
+            handleParameterChange(
+                selectedNote.trackId,
+                selectedNote.note.id,
+                'waveform',
+                waveform
+            );
+        }
+    }, [context, dispatch, selectedKey, selectedNote, handleParameterChange]);
+
+    // Get current waveform based on context
+    const getCurrentWaveform = useCallback(() => {
+        if (context === 'keyboard') {
+            // For keyboard context, get the selected key's waveform or global waveform
+            const keyWaveform = selectedKey !== null 
+                ? parameterValues['waveform']?.value 
+                : null;
+            return keyWaveform || globalWaveform;
+        } else if (context === 'note' && selectedNote) {
+            // For note context, get the note's waveform
+            return selectedNote.note.synthesis?.waveform || 'sine';
+        }
+        return 'sine'; // Default fallback
+    }, [context, selectedKey, selectedNote, globalWaveform, parameterValues]);
+
     // Combined background handler for mouseDown
     const handleBackgroundMouseDown = useCallback((e: React.MouseEvent) => {
         setIsPressed(true);
@@ -339,17 +385,11 @@ const ParameterPanel: React.FC = () => {
         }
     }, [dispatch, isPanelVisible]);
 
-    // Combined background handler for mouseUp
+    // Combined background handler for mouseUp - no longer changes context
     const handleBackgroundMouseUp = useCallback(() => {
-        // Only change context if we're not interacting with a control
-        if (isPressed && !clickedOnControl) {
-            const newContext = context === 'keyboard' ? 'note' : 'keyboard';
-            setContext(newContext);
-            dispatch(setParameterContext(newContext));
-        }
         setIsPressed(false);
         setClickedOnControl(false);
-    }, [isPressed, clickedOnControl, context, dispatch]);
+    }, []);
 
     // Handler for mouseDown on control elements
     const handleControlMouseDown = useCallback((e: React.MouseEvent) => {
@@ -372,6 +412,9 @@ const ParameterPanel: React.FC = () => {
 
     // Get parameters by group for the current context
     const allParameters = parameters.filter(p => p.contexts.includes(context) && p.group !== 'unison');
+
+    // Get context-specific title
+    const contextTitle = context === 'keyboard' ? 'Keyboard Parameters' : 'Note Parameters';
 
     return (
         <div className="w-full max-w-md relative">
@@ -468,46 +511,56 @@ const ParameterPanel: React.FC = () => {
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <div className="space-y-3">
-                                    {/* Remove the context header text */}
-                                    <div className="flex justify-between items-center mb-1">
-                                    </div>
-
-                                    <div>
-                                        {/* Control elements with SVG sliders */}
-                                        <div onMouseDown={handleControlMouseDown}>
-                                            {allParameters.map(param => (
-                                                <SVGSlider
-                                                    key={param.id}
-                                                    value={parameterValues[param.id]?.value ?? param.defaultValue}
-                                                    min={param.min}
-                                                    max={param.max}
-                                                    step={param.step}
-                                                    unit={param.unit || ''}
-                                                    precision={param.precision || 0}
-                                                    isMixed={parameterValues[param.id]?.isMixed}
-                                                    onChange={(value) => handleParameterUpdate(param.id, value)}
-                                                    trackColor={currentTrackColor}
-                                                />
-                                            ))}
+                                    {/* Parameter Groups */}
+                                    <div className="space-y-4" onMouseDown={handleControlMouseDown}>
+                                        {/* Add Waveform Controls here */}
+                                        <div className="mb-4" onMouseDown={handleControlMouseDown}>
+                                            {/* Waveform Controls are now handled directly in TunableKeyboard component */}
+                                            {/* 
+                                            <WaveformControls
+                                                currentWaveform={getCurrentWaveform()}
+                                                onWaveformChange={handleWaveformChange}
+                                            />
+                                            */}
                                         </div>
 
-                                        {/* Add Unison Controls with SVG sliders - reduced margin */}
-                                        <SVGUnisonGroup
-                                            context={context}
-                                            values={parameterValues}
-                                            onParameterChange={handleParameterUpdate}
-                                            currentTrackColor={currentTrackColor}
-                                            onMouseDown={handleControlMouseDown}
-                                            className="mt-0"
-                                        />
+                                        <div>
+                                            {/* Control elements with SVG sliders */}
+                                            <div onMouseDown={handleControlMouseDown}>
+                                                {allParameters.map(param => (
+                                                    <SVGSlider
+                                                        key={param.id}
+                                                        value={parameterValues[param.id]?.value ?? param.defaultValue}
+                                                        min={param.min}
+                                                        max={param.max}
+                                                        step={param.step}
+                                                        unit={param.unit || ''}
+                                                        precision={param.precision || 0}
+                                                        isMixed={parameterValues[param.id]?.isMixed}
+                                                        onChange={(value) => handleParameterUpdate(param.id, value)}
+                                                        trackColor={currentTrackColor}
+                                                    />
+                                                ))}
+                                            </div>
 
-                                        {/* Layout and Color Controls with reduced margin */}
-                                        <div
-                                            className="mt-4 pt-3 border-t border-gray-200"
-                                            onMouseDown={handleControlMouseDown}
-                                        >
-                                            <KeyboardLayoutToggle />
-                                            <ColorPicker />
+                                            {/* Add Unison Controls with SVG sliders - reduced margin */}
+                                            <SVGUnisonGroup
+                                                context={context}
+                                                values={parameterValues}
+                                                onParameterChange={handleParameterUpdate}
+                                                currentTrackColor={currentTrackColor}
+                                                onMouseDown={handleControlMouseDown}
+                                                className="mt-0"
+                                            />
+
+                                            {/* Layout and Color Controls with reduced margin */}
+                                            <div
+                                                className="mt-4 pt-3 border-t border-gray-200"
+                                                onMouseDown={handleControlMouseDown}
+                                            >
+                                                <KeyboardLayoutToggle />
+                                                <ColorPicker />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

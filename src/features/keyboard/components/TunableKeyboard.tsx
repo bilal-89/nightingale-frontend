@@ -21,8 +21,10 @@ import {
     selectGlobalWaveform,
     selectCurrentOctave,
     selectUsingFigmaLayout,
+    selectParameterContext,
     SynthMode,
-    Waveform
+    Waveform,
+    setParameterContext
 } from '../store/slices/keyboard.slice';
 import { initializeAudioContext } from '../../audio/store/actions.ts';
 import { RootState } from '../../../store';
@@ -50,6 +52,7 @@ const TunableKeyboard: React.FC = () => {
     const currentTrackColor = tracks[currentTrack]?.color;
     const currentOctave = useSelector(selectCurrentOctave);
     const usingFigmaLayout = useSelector(selectUsingFigmaLayout);
+    const parameterContext = useSelector(selectParameterContext);
 
     // Derive keyboard layout data based on Redux state
     const containerLayout = usingFigmaLayout ? FIGMA_CONTAINER_LAYOUT : ORIGINAL_CONTAINER_LAYOUT;
@@ -66,7 +69,17 @@ const TunableKeyboard: React.FC = () => {
     const handleNoteOn = useCallback((note: number) => {
         initializeAudio();
         dispatch(noteOn(note));
-    }, [dispatch, initializeAudio]);
+        
+        // Automatically switch to keyboard mode and show parameter panel
+        if (parameterContext !== 'keyboard') {
+            dispatch(setParameterContext('keyboard'));
+        }
+        
+        // Show parameter panel if not already visible
+        if (!isPanelVisible) {
+            dispatch(togglePanel());
+        }
+    }, [dispatch, initializeAudio, parameterContext, isPanelVisible]);
 
     const handleNoteOff = useCallback((note: number) => {
         dispatch(noteOff(note));
@@ -182,7 +195,7 @@ const TunableKeyboard: React.FC = () => {
                         keyData={keyData}
                     />
 
-                    {/* Waveform controls - only displayed in tunable mode */}
+                    {/* Waveform controls - only displayed in tunable mode (always visible) */}
                     {currentMode === 'tunable' && (
                         <WaveformControls
                             currentWaveform={currentWaveform}

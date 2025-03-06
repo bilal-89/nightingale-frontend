@@ -3,7 +3,7 @@
 import { useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { selectSelectedNote, selectMultiSelectedNotes } from '../../player/store/player';
-import { setKeyParameter } from '../../keyboard/store/slices/keyboard.slice';
+import { setKeyParameter, selectGlobalWaveform } from '../../keyboard/store/slices/keyboard.slice';
 import { useParameters } from '../../player/hooks/useParameters';
 import { parameters } from '../constants/parameters';
 import {
@@ -33,6 +33,7 @@ export const useParameterValues = (activeContext: ParameterContext) => {
     const selectedNote = useAppSelector(selectSelectedNote) as SelectedNoteState | null;
     const multiSelectedNotes = useAppSelector(selectMultiSelectedNotes) as SelectedNoteState[];
     const keyParameters = useAppSelector(state => state.keyboard.keyParameters) as Record<number, KeyParameterState>;
+    const globalWaveform = useAppSelector(selectGlobalWaveform);
     const { handleParameterChange } = useParameters();
 
     const getNoteParameterValue = useCallback((note: NoteEvent, param: typeof parameters[0]): number | undefined => {
@@ -101,11 +102,24 @@ export const useParameterValues = (activeContext: ParameterContext) => {
                             isMixed: false
                         };
                     }
+
+                    // Add waveform if available for each note
+                    if (multiSelectedNotes[0]?.note?.synthesis?.waveform) {
+                        const waveforms = multiSelectedNotes.map(n => n.note.synthesis?.waveform);
+                        const firstWaveform = waveforms[0];
+                        const isMixedWaveform = waveforms.some(w => w !== firstWaveform);
+                        
+                        acc['waveform'] = {
+                            value: firstWaveform || 'sine',
+                            isMixed: isMixedWaveform
+                        };
+                    }
+                    
                     return acc;
                 }, {} as Record<string, ParameterState>);
             } else if (selectedNote) {
                 // Handle single selected note
-                return parameters.reduce((acc, param) => {
+                const values = parameters.reduce((acc, param) => {
                     const value = getNoteParameterValue(selectedNote.note, param) ?? param.defaultValue;
                     acc[param.id] = {
                         value,
@@ -113,10 +127,20 @@ export const useParameterValues = (activeContext: ParameterContext) => {
                     };
                     return acc;
                 }, {} as Record<string, ParameterState>);
+                
+                // Add waveform if available
+                if (selectedNote.note.synthesis?.waveform) {
+                    values['waveform'] = {
+                        value: selectedNote.note.synthesis.waveform,
+                        isMixed: false
+                    };
+                }
+                
+                return values;
             }
         } else if (activeContext === 'keyboard' && selectedKey !== null) {
             // Handle keyboard context
-            return parameters.reduce((values, param) => {
+            const values = parameters.reduce((values, param) => {
                 if (isValidParameterId(param.id)) {
                     const paramValue = keyParameters[selectedKey]?.[param.id];
                     values[param.id] = {
@@ -126,10 +150,18 @@ export const useParameterValues = (activeContext: ParameterContext) => {
                 }
                 return values;
             }, {} as Record<string, ParameterState>);
+            
+            // Add waveform for the selected key
+            values['waveform'] = {
+                value: keyParameters[selectedKey]?.waveform || globalWaveform,
+                isMixed: false
+            };
+            
+            return values;
         }
 
         return {};
-    }, [activeContext, selectedKey, selectedNote, multiSelectedNotes, keyParameters, getNoteParameterValue]);
+    }, [activeContext, selectedKey, selectedNote, multiSelectedNotes, keyParameters, getNoteParameterValue, globalWaveform]);
 
     const handleParameterUpdate = useCallback((parameterId: string, value: number) => {
         if (activeContext === 'keyboard' && selectedKey !== null) {

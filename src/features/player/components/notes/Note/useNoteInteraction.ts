@@ -4,6 +4,12 @@ import { useCallback, useState, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../hooks';
 import { selectNote, moveNote } from '../../../store/player';
 import { NoteEvent } from '../../../types';
+import { 
+    setParameterContext, 
+    togglePanel,
+    selectIsPanelVisible,
+    selectParameterContext 
+} from '../../../../keyboard/store/slices/keyboard.slice';
 
 export const useNoteInteraction = (note: NoteEvent, trackId: string) => {
     const dispatch = useAppDispatch();
@@ -12,6 +18,8 @@ export const useNoteInteraction = (note: NoteEvent, trackId: string) => {
     const timelineZoom = useAppSelector(state => state.player.timelineZoom);
     const multiSelectedNoteIds = useAppSelector(state => state.player.multiSelectedNoteIds);
     const allNotes = useAppSelector(state => state.player.tracks.find(t => t.id === trackId)?.notes || []);
+    const isPanelVisible = useAppSelector(selectIsPanelVisible);
+    const parameterContext = useAppSelector(selectParameterContext);
 
     // Handle mouse down to start dragging
     const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -73,12 +81,24 @@ export const useNoteInteraction = (note: NoteEvent, trackId: string) => {
 
     const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         e.stopPropagation();
+        
+        // Select the note in the timeline
         dispatch(selectNote({
             trackId: String(trackId),
             noteId: note.id,
             isMultiSelect: e.shiftKey
         }));
-    }, [dispatch, trackId, note.id]);
+        
+        // Automatically switch to note mode
+        if (parameterContext !== 'note') {
+            dispatch(setParameterContext('note'));
+        }
+        
+        // Show parameter panel if not already visible
+        if (!isPanelVisible) {
+            dispatch(togglePanel());
+        }
+    }, [dispatch, trackId, note.id, parameterContext, isPanelVisible]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
