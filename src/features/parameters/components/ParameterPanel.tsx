@@ -69,7 +69,7 @@ const ColorPicker = () => {
 
     return (
         <div className="mt-4">
-            <div className="text-xs font-medium text-gray-500 mb-2">Track Color</div>
+            {/*<div className="text-xs font-medium text-gray-500 mb-2">Track Color</div>*/}
             <ColorStrip
                 selectedColor={displayColor}
                 onColorSelect={handleColorSelect}

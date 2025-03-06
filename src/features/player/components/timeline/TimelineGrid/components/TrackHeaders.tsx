@@ -41,7 +41,7 @@ export const TrackHeaders: React.FC<TrackHeadersProps> = ({
         <div className="w-32 flex-shrink-0 border-r border-[#d1cdc4]">
             {/* Time header */}
             <div className="h-8 border-b border-[#d1cdc4] bg-[#e8e4dc] px-2 py-1 text-sm font-medium">
-                Time
+                {/*Time*/}
             </div>
 
             {/* Track buttons */}
@@ -74,7 +74,7 @@ export const TrackHeaders: React.FC<TrackHeadersProps> = ({
                         "text-sm font-medium",
                         currentTrackIndex === index ? "text-gray-900" : "text-gray-600"
                     )}>
-                        {track.name}
+                        {/*{track.name}*/}
                     </span>
                 </button>
             ))}
@@ -136,7 +136,7 @@ export const TrackHeaders: React.FC<TrackHeadersProps> = ({
                             className="w-full h-full flex items-center justify-center"
                         >
                             <span className="text-sm font-medium text-gray-600">
-                                + Add Track
+                                {/*+ Add Track*/}
                             </span>
                         </div>
                     </foreignObject>
