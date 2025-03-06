@@ -1,11 +1,23 @@
 import React from 'react';
-import { Play, Square, SkipBack, Repeat } from 'lucide-react';
 import { usePlayback } from '../../hooks';
 import { formatTime } from '../../utils/time.utils';
 import { QuantizeButton } from './QuantizeButton';
 import { AutoTuneButton } from './AutoTuneButton';
+import { PlayPauseButton } from './PlayPauseButton';
+import { LoopButton } from './LoopButton';
+import { SkipBackButton } from './SkipBackButton';
+import { RecordButton } from './RecordButton';
 
-const TransportControls: React.FC = () => {
+interface TransportControlsProps {
+    // Add these props to accept recording state and handler from parent
+    isRecording?: boolean;
+    onRecordToggle?: () => void;
+}
+
+const TransportControls: React.FC<TransportControlsProps> = ({
+                                                                 isRecording = false,
+                                                                 onRecordToggle
+                                                             }) => {
     // Get our playback controls and state
     const {
         isPlaying,
@@ -38,50 +50,29 @@ const TransportControls: React.FC = () => {
     return (
         <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
+                {/* Record button - using props from parent */}
+                {onRecordToggle && (
+                    <RecordButton
+                        isRecording={isRecording}
+                        onClick={onRecordToggle}
+                    />
+                )}
                 {/* Rewind button */}
-                <button
-                    className="p-2 rounded-lg transition-all duration-300 bg-[#e8e4dc]
-                            hover:bg-[#dcd8d0]"
-                    onClick={handleRewind}
-                    style={{
-                        boxShadow: '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'
-                    }}
-                >
-                    <SkipBack className="w-5 h-5" />
-                </button>
+                <SkipBackButton onClick={handleRewind} />
 
                 {/* Play/Stop button */}
-                <button
-                    className={`p-2 rounded-lg transition-all duration-300 bg-[#e8e4dc]
-                        ${isPlaying ? 'hover:bg-[#e8e4dc]' : 'hover:bg-[#dcd8d0]'}`}
+                <PlayPauseButton
+                    isPlaying={isPlaying}
                     onClick={handlePlayPause}
-                    style={{
-                        boxShadow: isPlaying
-                            ? 'inset 2px 2px 4px #d1cdc4, inset -2px -2px 4px #ffffff'
-                            : '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'
-                    }}
-                >
-                    {isPlaying ? (
-                        <Square className="w-5 h-5" />
-                    ) : (
-                        <Play className="w-5 h-5" />
-                    )}
-                </button>
-                
+                />
+
                 {/* Loop button */}
-                <button
-                    className={`p-2 rounded-lg transition-all duration-300 
-                        ${loopEnabled ? 'bg-blue-100 text-blue-600' : 'bg-[#e8e4dc] hover:bg-[#dcd8d0]'}`}
+                <LoopButton
+                    loopEnabled={loopEnabled}
                     onClick={toggleLooping}
-                    title={loopEnabled ? `Loop: ${formatTime(loopStart)} - ${formatTime(loopEnd)}` : 'Enable Loop'}
-                    style={{
-                        boxShadow: loopEnabled
-                            ? 'inset 2px 2px 4px rgba(0,0,0,0.1), inset -2px -2px 4px rgba(255,255,255,0.5)'
-                            : '2px 2px 4px #d1cdc4, -2px -2px 4px #ffffff'
-                    }}
-                >
-                    <Repeat className="w-5 h-5" />
-                </button>
+                    loopStart={loopStart}
+                    loopEnd={loopEnd}
+                />
 
                 {/* Quantize and AutoTune buttons */}
                 <QuantizeButton />
@@ -95,7 +86,7 @@ const TransportControls: React.FC = () => {
 
             {/* Tempo control */}
             <div className="flex items-center space-x-2">
-                <label className="text-sm">BPM:</label>
+                {/*<label className="text-sm">BPM:</label>*/}
                 <input
                     type="number"
                     value={tempo}
