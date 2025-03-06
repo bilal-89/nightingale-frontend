@@ -327,15 +327,22 @@ export class PlaybackService {
 
         try {
             const previousMode = keyboardAudioManager.getCurrentMode();
+            
+            // DEBUG: Log keyboard tuning before scheduling
+            const keyboardTuningBefore = keyboardAudioManager.getKeyTuning(note.note);
+            console.log('DEBUG - Before play:', {
+                noteId: note.id,
+                noteTuning: note.tuning,
+                keyboardTuning: keyboardTuningBefore,
+                action: 'scheduling note',
+            });
 
             // Configure synthesis for this note
             if (note.synthesis.mode === 'tunable') {
                 keyboardAudioManager.setMode('tunable');
 
-                if (note.tuning !== undefined) {
-                    keyboardAudioManager.setNoteTuning(note.note, note.tuning);
-                }
-
+                // We don't set keyboard tuning when playing back notes anymore
+                
                 if (note.synthesis.waveform) {
                     keyboardAudioManager.setNoteWaveform(note.note, note.synthesis.waveform);
                 }
@@ -353,7 +360,8 @@ export class PlaybackService {
                 audioContextTime: this.state.audioContext.currentTime
             });
 
-            // Schedule the note to play
+            // Schedule the note to play - don't include tuning in synthesis object as it causes type errors
+            // Instead, pass it directly to playExactNote which handles it correctly
             keyboardAudioManager.playExactNote({
                 ...note,
                 timestamp: absoluteStartTime,
@@ -370,6 +378,17 @@ export class PlaybackService {
                 }
             }, absoluteStartTime);
 
+            // DEBUG: Log keyboard tuning after scheduling to confirm it's unchanged
+            const keyboardTuningAfter = keyboardAudioManager.getKeyTuning(note.note);
+            console.log('DEBUG - After play:', {
+                noteId: note.id,
+                noteTuning: note.tuning,
+                keyboardTuningBefore: keyboardTuningBefore,
+                keyboardTuningAfter: keyboardTuningAfter,
+                tuningChanged: keyboardTuningBefore !== keyboardTuningAfter,
+                action: 'played note'
+            });
+
             // Remember that we scheduled this note
             this.scheduledNotes.push({
                 id: scheduleId,
@@ -380,9 +399,6 @@ export class PlaybackService {
 
             // Restore previous synthesis state
             keyboardAudioManager.setMode(previousMode);
-            if (note.synthesis.mode === 'tunable' && note.tuning !== undefined) {
-                keyboardAudioManager.setNoteTuning(note.note, 0);
-            }
 
         } catch (error) {
             console.error('Note scheduling failed:', {

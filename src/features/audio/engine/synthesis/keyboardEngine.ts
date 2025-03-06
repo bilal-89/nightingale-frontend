@@ -302,7 +302,11 @@ class KeyboardAudioManager {
     private getFrequency(note: number, tuning?: number): number {
         const baseMidiNote = note - 69;
         const baseFrequency = 440 * Math.pow(2, baseMidiNote / 12);
+        
+        // If an explicit tuning value is provided (like from note playback),
+        // use that instead of the stored keyboard tuning
         const actualTuning = (tuning !== undefined ? tuning : this.tunings.get(note)) || 0;
+        
         return actualTuning === 0 ? baseFrequency : baseFrequency * Math.pow(2, actualTuning / 1200);
     }
 
@@ -937,6 +941,11 @@ class KeyboardAudioManager {
             // For older browsers using PannerNode
             (unisonVoice.panNode as PannerNode).setPosition(panPosition, 0, 0.1);
         }
+    }
+
+    // Public method to get the current tuning of a key (for debugging)
+    getKeyTuning(note: number): number {
+        return this.tunings.get(note) || 0;
     }
 }
 

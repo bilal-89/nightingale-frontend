@@ -66,7 +66,8 @@ export const useTiming = () => {
 
         const currentAudioTime = audioContext.currentTime;
 
-        tracks.forEach(track => {
+        // Fix TypeScript error by adding type to track parameter
+        tracks.forEach((track: any) => {
             track.notes.forEach((note: NoteEvent) => {
                 const noteId = `${note.id}-${note.timestamp}`;
                 const noteTimeInSeconds = note.timestamp / 1000;
@@ -79,6 +80,15 @@ export const useTiming = () => {
 
                     // Resolve tuning value with proper fallbacks
                     const tuningValue = note.tuning ?? keyboardTuningRef.current.get(note.note) ?? 0;
+
+                    // Add debugging
+                    const keyboardTuningBefore = keyboardAudioManager.getKeyTuning(note.note);
+                    console.log('DEBUG - Before scheduling:', {
+                        noteId: note.id,
+                        noteTuning: tuningValue,
+                        keyboardTuning: keyboardTuningBefore,
+                        action: 'preparing to schedule'
+                    });
 
                     // Prepare complete synthesis settings
                     const synthSettings = {
@@ -103,9 +113,6 @@ export const useTiming = () => {
                         tempo: tempo  // Log current tempo for debugging
                     });
 
-                    // Set up note tuning before playback
-                    keyboardAudioManager.setNoteParameter(note.note, 'tuning', tuningValue);
-
                     // Schedule the note with tempo-adjusted timing
                     keyboardAudioManager.playExactNote({
                         ...note,
@@ -114,14 +121,21 @@ export const useTiming = () => {
                         synthesis: synthSettings
                     }, scheduleTime);
 
-                    // Restore original keyboard tuning after scheduling
-                    restoreTuningState(note.note);
+                    // Add debug to confirm keyboard tuning is unchanged after playback
+                    const keyboardTuningAfter = keyboardAudioManager.getKeyTuning(note.note);
+                    console.log('DEBUG - After scheduling:', {
+                        noteId: note.id,
+                        keyboardTuningBefore,
+                        keyboardTuningAfter,
+                        tuningChanged: keyboardTuningBefore !== keyboardTuningAfter,
+                        action: 'scheduled note'
+                    });
 
                     scheduledNotesRef.current.add(noteId);
                 }
             });
         });
-    }, [isPlaying, tracks, restoreTuningState, tempo]);  // Added tempo to dependencies
+    }, [isPlaying, tracks, tempo]);  // Added tempo to dependencies
 
     // Initialize timing service
     useEffect(() => {
@@ -165,10 +179,6 @@ export const useTiming = () => {
                     if (timingServiceRef.current) {
                         timingServiceRef.current.stop();
                     }
-                    // Restore all keyboard tuning states when stopping
-                    Array.from(keyboardTuningRef.current.entries()).forEach(
-                        ([note, tuning]) => keyboardAudioManager.setNoteParameter(note, 'tuning', tuning)
-                    );
                     scheduledNotesRef.current.clear();
                 }
             } catch (error) {
