@@ -337,8 +337,8 @@ const ParameterPanel: React.FC = () => {
     // Track whether the click happened on a control element
     const [clickedOnControl, setClickedOnControl] = useState(false);
 
-    // Define the SVG path for the container shape - updated to match PARAMS (3).svg
-    const containerPath = "M0 78.813V31C0 13.8792 13.8792 0 31 0H58.6091H174.829H202.713C219.834 0 233.713 13.8792 233.713 31V78.813V215.009V441.004V666.999V803.195L234.539 859.546C234.793 876.842 220.841 891 203.542 891H176.591H65.3636H31C13.8792 891 0 877.121 0 860V803.195V666.999V441.004V215.009V78.813Z";
+    // Define the SVG path for the container shape - updated to match new design
+    const containerPath = "M0 39.8046V31C0 13.8792 13.8792 0 31 0H58.6091H174.829H202.713C219.834 0 233.713 13.8792 233.713 31V39.8046V108.59V222.729V336.868V405.654L234.074 418.101C234.581 435.567 220.56 450 203.087 450H176.591H65.3636H31C13.8792 450 0 436.121 0 419V405.654V336.868V222.729V108.59V39.8046Z";
 
     // Handle waveform changes based on context
     const handleWaveformChange = useCallback((waveform) => {
@@ -420,7 +420,7 @@ const ParameterPanel: React.FC = () => {
         <div className="w-full max-w-md relative">
             {/* SVG container with mask and visual styling - updated dimensions */}
             <svg
-                viewBox="0 0 235 891"
+                viewBox="0 0 235 450"
                 className="w-full h-auto"
                 style={{ maxWidth: '100%' }}
             >
@@ -433,7 +433,7 @@ const ParameterPanel: React.FC = () => {
                         />
                     </mask>
 
-                    <linearGradient id="keyGradient" x1="0" y1="441.004" x2="233.713" y2="441.004" gradientUnits="userSpaceOnUse">
+                    <linearGradient id="keyGradient" x1="0" y1="222.729" x2="233.713" y2="222.729" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#F5F2ED"/>
                         <stop offset="1" stopColor="#E8E4DF"/>
                     </linearGradient>
@@ -484,7 +484,7 @@ const ParameterPanel: React.FC = () => {
                     x="0"
                     y="0"
                     width="235"
-                    height="891"
+                    height="450"
                     mask="url(#panel-mask)"
                 >
                     {/* Clickable div that's masked to the SVG shape */}
