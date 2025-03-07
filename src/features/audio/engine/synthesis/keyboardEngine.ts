@@ -89,6 +89,7 @@ class KeyboardAudioManager {
         if (!this.audioContext) throw new Error('Audio context not initialized');
 
         const now = this.audioContext.currentTime;
+        console.log(`[DEBUG] Playing tunable note ${note} with velocity ${velocity} at time ${now}`);
         
         // Create main oscillator and nodes
         const oscillator = this.audioContext.createOscillator();
@@ -100,6 +101,8 @@ class KeyboardAudioManager {
         const envelope = this.getEnvelopeParams(note);
         const synthesis = this.getCurrentSynthesis(note);
         const waveform = this.getWaveformForNote(note);
+        console.log(`[DEBUG] Using waveform ${waveform} for note ${note} (from getWaveformForNote)`);
+        
         const filterParams = this.filterParams.get(note) ?? {
             cutoff: this.DEFAULT_FILTER_CUTOFF,
             resonance: this.DEFAULT_FILTER_RESONANCE
@@ -108,6 +111,7 @@ class KeyboardAudioManager {
 
         // Configure oscillator
         oscillator.type = waveform;
+        console.log(`[DEBUG] Set oscillator type to ${waveform} for note ${note}`);
         oscillator.frequency.setValueAtTime(baseFrequency, now);
 
         // Configure filter
@@ -311,7 +315,10 @@ class KeyboardAudioManager {
     }
 
     private getWaveformForNote(note: number): Waveform {
-        return this.waveforms.get(note) ?? this.globalWaveform;
+        const specificWaveform = this.waveforms.get(note);
+        const result = specificWaveform ?? this.globalWaveform;
+        console.log(`[DEBUG] getWaveformForNote(${note}): specific=${specificWaveform || 'not set'}, global=${this.globalWaveform}, using=${result}`);
+        return result;
     }
 
     setGlobalWaveform(waveform: Waveform): void {
@@ -325,11 +332,37 @@ class KeyboardAudioManager {
     }
 
     setNoteWaveform(note: number, waveform: Waveform): void {
+        console.log(`[DEBUG] Setting waveform for note ${note} to ${waveform}`);
+        console.log(`[DEBUG] Before - waveforms map has ${this.waveforms.size} entries`);
+        console.log(`[DEBUG] Before - waveform for this note is: ${this.waveforms.get(note) || 'not set (using global)'}`);
+        
+        // Store the waveform in our map
         this.waveforms.set(note, waveform);
+        
+        console.log(`[DEBUG] After - waveforms map has ${this.waveforms.size} entries`);
+        console.log(`[DEBUG] After - waveform for this note is: ${this.waveforms.get(note)}`);
+        console.log(`[DEBUG] Global waveform is: ${this.globalWaveform}`);
+        
         // Update voice if active
         const voice = this.activeVoices.get(note);
         if (voice) {
+            console.log(`[DEBUG] Updating active voice for note ${note}`);
+            // Update main oscillator
             voice.oscillator.type = waveform;
+            voice.waveform = waveform; // Update stored waveform
+            
+            // Update all unison voices to match
+            if (voice.unisonVoices && voice.unisonVoices.length > 0) {
+                console.log(`[DEBUG] Updating ${voice.unisonVoices.length} unison voices for note ${note}`);
+                voice.unisonVoices.forEach((unisonVoice, idx) => {
+                    if (unisonVoice.oscillator) {
+                        console.log(`[DEBUG] Setting unison voice ${idx} oscillator to ${waveform}`);
+                        unisonVoice.oscillator.type = waveform;
+                    }
+                });
+            }
+        } else {
+            console.log(`[DEBUG] No active voice found for note ${note}`);
         }
     }
 
@@ -381,39 +414,38 @@ class KeyboardAudioManager {
 
     // Play a note at a specific time (for playback)
     playExactNote(noteEvent: CompleteNoteEvent, time: number) {
-        if (!this.audioContext) return;
-
-        console.log('Playing note with synthesis:', noteEvent.synthesis);
-        if (noteEvent.synthesis?.unison) {
-            console.log('Unison parameters:', noteEvent.synthesis.unison);
+        if (!this.audioContext) {
+            console.error("AudioContext not initialized");
+            return;
         }
 
         const previousMode = this.currentMode;
-        this.currentMode = noteEvent.synthesis.mode;
+        // Handle case where mode is undefined by defaulting to 'tunable'
+        this.currentMode = noteEvent.synthesis.mode || 'tunable';
 
         try {
             if (this.currentMode === 'drums') {
+                // Play drum sound with tuning (if applicable)
                 drumSoundManager.initialize();
-                const tuning = this.tunings.get(noteEvent.note) || 0;
+                // Make sure we're using the correct drum sound API
                 drumSoundManager.playDrumSoundAt(
                     noteEvent.note,
-                    time,
-                    tuning
+                    time
                 );
             } else {
                 const oscillator = this.audioContext.createOscillator();
                 const gainNode = this.audioContext.createGain();
-                const envelope = noteEvent.synthesis.envelope;
-                const maxGain = this.velocityToGain(noteEvent.velocity);
 
                 // Configure oscillator
-                oscillator.type = noteEvent.synthesis.waveform;
+                // Set a default waveform if undefined
+                oscillator.type = noteEvent.synthesis.waveform || 'sine';
                 oscillator.frequency.setValueAtTime(
                     this.getFrequency(noteEvent.note, noteEvent.tuning),
                     time
                 );
 
                 // Calculate envelope timings
+                const envelope = this.getEnvelopeParams(noteEvent.note);
                 const attackEndTime = time + envelope.attack;
                 const decayEndTime = attackEndTime + envelope.decay;
                 const releaseStartTime = time + noteEvent.duration;
@@ -423,10 +455,10 @@ class KeyboardAudioManager {
                 gainNode.gain.setValueAtTime(0, time);
 
                 // Attack
-                gainNode.gain.linearRampToValueAtTime(maxGain, attackEndTime);
+                gainNode.gain.linearRampToValueAtTime(this.velocityToGain(noteEvent.velocity), attackEndTime);
 
                 // Decay to sustain
-                const sustainLevel = maxGain * envelope.sustain;
+                const sustainLevel = this.velocityToGain(noteEvent.velocity) * envelope.sustain;
                 gainNode.gain.linearRampToValueAtTime(sustainLevel, decayEndTime);
 
                 // Sustain (no automation needed, stays at sustainLevel)
@@ -722,22 +754,14 @@ class KeyboardAudioManager {
     // Add this function to check audio context state
     checkAudioContextState() {
         if (!this.audioContext) {
-            console.log(`[DIAG] Audio context doesn't exist!`);
-            return;
+            return; // Exit if audioContext is null
         }
 
-        console.log(`[DIAG] Audio context state:`, {
-            state: this.audioContext.state,
-            sampleRate: this.audioContext.sampleRate,
-            currentTime: this.audioContext.currentTime.toFixed(4),
-            baseLatency: this.audioContext.baseLatency?.toFixed(4) || 'N/A',
-        });
-
-        // Check if in suspended state and try to resume
+        // Only try to resume if it's suspended
         if (this.audioContext.state === 'suspended') {
             console.log(`[DIAG] Attempting to resume suspended audio context...`);
             this.audioContext.resume().then(() => {
-                console.log(`[DIAG] Audio context resumed:`, this.audioContext.state);
+                console.log(`[DIAG] Audio context resumed:`, this.audioContext?.state);
             }).catch(err => {
                 console.error(`[DIAG] Failed to resume audio context:`, err);
             });
@@ -829,6 +853,7 @@ class KeyboardAudioManager {
         const voice = this.activeVoices.get(note);
         if (!voice || !this.audioContext) return;
         
+        console.log(`[DEBUG] Adding unison voice ${index}/${totalVoices} for note ${note}`);
         const unisonSettings = this.getUnisonSettings(note);
         const now = this.audioContext.currentTime;
         
@@ -840,7 +865,11 @@ class KeyboardAudioManager {
             this.audioContext.createPanner();
         
         // Set oscillator type to match main oscillator
-        oscillator.type = voice.waveform || 'sine';
+        const noteWaveform = this.getWaveformForNote(note);
+        console.log(`[DEBUG] Unison ${index}: retrieved waveform ${noteWaveform} for note ${note}`);
+        console.log(`[DEBUG] Unison ${index}: voice.waveform is ${voice.waveform}`);
+        oscillator.type = noteWaveform;
+        console.log(`[DEBUG] Unison ${index}: Set oscillator type to ${oscillator.type} for note ${note}`);
         
         // Configure oscillator with base frequency
         oscillator.frequency.setValueAtTime(baseFrequency, now);
@@ -858,7 +887,7 @@ class KeyboardAudioManager {
         oscillator.connect(gainNode);
         
         // Connect panning based on browser support
-        if (this.audioContext.createStereoPanner) {
+        if (typeof this.audioContext.createStereoPanner === 'function') {
             gainNode.connect(panNode);
             panNode.connect(this.mainGain!); // Connect directly to main gain, not through filter
         } else {
@@ -904,7 +933,7 @@ class KeyboardAudioManager {
         if (totalVoices === 1) {
             unisonVoice.oscillator.detune.setValueAtTime(0, now);
             
-            if (this.audioContext.createStereoPanner) {
+            if (typeof this.audioContext.createStereoPanner === 'function') {
                 (unisonVoice.panNode as StereoPannerNode).pan.setValueAtTime(0, now);
             } else {
                 (unisonVoice.panNode as PannerNode).setPosition(0, 0, 0.1);
@@ -935,7 +964,7 @@ class KeyboardAudioManager {
         console.log(`Unison voice ${index}/${totalVoices-1}: detune=${detuneAmount.toFixed(1)} cents, pan=${panPosition.toFixed(2)}`);
         
         // Set panning based on browser support
-        if (this.audioContext.createStereoPanner) {
+        if (typeof this.audioContext.createStereoPanner === 'function') {
             (unisonVoice.panNode as StereoPannerNode).pan.setValueAtTime(panPosition, now);
         } else {
             // For older browsers using PannerNode
@@ -946,6 +975,11 @@ class KeyboardAudioManager {
     // Public method to get the current tuning of a key (for debugging)
     getKeyTuning(note: number): number {
         return this.tunings.get(note) || 0;
+    }
+
+    // Add a public method to get the waveform for a specific key
+    getKeyWaveform(note: number): Waveform | undefined {
+        return this.waveforms.get(note);
     }
 }
 

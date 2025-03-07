@@ -7,7 +7,7 @@ export type BiquadFilterType = 'lowpass' | 'highpass' | 'bandpass';
 // Update src/features/audio/api/types.ts
 
 export interface SynthesisParameters {
-    mode?: 'tunable' | 'sampler';
+    mode?: 'tunable' | 'drums';
     waveform?: 'sine' | 'square' | 'sawtooth' | 'triangle';
     envelope: {
         attack: number;

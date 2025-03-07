@@ -81,15 +81,38 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
 
             case 'keyboard/setGlobalWaveform': {
                 const waveform = action.payload;
+                const isGlobalOscillatorMode = getState().keyboard.isGlobalOscillatorMode;
                 debug.log(`Setting global waveform: ${waveform}`);
+                
+                // Always update the global waveform
                 keyboardAudioManager.setGlobalWaveform(waveform);
+                
+                // In global mode, also update all key-specific waveforms
+                if (isGlobalOscillatorMode) {
+                    debug.log(`Global oscillator mode active - updating all keys to ${waveform}`);
+                    
+                    // Update all active keys in the keyboard state
+                    const keys = Object.keys(getState().keyboard.keyParameters).map(Number);
+                    keys.forEach(keyNumber => {
+                        debug.log(`Setting waveform for key ${keyNumber} to ${waveform}`);
+                        keyboardAudioManager.setNoteWaveform(keyNumber, waveform);
+                        // Also dispatch an action to update the Redux state
+                        dispatch({ 
+                            type: 'keyboard/setKeyWaveform', 
+                            payload: { keyNumber, waveform } 
+                        });
+                    });
+                }
                 break;
             }
 
             case 'keyboard/setKeyWaveform': {
                 const { keyNumber, waveform } = action.payload;
                 debug.log(`Setting waveform for key ${keyNumber}: ${waveform}`);
+                console.log(`[DEBUG MIDDLEWARE] Setting waveform for key ${keyNumber} to ${waveform}`);
+                console.log(`[DEBUG MIDDLEWARE] Before: waveform map entry for key ${keyNumber}: ${keyboardAudioManager.getKeyWaveform?.(keyNumber) || 'not available'}`);
                 keyboardAudioManager.setNoteWaveform(keyNumber, waveform);
+                console.log(`[DEBUG MIDDLEWARE] After: waveform map entry for key ${keyNumber}: ${keyboardAudioManager.getKeyWaveform?.(keyNumber) || 'not available'}`);
                 break;
             }
 

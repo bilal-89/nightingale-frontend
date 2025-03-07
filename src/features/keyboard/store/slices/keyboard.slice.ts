@@ -48,6 +48,7 @@ export interface KeyboardState {
     minOctave: number;         // Added for octave control
     maxOctave: number;         // Added for octave control
     usingFigmaLayout: boolean; // Add this new property for layout toggle
+    isGlobalOscillatorMode: boolean; // Whether oscillator changes apply to all keys
 }
 
 const defaultParameters: KeyParameters = {
@@ -82,6 +83,7 @@ const initialState: KeyboardState = {
     minOctave: 0,                  // Added for octave control
     maxOctave: 8,                  // Added for octave control
     usingFigmaLayout: false,       // Changed to false to default to original layout
+    isGlobalOscillatorMode: false, // Default to local mode
 };
 
 const keyboardSlice = createSlice({
@@ -216,6 +218,10 @@ const keyboardSlice = createSlice({
             state.usingFigmaLayout = !state.usingFigmaLayout;
         },
 
+        toggleOscillatorMode: (state) => {
+            state.isGlobalOscillatorMode = !state.isGlobalOscillatorMode;
+        },
+
         cleanup: (state) => {
             state.activeNotes = [];
             state.isInitialized = false;
@@ -244,6 +250,7 @@ export const {
     decrementOctave,     // Added for octave control
     setOctave,          // Added for octave control
     toggleKeyboardLayout, // Add this new action
+    toggleOscillatorMode,
     cleanup
 } = keyboardSlice.actions;
 
@@ -291,5 +298,8 @@ export const selectCurrentOctave = (state: { keyboard: KeyboardState }) =>
 
 export const selectUsingFigmaLayout = (state: { keyboard: KeyboardState }) =>
     state.keyboard.usingFigmaLayout;
+
+export const selectIsGlobalOscillatorMode = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.isGlobalOscillatorMode;
 
 export default keyboardSlice.reducer;

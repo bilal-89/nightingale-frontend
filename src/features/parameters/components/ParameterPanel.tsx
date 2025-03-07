@@ -9,7 +9,8 @@ import {
     setGlobalWaveform,
     selectGlobalWaveform,
     selectSelectedKey,
-    setKeyWaveform
+    setKeyWaveform,
+    selectKeyWaveform
 } from '../../keyboard/store/slices/keyboard.slice';
 import { useParameterValues } from '../hooks/useParameterValues';
 import { parameters } from '../constants/parameters';
@@ -340,6 +341,9 @@ const ParameterPanel: React.FC = () => {
     // Define the SVG path for the container shape - updated to match new design
     const containerPath = "M0 39.8046V31C0 13.8792 13.8792 0 31 0H58.6091H174.829H202.713C219.834 0 233.713 13.8792 233.713 31V39.8046V108.59V222.729V336.868V405.654L234.074 418.101C234.581 435.567 220.56 450 203.087 450H176.591H65.3636H31C13.8792 450 0 436.121 0 419V405.654V336.868V222.729V108.59V39.8046Z";
 
+    // Get the redux state for keyboard
+    const keyboardState = useAppSelector(state => state.keyboard);
+
     // Handle waveform changes based on context
     const handleWaveformChange = useCallback((waveform) => {
         if (context === 'keyboard') {
@@ -364,17 +368,20 @@ const ParameterPanel: React.FC = () => {
     // Get current waveform based on context
     const getCurrentWaveform = useCallback(() => {
         if (context === 'keyboard') {
-            // For keyboard context, get the selected key's waveform or global waveform
-            const keyWaveform = selectedKey !== null 
-                ? parameterValues['waveform']?.value 
-                : null;
-            return keyWaveform || globalWaveform;
+            if (selectedKey !== null) {
+                // Get the selected key's waveform from the keyboard state directly
+                const keyWaveform = keyboardState.keyParameters[selectedKey]?.waveform;
+                return keyWaveform || globalWaveform;
+            } else {
+                // Return global waveform if no key is selected
+                return globalWaveform;
+            }
         } else if (context === 'note' && selectedNote) {
             // For note context, get the note's waveform
             return selectedNote.note.synthesis?.waveform || 'sine';
         }
         return 'sine'; // Default fallback
-    }, [context, selectedKey, selectedNote, globalWaveform, parameterValues]);
+    }, [context, selectedKey, selectedNote, globalWaveform, keyboardState]);
 
     // Combined background handler for mouseDown
     const handleBackgroundMouseDown = useCallback((e: React.MouseEvent) => {

@@ -22,9 +22,13 @@ import {
     selectCurrentOctave,
     selectUsingFigmaLayout,
     selectParameterContext,
+    selectSelectedKey,
     SynthMode,
     Waveform,
-    setParameterContext
+    setParameterContext,
+    setKeyWaveform,
+    selectKeyWaveform,
+    selectIsGlobalOscillatorMode
 } from '../store/slices/keyboard.slice';
 import { initializeAudioContext } from '../../audio/store/actions.ts';
 import { RootState } from '../../../store';
@@ -38,6 +42,7 @@ import {
     FIGMA_KEY_DATA,
     ORIGINAL_KEY_DATA
 } from '../data/keyboardData';
+import OscillatorModeToggle from './OscillatorModeToggle';
 
 // Main component
 const TunableKeyboard: React.FC = () => {
@@ -45,7 +50,7 @@ const TunableKeyboard: React.FC = () => {
     const timing = useTiming();
     const isInitialized = useSelector(selectIsInitialized);
     const currentMode = useSelector(selectMode);
-    const currentWaveform = useSelector(selectGlobalWaveform);
+    const globalWaveform = useSelector(selectGlobalWaveform);
     const isPanelVisible = useSelector(selectIsPanelVisible);
     const currentTrack = useSelector((state: RootState) => state.player.currentTrack);
     const tracks = useSelector((state: RootState) => state.player.tracks);
@@ -53,6 +58,15 @@ const TunableKeyboard: React.FC = () => {
     const currentOctave = useSelector(selectCurrentOctave);
     const usingFigmaLayout = useSelector(selectUsingFigmaLayout);
     const parameterContext = useSelector(selectParameterContext);
+    const selectedKey = useSelector(selectSelectedKey);
+    const isGlobalOscillatorMode = useSelector(selectIsGlobalOscillatorMode);
+    
+    // Get the appropriate waveform - either for the selected key or global
+    const currentWaveform = useSelector((state: RootState) => 
+        selectedKey !== null 
+            ? selectKeyWaveform(state, selectedKey) 
+            : globalWaveform
+    );
 
     // Derive keyboard layout data based on Redux state
     const containerLayout = usingFigmaLayout ? FIGMA_CONTAINER_LAYOUT : ORIGINAL_CONTAINER_LAYOUT;
@@ -96,8 +110,22 @@ const TunableKeyboard: React.FC = () => {
     }, [dispatch, timing]);
 
     const handleWaveformChange = useCallback((newWaveform: Waveform) => {
-        dispatch(setGlobalWaveform(newWaveform));
-    }, [dispatch]);
+        if (isGlobalOscillatorMode) {
+            // In global mode, always change all keys by updating the global waveform
+            dispatch(setGlobalWaveform(newWaveform));
+            console.log(`[DEBUG UI] Setting global waveform to ${newWaveform} (global mode)`);
+        } else {
+            // In local mode, only change the selected key (if any)
+            if (selectedKey !== null) {
+                dispatch(setKeyWaveform({ keyNumber: selectedKey, waveform: newWaveform }));
+                console.log(`[DEBUG UI] Setting waveform for key ${selectedKey} to ${newWaveform} (local mode)`);
+            } else {
+                // If no key is selected in local mode, still update the global waveform
+                dispatch(setGlobalWaveform(newWaveform));
+                console.log(`[DEBUG UI] Setting global waveform to ${newWaveform} (local mode, no key selected)`);
+            }
+        }
+    }, [dispatch, selectedKey, isGlobalOscillatorMode]);
 
     const handlePanelClick = useCallback(() => {
         dispatch(togglePanel());
@@ -175,7 +203,9 @@ const TunableKeyboard: React.FC = () => {
             <div className="flex flex-row gap-6">
                 {/* Octave Controls */}
                 <div className="flex-none">
-                    <OctaveControls className="p-4" size={1.8} />
+                    <div className="p-4">
+                        <OctaveControls size={1.8} />
+                    </div>
                 </div>
 
                 {/* Main Keyboard Area */}
@@ -195,12 +225,32 @@ const TunableKeyboard: React.FC = () => {
                         keyData={keyData}
                     />
 
-                    {/* Waveform controls - only displayed in tunable mode (always visible) */}
+                    {/* Waveform controls - only displayed in tunable mode */}
                     {currentMode === 'tunable' && (
-                        <WaveformControls
-                            currentWaveform={currentWaveform}
-                            onWaveformChange={handleWaveformChange}
-                        />
+                        <div className="flex justify-center items-end">
+                            <WaveformControls
+                                currentWaveform={currentWaveform}
+                                onWaveformChange={handleWaveformChange}
+                            />
+                        </div>
+                    )}
+                    
+                    {/* Oscillator Mode Toggle with precise positioning */}
+                    {currentMode === 'tunable' && (
+                        <div className="absolute" style={{
+                            /* 
+                            EDIT THESE VALUES TO POSITION THE BUTTONS:
+                            - top: controls vertical position (higher value = lower on screen)
+                            - left: controls horizontal position (higher value = more to the right)
+                            - transform: use to make fine adjustments
+                            */
+                            top: '330px',    // Try different values like '10px', '40px', etc.
+                            left: '-90px',  // Try different values like '100px', '200px', etc.
+                            transform: 'scale(1.4)', // Makes the buttons slightly larger
+                            zIndex: 10 // Ensures the buttons appear on top of other elements
+                        }}>
+                            <OscillatorModeToggle />
+                        </div>
                     )}
                 </div>
             </div>
