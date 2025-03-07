@@ -245,7 +245,7 @@ const TunableKeyboard: React.FC = () => {
                             - transform: use to make fine adjustments
                             */
                             top: '330px',    // Try different values like '10px', '40px', etc.
-                            left: '-90px',  // Try different values like '100px', '200px', etc.
+                            left: '-60px',  // Try different values like '100px', '200px', etc.
                             transform: 'scale(1.4)', // Makes the buttons slightly larger
                             zIndex: 10 // Ensures the buttons appear on top of other elements
                         }}>

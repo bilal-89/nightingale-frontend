@@ -158,6 +158,47 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 }
                 break;
             }
+
+            case 'keyboard/setBatchParameters': {
+                const { notes, parameter, value } = action.payload;
+                const mode = getState().keyboard.mode;
+                debug.log(`Batch setting parameter ${parameter}=${value} for ${notes.length} notes`);
+                
+                if (mode !== 'drums') {
+                    // Update each note in the audio engine
+                    notes.forEach(noteNumber => {
+                        keyboardAudioManager.setNoteParameter(noteNumber, parameter, value);
+                    });
+                }
+                
+                // Continue to update Redux state
+                next(action);
+                return;
+            }
+
+            case 'keyboard/updateOscillatorBatch': {
+                const { notes, oscillatorIndex, changes } = action.payload;
+                debug.log(`Batch updating oscillator ${oscillatorIndex} for ${notes.length} notes: ${JSON.stringify(changes)}`);
+                
+                // Update Redux state first
+                next(action);
+                
+                // Then update each note in the audio engine
+                notes.forEach(noteNumber => {
+                    // Get the updated oscillators from state
+                    const oscillators = getState().keyboard.keyParameters[noteNumber]?.oscillators;
+                    
+                    if (oscillators && oscillators.length > 0) {
+                        // If the note has custom oscillators, update them
+                        keyboardAudioManager.setKeyOscillators(noteNumber, oscillators);
+                    } else if (changes.waveform && oscillatorIndex === 0) {
+                        // For the primary oscillator, fall back to setting the waveform
+                        keyboardAudioManager.setNoteWaveform(noteNumber, changes.waveform);
+                    }
+                });
+                
+                return;
+            }
         }
     } catch (error) {
         debug.error('Error in audio middleware:', error);

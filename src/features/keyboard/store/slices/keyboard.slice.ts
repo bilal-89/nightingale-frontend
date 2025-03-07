@@ -229,6 +229,62 @@ const keyboardSlice = createSlice({
             state.isParameterPanelVisible = false;
             state.parameterContext = 'keyboard';
             state.currentOctave = initialState.currentOctave;  // Reset octave on cleanup
+        },
+
+        // Batch parameter update for multiple notes
+        setBatchParameters: (state, action: PayloadAction<{
+            notes: number[];
+            parameter: keyof KeyParameters;
+            value: number;
+        }>) => {
+            const { notes, parameter, value } = action.payload;
+            
+            // Update each of the specified notes
+            notes.forEach(noteNumber => {
+                if (!state.keyParameters[noteNumber]) {
+                    state.keyParameters[noteNumber] = {};
+                }
+
+                if (!state.keyParameters[noteNumber][parameter]) {
+                    state.keyParameters[noteNumber][parameter] = {
+                        value: defaultParameters[parameter]?.defaultValue ?? 0,
+                        defaultValue: defaultParameters[parameter]?.defaultValue ?? 0
+                    };
+                }
+
+                if (state.keyParameters[noteNumber][parameter]) {
+                    state.keyParameters[noteNumber][parameter]!.value = value;
+                }
+            });
+        },
+
+        // Batch update for oscillator parameters across multiple notes
+        updateOscillatorBatch: (state, action: PayloadAction<{
+            notes: number[];
+            oscillatorIndex: number;
+            changes: Partial<Oscillator>;
+        }>) => {
+            const { notes, oscillatorIndex, changes } = action.payload;
+            
+            notes.forEach(noteNumber => {
+                // Check if the note has custom oscillators
+                if (state.keyParameters[noteNumber]?.oscillators && 
+                    state.keyParameters[noteNumber].oscillators![oscillatorIndex]) {
+                    
+                    // Update the oscillator parameters
+                    state.keyParameters[noteNumber].oscillators![oscillatorIndex] = {
+                        ...state.keyParameters[noteNumber].oscillators![oscillatorIndex],
+                        ...changes
+                    };
+                } else if (changes.waveform && oscillatorIndex === 0) {
+                    // If this is the main oscillator (index 0) and it doesn't exist yet,
+                    // fall back to updating the key's waveform
+                    if (!state.keyParameters[noteNumber]) {
+                        state.keyParameters[noteNumber] = {};
+                    }
+                    state.keyParameters[noteNumber].waveform = changes.waveform;
+                }
+            });
         }
     }
 });
@@ -251,7 +307,9 @@ export const {
     setOctave,          // Added for octave control
     toggleKeyboardLayout, // Add this new action
     toggleOscillatorMode,
-    cleanup
+    cleanup,
+    setBatchParameters,
+    updateOscillatorBatch
 } = keyboardSlice.actions;
 
 // Selectors
