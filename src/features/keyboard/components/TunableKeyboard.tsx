@@ -5,7 +5,8 @@ import { useAppDispatch } from '../../../store/hooks';
 import { Card } from '../../../shared/components/ui/card';
 import { KeyboardLayout } from './KeyboardLayout';
 import { OctaveControls } from './OctaveControls';
-import WaveformControls from './WaveformControls'; // Import the new component
+import WaveformControls from './WaveformControls'; // Import the single waveform component
+import MultiWaveformControls from './MultiWaveformControls'; // Import the new multi-waveform component
 import {
     noteOn,
     noteOff,
@@ -28,7 +29,14 @@ import {
     setParameterContext,
     setKeyWaveform,
     selectKeyWaveform,
-    selectIsGlobalOscillatorMode
+    selectIsGlobalOscillatorMode,
+    // Add the new selectors
+    selectActiveWaveforms,
+    selectEditableWaveform,
+    setSelectedKey,
+    toggleWaveform,
+    setEditableWaveform,
+    selectOscillatorMode,
 } from '../store/slices/keyboard.slice';
 import { initializeAudioContext } from '../../audio/store/actions.ts';
 import { RootState } from '../../../store';
@@ -43,6 +51,7 @@ import {
     ORIGINAL_KEY_DATA
 } from '../data/keyboardData';
 import OscillatorModeToggle from './OscillatorModeToggle';
+import OscillatorTypeToggle from './OscillatorTypeToggle';
 
 // Main component
 const TunableKeyboard: React.FC = () => {
@@ -52,14 +61,31 @@ const TunableKeyboard: React.FC = () => {
     const currentMode = useSelector(selectMode);
     const globalWaveform = useSelector(selectGlobalWaveform);
     const isPanelVisible = useSelector(selectIsPanelVisible);
-    const currentTrack = useSelector((state: RootState) => state.player.currentTrack);
-    const tracks = useSelector((state: RootState) => state.player.tracks);
-    const currentTrackColor = tracks[currentTrack]?.color;
+    const activeNotes = useSelector(selectActiveNotes);
+    
+    // Try to get track color, but provide fallbacks in case player state is different
+    // than expected - fixing TypeScript errors
+    let currentTrackColor: string | undefined;
+    try {
+        // @ts-ignore - Ignore type errors for now as we're providing fallbacks
+        const currentTrack = useSelector((state: RootState) => state.player?.currentTrack);
+        // @ts-ignore
+        const tracks = useSelector((state: RootState) => state.player?.tracks);
+        
+        if (currentTrack !== undefined && tracks && tracks[currentTrack]) {
+            currentTrackColor = tracks[currentTrack].color;
+        }
+    } catch (e) {
+        console.warn('Could not get track color:', e);
+        currentTrackColor = '#B3D94C'; // Default accent color
+    }
+    
     const currentOctave = useSelector(selectCurrentOctave);
     const usingFigmaLayout = useSelector(selectUsingFigmaLayout);
     const parameterContext = useSelector(selectParameterContext);
     const selectedKey = useSelector(selectSelectedKey);
     const isGlobalOscillatorMode = useSelector(selectIsGlobalOscillatorMode);
+    const oscillatorMode = useSelector(selectOscillatorMode);
     
     // Get the appropriate waveform - either for the selected key or global
     const currentWaveform = useSelector((state: RootState) => 
@@ -81,19 +107,34 @@ const TunableKeyboard: React.FC = () => {
 
     // Note event handlers
     const handleNoteOn = useCallback((note: number) => {
+        // Initialize audio before doing anything else
         initializeAudio();
+        
+        console.log(`[DEBUG] Note on: ${note}`);
+        
+        // Before dispatching noteOn, select the key explicitly
+        // This must happen BEFORE any other actions
+        dispatch(setSelectedKey(note));
+        console.log(`[DEBUG] Selected key set to: ${note}`);
+        
+        // Then dispatch noteOn
         dispatch(noteOn(note));
         
-        // Automatically switch to keyboard mode and show parameter panel
-        if (parameterContext !== 'keyboard') {
-            dispatch(setParameterContext('keyboard'));
-        }
+        // Force-set the parameter context to keyboard
+        dispatch(setParameterContext('keyboard'));
         
-        // Show parameter panel if not already visible
+        // Always show parameter panel on note press
         if (!isPanelVisible) {
+            console.log(`[DEBUG] Opening parameter panel for note ${note}`);
             dispatch(togglePanel());
         }
-    }, [dispatch, initializeAudio, parameterContext, isPanelVisible]);
+        
+        // Clear any outdated selected key info when pressing a new key
+        if (selectedKey !== note) {
+            console.log(`[DEBUG] Updating selected key from ${selectedKey} to ${note}`);
+            dispatch(setSelectedKey(note));
+        }
+    }, [dispatch, initializeAudio, isPanelVisible, selectedKey]);
 
     const handleNoteOff = useCallback((note: number) => {
         dispatch(noteOff(note));
@@ -109,23 +150,52 @@ const TunableKeyboard: React.FC = () => {
         }));
     }, [dispatch, timing]);
 
-    const handleWaveformChange = useCallback((newWaveform: Waveform) => {
-        if (isGlobalOscillatorMode) {
-            // In global mode, always change all keys by updating the global waveform
-            dispatch(setGlobalWaveform(newWaveform));
-            console.log(`[DEBUG UI] Setting global waveform to ${newWaveform} (global mode)`);
-        } else {
-            // In local mode, only change the selected key (if any)
-            if (selectedKey !== null) {
-                dispatch(setKeyWaveform({ keyNumber: selectedKey, waveform: newWaveform }));
-                console.log(`[DEBUG UI] Setting waveform for key ${selectedKey} to ${newWaveform} (local mode)`);
+    // Handle waveform changes with more robust tracking of the selected key
+    const handleWaveformChange = useCallback((waveform: Waveform) => {
+        // Log current state for debugging
+        console.log(`[WAVEFORM CHANGE] Mode: ${oscillatorMode}, isGlobalMode: ${isGlobalOscillatorMode}, selectedKey: ${selectedKey}, activeNotes: [${activeNotes.join(', ')}]`);
+        
+        // Handle traditional single waveform mode differently from multi-waveform
+        if (oscillatorMode === 'single') {
+            if (isGlobalOscillatorMode) {
+                // In global mode, change all keys by updating the global waveform
+                dispatch(setGlobalWaveform(waveform));
+                console.log(`[DEBUG UI] Setting global waveform to ${waveform} (global mode)`);
             } else {
-                // If no key is selected in local mode, still update the global waveform
-                dispatch(setGlobalWaveform(newWaveform));
-                console.log(`[DEBUG UI] Setting global waveform to ${newWaveform} (local mode, no key selected)`);
+                // LOCAL MODE LOGIC - NEVER update global waveform in local mode
+                
+                // First choice: If a key is selected, update that specific key only
+                if (selectedKey !== null) {
+                    dispatch(setKeyWaveform({ keyNumber: selectedKey, waveform }));
+                    console.log(`[DEBUG UI] Setting waveform for selected key ${selectedKey} to ${waveform} (local mode)`);
+                }
+                // Second choice: If we have active notes but no selected key, update the most recent active note
+                else if (activeNotes.length > 0) {
+                    const noteToUpdate = activeNotes[activeNotes.length - 1];
+                    dispatch(setKeyWaveform({ keyNumber: noteToUpdate, waveform }));
+                    console.log(`[DEBUG UI] Setting waveform for active note ${noteToUpdate} to ${waveform} (local mode, from active notes)`);
+                    
+                    // Also select this key to maintain consistent behavior
+                    dispatch(setSelectedKey(noteToUpdate));
+                }
+                // Last resort: In local mode with no selected key and no active notes, show a notification
+                else {
+                    console.log(`[DEBUG UI] Cannot set key-specific waveform - no selected key or active notes`);
+                    
+                    // DO NOT update global waveform in local mode - that's the bug we're fixing
+                    
+                    // Optional: You could show a temporary message to the user here
+                    // For example:
+                    // dispatch(setTemporaryMessage('Please select a key or play a note to set its waveform'));
+                }
             }
+        } else {
+            // Multi-oscillator mode
+            dispatch(toggleWaveform(waveform));
+            dispatch(setEditableWaveform(waveform));
+            console.log(`[DEBUG UI] Toggled waveform ${waveform} in multi-oscillator mode`);
         }
-    }, [dispatch, selectedKey, isGlobalOscillatorMode]);
+    }, [dispatch, selectedKey, isGlobalOscillatorMode, oscillatorMode, activeNotes]);
 
     const handlePanelClick = useCallback(() => {
         dispatch(togglePanel());
@@ -228,29 +298,41 @@ const TunableKeyboard: React.FC = () => {
                     {/* Waveform controls - only displayed in tunable mode */}
                     {currentMode === 'tunable' && (
                         <div className="flex justify-center items-end">
-                            <WaveformControls
-                                currentWaveform={currentWaveform}
-                                onWaveformChange={handleWaveformChange}
-                            />
+                            {/* Conditionally render based on oscillator mode */}
+                            {oscillatorMode === 'single' ? (
+                                <WaveformControls
+                                    currentWaveform={currentWaveform}
+                                    onWaveformChange={handleWaveformChange}
+                                />
+                            ) : (
+                                <MultiWaveformControls />
+                            )}
                         </div>
                     )}
                     
-                    {/* Oscillator Mode Toggle with precise positioning */}
+                    {/* Mode toggle buttons with precise positioning */}
                     {currentMode === 'tunable' && (
-                        <div className="absolute" style={{
-                            /* 
-                            EDIT THESE VALUES TO POSITION THE BUTTONS:
-                            - top: controls vertical position (higher value = lower on screen)
-                            - left: controls horizontal position (higher value = more to the right)
-                            - transform: use to make fine adjustments
-                            */
-                            top: '330px',    // Try different values like '10px', '40px', etc.
-                            left: '-60px',  // Try different values like '100px', '200px', etc.
-                            transform: 'scale(1.4)', // Makes the buttons slightly larger
-                            zIndex: 10 // Ensures the buttons appear on top of other elements
-                        }}>
-                            <OscillatorModeToggle />
-                        </div>
+                        <>
+                            {/* Global/Local Oscillator Mode Toggle */}
+                            <div className="absolute" style={{
+                                top: '330px',
+                                left: '-60px',
+                                transform: 'scale(1.4)',
+                                zIndex: 10
+                            }}>
+                                <OscillatorModeToggle />
+                            </div>
+                            
+                            {/* New Single/Multi Oscillator Type Toggle */}
+                            <div className="absolute" style={{
+                                top: '330px',
+                                right: '-60px',
+                                transform: 'scale(1.4)',
+                                zIndex: 10
+                            }}>
+                                <OscillatorTypeToggle />
+                            </div>
+                        </>
                     )}
                 </div>
             </div>

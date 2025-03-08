@@ -3,6 +3,13 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 export type Waveform = 'sine' | 'square' | 'sawtooth' | 'triangle';
 export type ParameterContext = 'keyboard' | 'note';
 
+// Define structure for oscillator state
+export interface OscillatorState {
+    waveform: Waveform;
+    enabled: boolean;
+    id: string;
+}
+
 // Define the structure for a single parameter
 export interface Parameter {
     value: number;
@@ -30,9 +37,13 @@ export interface KeyParameters {
     unisonCount: Parameter;
     unisonDetune: Parameter;
     unisonWidth: Parameter;
+    
+    // New field for multi-oscillator support
+    activeWaveforms?: Waveform[]; // Store active waveforms per key
 }
 
 export type SynthMode = 'tunable' | 'drums';
+export type OscillatorMode = 'single' | 'multi'; // New type for oscillator mode
 
 export interface KeyboardState {
     activeNotes: number[];
@@ -49,6 +60,13 @@ export interface KeyboardState {
     maxOctave: number;         // Added for octave control
     usingFigmaLayout: boolean; // Add this new property for layout toggle
     isGlobalOscillatorMode: boolean; // Whether oscillator changes apply to all keys
+    
+    // Add new fields for multi-oscillator support
+    activeWaveforms: Waveform[]; // Currently active waveforms
+    editableWaveform: Waveform | null; // Currently editable waveform
+    
+    // New field to toggle between single and multi oscillator modes
+    oscillatorMode: OscillatorMode;
 }
 
 const defaultParameters: KeyParameters = {
@@ -84,6 +102,13 @@ const initialState: KeyboardState = {
     maxOctave: 8,                  // Added for octave control
     usingFigmaLayout: false,       // Changed to false to default to original layout
     isGlobalOscillatorMode: false, // Default to local mode
+    
+    // Initialize with sine wave active and editable
+    activeWaveforms: ['sine'],
+    editableWaveform: 'sine',
+    
+    // Default to single oscillator mode for backward compatibility
+    oscillatorMode: 'single'
 };
 
 const keyboardSlice = createSlice({
@@ -222,6 +247,36 @@ const keyboardSlice = createSlice({
             state.isGlobalOscillatorMode = !state.isGlobalOscillatorMode;
         },
 
+        toggleOscillatorType: (state) => {
+            // Toggle between single and multi
+            state.oscillatorMode = state.oscillatorMode === 'single' ? 'multi' : 'single';
+            
+            // When switching to single mode from multi mode
+            if (state.oscillatorMode === 'single') {
+                // Keep only the editable waveform (or the first one if none is editable)
+                const waveformToKeep = state.editableWaveform || state.activeWaveforms[0] || 'sine';
+                state.activeWaveforms = [waveformToKeep];
+                state.editableWaveform = waveformToKeep;
+                
+                // Only update the global waveform if in global mode
+                // This is important to prevent losing per-key waveform settings in local mode
+                if (state.isGlobalOscillatorMode) {
+                    state.globalWaveform = waveformToKeep;
+                }
+            }
+            
+            // When switching to multi mode from single mode
+            else {
+                // If there's only one active waveform (from single mode),
+                // make sure it's in the activeWaveforms array
+                const currentWaveform = state.globalWaveform;
+                if (!state.activeWaveforms.includes(currentWaveform)) {
+                    state.activeWaveforms = [currentWaveform];
+                    state.editableWaveform = currentWaveform;
+                }
+            }
+        },
+
         cleanup: (state) => {
             state.activeNotes = [];
             state.isInitialized = false;
@@ -285,7 +340,196 @@ const keyboardSlice = createSlice({
                     state.keyParameters[noteNumber].waveform = changes.waveform;
                 }
             });
-        }
+        },
+
+        // Initialize key parameters if they don't exist
+        initializeKeyParameters: (state, action: PayloadAction<number>) => {
+            const keyNumber = action.payload;
+            if (!state.keyParameters[keyNumber]) {
+                state.keyParameters[keyNumber] = {};
+            }
+        },
+        
+        // Set active waveforms for a specific key
+        setKeyActiveWaveforms: (state, action: PayloadAction<{
+            keyNumber: number;
+            activeWaveforms: Waveform[];
+        }>) => {
+            const { keyNumber, activeWaveforms } = action.payload;
+            
+            // Make sure the key parameters exist
+            if (!state.keyParameters[keyNumber]) {
+                state.keyParameters[keyNumber] = {};
+            }
+            
+            // Set the active waveforms for this key
+            state.keyParameters[keyNumber].activeWaveforms = [...activeWaveforms];
+            
+            console.log(`[REDUX] Set active waveforms for key ${keyNumber}: ${activeWaveforms.join(', ')}`);
+        },
+
+        // Add new reducers for multi-waveform support
+        toggleWaveform: (state, action: PayloadAction<Waveform>) => {
+            const waveform = action.payload;
+            
+            // Handle global vs. local mode differently
+            if (state.isGlobalOscillatorMode) {
+                // GLOBAL MODE: Update the global active waveforms array
+                
+                // If waveform is already active, remove it unless it's the only one
+                if (state.activeWaveforms.includes(waveform)) {
+                    // Don't remove if it's the only active waveform
+                    if (state.activeWaveforms.length > 1) {
+                        state.activeWaveforms = state.activeWaveforms.filter(w => w !== waveform);
+                        
+                        // If the removed waveform was the editable one, make the first active waveform editable
+                        if (state.editableWaveform === waveform) {
+                            state.editableWaveform = state.activeWaveforms[0];
+                        }
+                    }
+                } else {
+                    // Add the waveform to active waveforms
+                    state.activeWaveforms.push(waveform);
+                    
+                    // If this is the first active waveform, make it editable
+                    if (state.activeWaveforms.length === 1) {
+                        state.editableWaveform = waveform;
+                    }
+                }
+            } else {
+                // LOCAL MODE: Update the active waveforms for the selected key or most recent active note
+                const selectedKey = state.selectedKey;
+                const effectiveKey = selectedKey !== null 
+                    ? selectedKey 
+                    : state.activeNotes.length > 0 
+                        ? state.activeNotes[state.activeNotes.length - 1] 
+                        : null;
+                
+                // Only proceed if we have a key to work with
+                if (effectiveKey !== null) {
+                    // Make sure the key parameters exist
+                    if (!state.keyParameters[effectiveKey]) {
+                        state.keyParameters[effectiveKey] = {};
+                    }
+                    
+                    // Initialize activeWaveforms if needed
+                    if (!state.keyParameters[effectiveKey].activeWaveforms) {
+                        // Start with the global active waveforms
+                        state.keyParameters[effectiveKey].activeWaveforms = [...state.activeWaveforms];
+                    }
+                    
+                    // Get reference to the current activeWaveforms array for this key
+                    const keyActiveWaveforms = state.keyParameters[effectiveKey].activeWaveforms!;
+                    
+                    // Toggle the waveform using the same logic as for global mode
+                    if (keyActiveWaveforms.includes(waveform)) {
+                        // Don't remove if it's the only active waveform
+                        if (keyActiveWaveforms.length > 1) {
+                            state.keyParameters[effectiveKey].activeWaveforms = 
+                                keyActiveWaveforms.filter(w => w !== waveform);
+                            
+                            // If the removed waveform was the editable one, make the first active waveform editable
+                            if (state.editableWaveform === waveform) {
+                                state.editableWaveform = state.keyParameters[effectiveKey].activeWaveforms![0];
+                            }
+                        }
+                    } else {
+                        // Add the waveform
+                        state.keyParameters[effectiveKey].activeWaveforms!.push(waveform);
+                        
+                        // If this is the first active waveform, make it editable
+                        if (state.keyParameters[effectiveKey].activeWaveforms!.length === 1) {
+                            state.editableWaveform = waveform;
+                        }
+                    }
+                    
+                    // For debugging
+                    console.log(`[REDUX] Toggled waveform ${waveform} for key ${effectiveKey}, 
+                        active waveforms: ${state.keyParameters[effectiveKey].activeWaveforms!.join(', ')}`);
+                } else {
+                    // No key selected or active - just update the global state as a fallback
+                    // This shouldn't normally happen if the UI is working correctly
+                    console.warn(`[REDUX] No key selected or active, using global state as fallback`);
+                    
+                    // Default to the global logic
+                    if (state.activeWaveforms.includes(waveform)) {
+                        if (state.activeWaveforms.length > 1) {
+                            state.activeWaveforms = state.activeWaveforms.filter(w => w !== waveform);
+                            if (state.editableWaveform === waveform) {
+                                state.editableWaveform = state.activeWaveforms[0];
+                            }
+                        }
+                    } else {
+                        state.activeWaveforms.push(waveform);
+                        if (state.activeWaveforms.length === 1) {
+                            state.editableWaveform = waveform;
+                        }
+                    }
+                }
+            }
+        },
+        
+        setEditableWaveform: (state, action: PayloadAction<Waveform>) => {
+            const waveform = action.payload;
+            
+            // Handle differently depending on mode
+            if (state.isGlobalOscillatorMode) {
+                // GLOBAL MODE: Use the global active waveforms
+                
+                // Only set if the waveform is active
+                if (state.activeWaveforms.includes(waveform)) {
+                    state.editableWaveform = waveform;
+                } else {
+                    // If not active, add it and make it editable
+                    state.activeWaveforms.push(waveform);
+                    state.editableWaveform = waveform;
+                }
+            } else {
+                // LOCAL MODE: Use key-specific active waveforms
+                const selectedKey = state.selectedKey;
+                const effectiveKey = selectedKey !== null 
+                    ? selectedKey 
+                    : state.activeNotes.length > 0 
+                        ? state.activeNotes[state.activeNotes.length - 1] 
+                        : null;
+                
+                if (effectiveKey !== null) {
+                    // Make sure the key parameters exist
+                    if (!state.keyParameters[effectiveKey]) {
+                        state.keyParameters[effectiveKey] = {};
+                    }
+                    
+                    // Initialize activeWaveforms if needed
+                    if (!state.keyParameters[effectiveKey].activeWaveforms) {
+                        // Start with the global active waveforms
+                        state.keyParameters[effectiveKey].activeWaveforms = [...state.activeWaveforms];
+                    }
+                    
+                    // Check if the waveform is in the key's active waveforms
+                    const keyActiveWaveforms = state.keyParameters[effectiveKey].activeWaveforms!;
+                    
+                    if (keyActiveWaveforms.includes(waveform)) {
+                        state.editableWaveform = waveform;
+                    } else {
+                        // If not active, add it and make it editable
+                        state.keyParameters[effectiveKey].activeWaveforms!.push(waveform);
+                        state.editableWaveform = waveform;
+                    }
+                    
+                    console.log(`[REDUX] Set editable waveform to ${waveform} for key ${effectiveKey}`);
+                } else {
+                    // No key selected, fall back to global behavior
+                    console.warn(`[REDUX] No key selected for setEditableWaveform, using global state`);
+                    
+                    if (state.activeWaveforms.includes(waveform)) {
+                        state.editableWaveform = waveform;
+                    } else {
+                        state.activeWaveforms.push(waveform);
+                        state.editableWaveform = waveform;
+                    }
+                }
+            }
+        },
     }
 });
 
@@ -307,9 +551,14 @@ export const {
     setOctave,          // Added for octave control
     toggleKeyboardLayout, // Add this new action
     toggleOscillatorMode,
+    toggleOscillatorType,
     cleanup,
     setBatchParameters,
-    updateOscillatorBatch
+    updateOscillatorBatch,
+    toggleWaveform,
+    setEditableWaveform,
+    initializeKeyParameters,
+    setKeyActiveWaveforms
 } = keyboardSlice.actions;
 
 // Selectors
@@ -359,5 +608,14 @@ export const selectUsingFigmaLayout = (state: { keyboard: KeyboardState }) =>
 
 export const selectIsGlobalOscillatorMode = (state: { keyboard: KeyboardState }) =>
     state.keyboard.isGlobalOscillatorMode;
+
+export const selectActiveWaveforms = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.activeWaveforms;
+
+export const selectEditableWaveform = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.editableWaveform;
+
+export const selectOscillatorMode = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.oscillatorMode;
 
 export default keyboardSlice.reducer;

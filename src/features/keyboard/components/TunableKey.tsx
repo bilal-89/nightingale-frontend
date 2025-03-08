@@ -55,7 +55,7 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
             stroke: isPressed ? '#e0dbd6' : '#f0f0f0',
             strokeOpacity: 0.9, // Maintain same opacity for both states
             strokeWidth: 1.5, // Consistent stroke width for both states
-            // Less translation for subtler effect
+            // Less translation for subtler effect - ensure proper format with parentheses
             transform: isPressed ? 'translate(1.5px, 1.5px)' : '',
             // Transition for smooth state changes
             transition: 'all 120ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -76,6 +76,18 @@ const TunableKey: React.FC<ExtendedKeyProps> = ({
     };
 
     const styles = modeStyles[mode];
+
+    // Make sure the transform property is properly formatted
+    if (styles.transform && styles.transform.length > 0) {
+        // Ensure the transform attribute has valid syntax with proper parentheses
+        if (styles.transform.includes('translate') && !styles.transform.includes('(')) {
+            // If we have a translate without parentheses, format it correctly
+            styles.transform = 'translate(0, 0)'; 
+        } else if (styles.transform.includes('translate(') && !styles.transform.includes(')')) {
+            // If we have an opening parenthesis but no closing one, add it
+            styles.transform = styles.transform + ')';
+        }
+    }
 
     // If we have path data, render the SVG version
     if (pathData) {

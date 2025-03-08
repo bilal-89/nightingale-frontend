@@ -77,6 +77,7 @@ class KeyboardAudioManager {
             gainNode: GainNode;
             panNode: StereoPannerNode | PannerNode;
         }>;
+        allOscillators?: OscillatorNode[];
     }>();
 
 
@@ -84,56 +85,102 @@ class KeyboardAudioManager {
     private readonly DEFAULT_FILTER_CUTOFF = 19000;  // Hz
     private readonly DEFAULT_FILTER_RESONANCE = 0.707;  // Q value
 
-    // Modify playTunableNoteRT to include filter
+    // Add a new property to store active waveforms
+    private activeWaveforms = new Map<number, Waveform[]>();
+    private editableWaveform = new Map<number, Waveform>();
+
+    // Modify playTunableNoteRT to support multiple oscillators
     private async playTunableNoteRT(note: number, velocity: number): Promise<CompleteNoteEvent> {
         if (!this.audioContext) throw new Error('Audio context not initialized');
 
         const now = this.audioContext.currentTime;
         console.log(`[DEBUG] Playing tunable note ${note} with velocity ${velocity} at time ${now}`);
         
-        // Create main oscillator and nodes
-        const oscillator = this.audioContext.createOscillator();
-        const filterNode = this.audioContext.createBiquadFilter();
-        const gainNode = this.audioContext.createGain();
-
         // Get parameters
         const baseFrequency = this.getFrequency(note);
         const envelope = this.getEnvelopeParams(note);
         const synthesis = this.getCurrentSynthesis(note);
-        const waveform = this.getWaveformForNote(note);
-        console.log(`[DEBUG] Using waveform ${waveform} for note ${note} (from getWaveformForNote)`);
         
+        // Get this note's specific waveform if it exists, otherwise use global
+        const noteWaveform = this.getWaveformForNote(note);
+        
+        // Get all active waveforms for this note, or default to the note's specific waveform
+        let waveforms = this.getActiveWaveformsForNote(note);
+        if (waveforms.length === 0) {
+            // If no waveforms are specified for multi-oscillator mode,
+            // use the note-specific waveform (or global fallback)
+            waveforms = [noteWaveform];
+        }
+        
+        console.log(`[DEBUG] Using waveforms ${waveforms.join(', ')} for note ${note}`);
+        
+        // Create a filter node that will be shared by all oscillators
+        const filterNode = this.audioContext.createBiquadFilter();
         const filterParams = this.filterParams.get(note) ?? {
             cutoff: this.DEFAULT_FILTER_CUTOFF,
             resonance: this.DEFAULT_FILTER_RESONANCE
         };
-        const unisonSettings = this.getUnisonSettings(note);
-
-        // Configure oscillator
-        oscillator.type = waveform;
-        console.log(`[DEBUG] Set oscillator type to ${waveform} for note ${note}`);
-        oscillator.frequency.setValueAtTime(baseFrequency, now);
-
+        
         // Configure filter
         filterNode.type = 'lowpass';
         filterNode.frequency.setValueAtTime(filterParams.cutoff, now);
         filterNode.Q.setValueAtTime(filterParams.resonance, now);
 
-        // Configure envelope - adjust gain based on unison count
-        // For single voice, use normal gain. For unison, we'll handle gain in the unison voices
+        // Create a gain node that will be shared by all oscillators
+        const gainNode = this.audioContext.createGain();
         const maxGain = this.velocityToGain(velocity);
         
-        // Apply envelope to main oscillator
+        // Apply envelope
         gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.linearRampToValueAtTime(maxGain, now + envelope.attack);
         gainNode.gain.linearRampToValueAtTime(
             maxGain * envelope.sustain,
             now + envelope.attack + envelope.decay
         );
-
-        // Create main voice
+        
+        // Get unison settings
+        const unisonSettings = this.getUnisonSettings(note);
+        
+        // Create oscillators for each active waveform
+        const oscillators: OscillatorNode[] = [];
+        
+        // Calculate per-oscillator gain to prevent excessive volume with multiple oscillators
+        const oscillatorCount = waveforms.length;
+        const perOscillatorGain = oscillatorCount > 0 ? 1 / Math.sqrt(oscillatorCount) : 1;
+        console.log(`[AUDIO ENGINE] Creating ${oscillatorCount} oscillators with per-oscillator gain of ${perOscillatorGain}`);
+        
+        // Create an oscillator for each waveform
+        for (const waveform of waveforms) {
+            // Create a gain node for this oscillator to balance volume
+            const oscillatorGain = this.audioContext.createGain();
+            oscillatorGain.gain.setValueAtTime(perOscillatorGain, now);
+            
+            // Create the oscillator
+            const oscillator = this.audioContext.createOscillator();
+            oscillator.type = waveform;
+            oscillator.frequency.setValueAtTime(baseFrequency, now);
+            
+            // Connect oscillator to its gain node, then to the shared filter
+            oscillator.connect(oscillatorGain);
+            oscillatorGain.connect(filterNode);
+            
+            // Store the gain node with the oscillator for future reference
+            (oscillator as any).gainNode = oscillatorGain;
+            
+            // Start oscillator
+            oscillator.start(now);
+            oscillators.push(oscillator);
+            
+            console.log(`[AUDIO ENGINE] Created oscillator with waveform ${waveform} for note ${note}`);
+        }
+        
+        // Connect filter to gain node, and gain node to main output
+        filterNode.connect(gainNode);
+        gainNode.connect(this.mainGain!);
+        
+        // Store voice
         const voice = {
-            oscillator,
+            oscillator: oscillators[0], // Store primary oscillator (first one)
             filterNode,
             gainNode,
             baseFrequency,
@@ -142,23 +189,15 @@ class KeyboardAudioManager {
             startTime: now,
             noteStartTime: now,
             envelope,
-            waveform,
+            waveform: waveforms[0], // Store primary waveform (first one)
             filter: filterParams,
-            unisonVoices: []
+            unisonVoices: [],
+            allOscillators: oscillators, // Store all oscillators
         };
-
-        // Store voice
-        this.activeVoices.set(note, voice);
-
-        // Connect audio path for main oscillator
-        oscillator.connect(filterNode);
-        filterNode.connect(gainNode);
-        gainNode.connect(this.mainGain!);
         
-        // Start the main oscillator
-        oscillator.start(now);
-
-        // If unison is enabled (count > 1), create additional voices
+        this.activeVoices.set(note, voice);
+        
+        // If unison is enabled (count > 1), create additional voices for each oscillator
         if (unisonSettings.count > 1) {
             console.log(`Creating ${unisonSettings.count} unison voices for note ${note}`);
             
@@ -315,10 +354,27 @@ class KeyboardAudioManager {
     }
 
     private getWaveformForNote(note: number): Waveform {
-        const specificWaveform = this.waveforms.get(note);
-        const result = specificWaveform ?? this.globalWaveform;
-        console.log(`[DEBUG] getWaveformForNote(${note}): specific=${specificWaveform || 'not set'}, global=${this.globalWaveform}, using=${result}`);
-        return result;
+        // First check if this note has a custom waveform set
+        const customWaveform = this.waveforms.get(note);
+        
+        // Get all registered notes with custom waveforms for debugging
+        const notesWithCustomWaveforms = [...this.waveforms.entries()]
+            .map(([noteNum, waveform]) => `${noteNum}:${waveform}`);
+        
+        // Debug output to track waveform selection
+        console.log(`[AUDIO ENGINE] Getting waveform for note ${note}:
+            - Custom waveform for this note: ${customWaveform || 'none'}
+            - Global waveform: ${this.globalWaveform}
+            - Will use: ${customWaveform || this.globalWaveform}
+            - All custom waveforms: [${notesWithCustomWaveforms.join(', ')}]`);
+        
+        // If this note has a custom waveform, use that
+        if (customWaveform) {
+            return customWaveform;
+        }
+        
+        // Otherwise use the global waveform
+        return this.globalWaveform;
     }
 
     setGlobalWaveform(waveform: Waveform): void {
@@ -332,37 +388,73 @@ class KeyboardAudioManager {
     }
 
     setNoteWaveform(note: number, waveform: Waveform): void {
-        console.log(`[DEBUG] Setting waveform for note ${note} to ${waveform}`);
-        console.log(`[DEBUG] Before - waveforms map has ${this.waveforms.size} entries`);
-        console.log(`[DEBUG] Before - waveform for this note is: ${this.waveforms.get(note) || 'not set (using global)'}`);
+        console.log(`[AUDIO ENGINE] Setting waveform for note ${note} to ${waveform}`);
         
-        // Store the waveform in our map
+        // Store the custom waveform for this note
         this.waveforms.set(note, waveform);
         
-        console.log(`[DEBUG] After - waveforms map has ${this.waveforms.size} entries`);
-        console.log(`[DEBUG] After - waveform for this note is: ${this.waveforms.get(note)}`);
-        console.log(`[DEBUG] Global waveform is: ${this.globalWaveform}`);
-        
-        // Update voice if active
+        // If the note is currently playing, update its waveform
         const voice = this.activeVoices.get(note);
         if (voice) {
-            console.log(`[DEBUG] Updating active voice for note ${note}`);
-            // Update main oscillator
-            voice.oscillator.type = waveform;
-            voice.waveform = waveform; // Update stored waveform
-            
-            // Update all unison voices to match
-            if (voice.unisonVoices && voice.unisonVoices.length > 0) {
-                console.log(`[DEBUG] Updating ${voice.unisonVoices.length} unison voices for note ${note}`);
-                voice.unisonVoices.forEach((unisonVoice, idx) => {
-                    if (unisonVoice.oscillator) {
-                        console.log(`[DEBUG] Setting unison voice ${idx} oscillator to ${waveform}`);
-                        unisonVoice.oscillator.type = waveform;
-                    }
-                });
+            try {
+                console.log(`[AUDIO ENGINE] Updating active voice for note ${note} to waveform ${waveform}`);
+                
+                // For backwards compatibility with older implementation
+                if (voice.oscillator) {
+                    voice.oscillator.type = waveform;
+                    voice.waveform = waveform;
+                    console.log(`[AUDIO ENGINE] Updated main oscillator type to ${waveform}`);
+                }
+                
+                // For multi-oscillator implementation
+                if (voice.allOscillators && voice.allOscillators.length > 0) {
+                    // Update the waveform of the first oscillator
+                    voice.allOscillators[0].type = waveform;
+                    console.log(`[AUDIO ENGINE] Updated first oscillator in allOscillators to ${waveform}`);
+                }
+                
+                // Also update unison voices if they exist
+                if (voice.unisonVoices && voice.unisonVoices.length > 0) {
+                    voice.unisonVoices.forEach(unisonVoice => {
+                        if (unisonVoice.oscillator) {
+                            unisonVoice.oscillator.type = waveform;
+                            console.log(`[AUDIO ENGINE] Updated unison oscillator to ${waveform}`);
+                        }
+                    });
+                }
+                
+                // Update the voice's stored waveform property for future reference
+                voice.waveform = waveform;
+                
+                // Force a redraw of the waveform by stopping and recreating the oscillator
+                // This is a more aggressive approach but ensures the waveform changes
+                if (!voice.allOscillators && voice.oscillator && voice.oscillator.type !== waveform) {
+                    console.log(`[AUDIO ENGINE] Recreating oscillator for note ${note} with waveform ${waveform}`);
+                    
+                    // Get current values
+                    const now = this.audioContext!.currentTime;
+                    const currentFreq = voice.baseFrequency;
+                    
+                    // Create new oscillator with the correct waveform
+                    const newOscillator = this.audioContext!.createOscillator();
+                    newOscillator.type = waveform;
+                    newOscillator.frequency.setValueAtTime(currentFreq, now);
+                    
+                    // Connect to the same destinations
+                    newOscillator.connect(voice.filterNode);
+                    
+                    // Schedule the old oscillator to stop
+                    voice.oscillator.stop(now + 0.01);
+                    
+                    // Start the new oscillator
+                    newOscillator.start(now);
+                    
+                    // Replace the old oscillator
+                    voice.oscillator = newOscillator;
+                }
+            } catch (error) {
+                console.error(`Error updating waveform for note ${note}:`, error);
             }
-        } else {
-            console.log(`[DEBUG] No active voice found for note ${note}`);
         }
     }
 
@@ -556,10 +648,21 @@ class KeyboardAudioManager {
             const now = this.audioContext.currentTime;
             const releaseTime = voice.envelope.release;
 
-            // Cancel scheduled changes and start release phase for main voice
+            // Apply release envelope to gain node
             voice.gainNode.gain.cancelScheduledValues(now);
             voice.gainNode.gain.setValueAtTime(voice.gainNode.gain.value, now);
-            voice.gainNode.gain.linearRampToValueAtTime(0, now + releaseTime);
+            voice.gainNode.gain.exponentialRampToValueAtTime(0.001, now + releaseTime);
+
+            // Stop all oscillators after release time
+            if (voice.allOscillators) {
+                // Stop all oscillators
+                voice.allOscillators.forEach(osc => {
+                    osc.stop(now + releaseTime + 0.1);
+                });
+            } else {
+                // Legacy code for backwards compatibility
+                voice.oscillator.stop(now + releaseTime + 0.1);
+            }
 
             // Handle unison voices release
             if (voice.unisonVoices && voice.unisonVoices.length > 0) {
@@ -736,6 +839,8 @@ class KeyboardAudioManager {
         this.waveforms.clear();
         this.unisonSettings.clear(); // Clear unison settings
         this.globalWaveform = 'sine';
+        this.activeWaveforms.clear();
+        this.editableWaveform.clear();
 
         if (this.audioContext) {
             this.audioContext.close();
@@ -980,6 +1085,170 @@ class KeyboardAudioManager {
     // Add a public method to get the waveform for a specific key
     getKeyWaveform(note: number): Waveform | undefined {
         return this.waveforms.get(note);
+    }
+
+    // Add a new method to get all active waveforms for a note
+    private getActiveWaveformsForNote(note: number): Waveform[] {
+        // Return the active waveforms for this note, or the global active waveforms if none set for this note
+        return this.activeWaveforms.get(note) || [];
+    }
+
+    // Add methods to manage active waveforms
+    setActiveWaveforms(note: number, waveforms: Waveform[]): void {
+        this.activeWaveforms.set(note, [...waveforms]);
+        
+        // Update active voice if note is currently playing
+        this.updateActiveVoiceWaveforms(note);
+    }
+    
+    setGlobalActiveWaveforms(waveforms: Waveform[]): void {
+        console.log(`[AUDIO ENGINE] Setting global active waveforms: ${waveforms.join(', ')}`);
+        
+        // Update the global waveform to be the first active waveform
+        if (waveforms.length > 0) {
+            this.globalWaveform = waveforms[0];
+        }
+        
+        // Update all notes that don't have custom waveforms
+        this.activeVoices.forEach((voice, note) => {
+            // In multi-oscillator mode, we want to update all notes with the global waveforms
+            // unless they have their own specific active waveforms
+            if (!this.activeWaveforms.has(note)) {
+                // Store these waveforms for this note
+                this.activeWaveforms.set(note, [...waveforms]);
+                console.log(`[AUDIO ENGINE] Setting active waveforms for note ${note} to global waveforms: ${waveforms.join(', ')}`);
+                
+                // Update the oscillators for this note
+                this.updateActiveVoiceWaveforms(note);
+            }
+        });
+    }
+    
+    // Helper method to update the waveforms of an active voice
+    private updateActiveVoiceWaveforms(note: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        const waveforms = this.getActiveWaveformsForNote(note);
+        console.log(`[AUDIO ENGINE] Updating voice waveforms for note ${note}: ${waveforms.join(', ')}`);
+        
+        // Calculate per-oscillator gain to prevent excessive volume with multiple oscillators
+        const oscillatorCount = waveforms.length;
+        const perOscillatorGain = oscillatorCount > 0 ? 1 / Math.sqrt(oscillatorCount) : 1;
+        console.log(`[AUDIO ENGINE] Using ${oscillatorCount} oscillators with per-oscillator gain of ${perOscillatorGain}`);
+        
+        // If no custom oscillators yet, create them based on the active waveforms
+        if (!voice.allOscillators) {
+            const now = this.audioContext.currentTime;
+            const oscillators: OscillatorNode[] = [];
+            
+            // Create oscillators for each waveform
+            for (const waveform of waveforms) {
+                // Create a gain node for this oscillator to adjust its volume
+                const oscillatorGain = this.audioContext.createGain();
+                oscillatorGain.gain.setValueAtTime(perOscillatorGain, now);
+                
+                // Create and configure the oscillator
+                const oscillator = this.audioContext.createOscillator();
+                oscillator.type = waveform;
+                oscillator.frequency.setValueAtTime(voice.baseFrequency, now);
+                
+                // Connect oscillator to its gain node, then to the shared filter
+                oscillator.connect(oscillatorGain);
+                oscillatorGain.connect(voice.filterNode);
+                
+                // Store the gain node with the oscillator for future reference
+                (oscillator as any).gainNode = oscillatorGain;
+                
+                // Start oscillator
+                oscillator.start(now);
+                oscillators.push(oscillator);
+                
+                console.log(`[AUDIO ENGINE] Created new oscillator with waveform ${waveform} for note ${note}`);
+            }
+            
+            // Store all oscillators
+            voice.allOscillators = oscillators;
+        } else {
+            // Update existing oscillators or create new ones as needed
+            const existingCount = voice.allOscillators.length;
+            const targetCount = waveforms.length;
+            const now = this.audioContext.currentTime;
+            
+            console.log(`[AUDIO ENGINE] Updating oscillators for note ${note}: existing=${existingCount}, target=${targetCount}`);
+            
+            // Update the gain for all oscillators (existing and new)
+            for (let i = 0; i < existingCount; i++) {
+                if (i < targetCount) {
+                    // Update type of existing oscillator
+                    voice.allOscillators[i].type = waveforms[i];
+                    
+                    // Update its gain
+                    const oscillatorGain = (voice.allOscillators[i] as any).gainNode;
+                    if (oscillatorGain) {
+                        oscillatorGain.gain.setValueAtTime(perOscillatorGain, now);
+                    }
+                    
+                    console.log(`[AUDIO ENGINE] Updated oscillator ${i} to waveform ${waveforms[i]} for note ${note}`);
+                }
+            }
+            
+            // Create additional oscillators if needed
+            if (targetCount > existingCount) {
+                for (let i = existingCount; i < targetCount; i++) {
+                    // Create a gain node for this oscillator
+                    const oscillatorGain = this.audioContext.createGain();
+                    oscillatorGain.gain.setValueAtTime(perOscillatorGain, now);
+                    
+                    // Create and configure the oscillator
+                    const oscillator = this.audioContext.createOscillator();
+                    oscillator.type = waveforms[i];
+                    oscillator.frequency.setValueAtTime(voice.baseFrequency, now);
+                    
+                    // Connect oscillator to its gain node, then to the shared filter
+                    oscillator.connect(oscillatorGain);
+                    oscillatorGain.connect(voice.filterNode);
+                    
+                    // Store the gain node with the oscillator
+                    (oscillator as any).gainNode = oscillatorGain;
+                    
+                    // Start oscillator
+                    oscillator.start(now);
+                    voice.allOscillators.push(oscillator);
+                    
+                    console.log(`[AUDIO ENGINE] Added new oscillator ${i} with waveform ${waveforms[i]} for note ${note}`);
+                }
+            }
+            
+            // Stop excess oscillators
+            if (targetCount < existingCount) {
+                for (let i = targetCount; i < existingCount; i++) {
+                    try {
+                        // Stop the oscillator
+                        voice.allOscillators[i].stop(now);
+                        
+                        // Disconnect its gain node if it exists
+                        const oscillatorGain = (voice.allOscillators[i] as any).gainNode;
+                        if (oscillatorGain) {
+                            oscillatorGain.disconnect();
+                        }
+                        
+                        console.log(`[AUDIO ENGINE] Stopped excess oscillator ${i} for note ${note}`);
+                    } catch (error) {
+                        console.error(`Error stopping oscillator ${i} for note ${note}:`, error);
+                    }
+                }
+                
+                // Remove excess oscillators from the array
+                voice.allOscillators = voice.allOscillators.slice(0, targetCount);
+            }
+        }
+        
+        // Also update the primary oscillator and waveform properties for compatibility
+        if (voice.allOscillators && voice.allOscillators.length > 0) {
+            voice.oscillator = voice.allOscillators[0];
+            voice.waveform = waveforms[0] || 'sine';
+        }
     }
 }
 

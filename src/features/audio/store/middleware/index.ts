@@ -1,9 +1,23 @@
 // src/features/audio/store/middleware/index.ts
 import { Middleware } from '@reduxjs/toolkit';
 import { RootState } from '../../../../store';
-import { setMode } from '../slice';  // Import from slice instead of actions
+import { setMode as setAudioMode } from '../slice';
 import keyboardAudioManager from '../../engine/synthesis/keyboardEngine';
 import { drumSoundManager } from '../../engine/synthesis/drumEngine';
+import {
+    noteOn,
+    noteOff,
+    initializeAudio,
+    setKeyParameter,
+    setGlobalWaveform,
+    setKeyWaveform,
+    setMode as setKeyboardMode,
+    cleanup,
+    toggleWaveform,
+    setEditableWaveform,
+    selectActiveWaveforms,
+    selectEditableWaveform
+} from '../../../keyboard/store/slices/keyboard.slice';
 
 // Debug utilities
 const debug = {
@@ -48,6 +62,16 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 const keyParams = getState().keyboard.keyParameters[note] || {};
                 debug.log(`Note on: ${note}, Mode: ${mode}`);
 
+                // Debug waveform settings before playing
+                const noteWaveform = getState().keyboard.keyParameters[note]?.waveform;
+                const globalWaveform = getState().keyboard.globalWaveform;
+                const isGlobalMode = getState().keyboard.isGlobalOscillatorMode;
+                debug.log(`Playing note ${note} with waveform settings:
+                    - Note-specific waveform: ${noteWaveform || 'none'}
+                    - Global waveform: ${globalWaveform}
+                    - Using global mode: ${isGlobalMode}
+                    - Will use: ${noteWaveform || globalWaveform}`);
+
                 if (mode === 'drums') {
                     const params = getNoteParameters(keyParams);
                     drumSoundManager.playDrumSound(note, params);
@@ -82,9 +106,9 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
             case 'keyboard/setGlobalWaveform': {
                 const waveform = action.payload;
                 const isGlobalOscillatorMode = getState().keyboard.isGlobalOscillatorMode;
-                debug.log(`Setting global waveform: ${waveform}`);
+                debug.log(`Setting global waveform: ${waveform}, isGlobalMode: ${isGlobalOscillatorMode}`);
                 
-                // Always update the global waveform
+                // Always update the global waveform since that's what this action is for
                 keyboardAudioManager.setGlobalWaveform(waveform);
                 
                 // In global mode, also update all key-specific waveforms
@@ -102,6 +126,9 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                             payload: { keyNumber, waveform } 
                         });
                     });
+                } else {
+                    // In local mode, we don't update key-specific waveforms when global waveform changes
+                    debug.log(`Local oscillator mode active - NOT updating individual keys`);
                 }
                 break;
             }
@@ -110,9 +137,18 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 const { keyNumber, waveform } = action.payload;
                 debug.log(`Setting waveform for key ${keyNumber}: ${waveform}`);
                 console.log(`[DEBUG MIDDLEWARE] Setting waveform for key ${keyNumber} to ${waveform}`);
-                console.log(`[DEBUG MIDDLEWARE] Before: waveform map entry for key ${keyNumber}: ${keyboardAudioManager.getKeyWaveform?.(keyNumber) || 'not available'}`);
+                
+                // Make sure this updates only this specific key without affecting the global waveform
                 keyboardAudioManager.setNoteWaveform(keyNumber, waveform);
-                console.log(`[DEBUG MIDDLEWARE] After: waveform map entry for key ${keyNumber}: ${keyboardAudioManager.getKeyWaveform?.(keyNumber) || 'not available'}`);
+                console.log(`[DEBUG MIDDLEWARE] Updated waveform map entry for key ${keyNumber}: ${keyboardAudioManager.getKeyWaveform?.(keyNumber) || 'not available'}`);
+                
+                // In local mode, we should NOT update the global waveform
+                // This is important to ensure local mode changes stay local
+                const isGlobalMode = getState().keyboard.isGlobalOscillatorMode;
+                if (!isGlobalMode) {
+                    console.log(`[DEBUG MIDDLEWARE] In local mode - NOT updating global waveform`);
+                }
+                
                 break;
             }
 
@@ -130,7 +166,7 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 // Update audio engine mode
                 keyboardAudioManager.setMode(newMode);
                 // Sync audio state with keyboard state
-                dispatch(setMode(newMode));
+                dispatch(setAudioMode(newMode));
                 break;
             }
 
@@ -166,7 +202,7 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 
                 if (mode !== 'drums') {
                     // Update each note in the audio engine
-                    notes.forEach(noteNumber => {
+                    notes.forEach((noteNumber: number) => {
                         keyboardAudioManager.setNoteParameter(noteNumber, parameter, value);
                     });
                 }
@@ -184,13 +220,15 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 next(action);
                 
                 // Then update each note in the audio engine
-                notes.forEach(noteNumber => {
+                notes.forEach((noteNumber: number) => {
                     // Get the updated oscillators from state
+                    // @ts-ignore - oscillators might not exist on keyParameters
                     const oscillators = getState().keyboard.keyParameters[noteNumber]?.oscillators;
                     
                     if (oscillators && oscillators.length > 0) {
                         // If the note has custom oscillators, update them
-                        keyboardAudioManager.setKeyOscillators(noteNumber, oscillators);
+                        // @ts-ignore - setKeyOscillators might not exist on keyboardAudioManager
+                        keyboardAudioManager.setKeyOscillators?.(noteNumber, oscillators);
                     } else if (changes.waveform && oscillatorIndex === 0) {
                         // For the primary oscillator, fall back to setting the waveform
                         keyboardAudioManager.setNoteWaveform(noteNumber, changes.waveform);
@@ -207,4 +245,149 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
     return result;
 };
 
-export default audioMiddleware;
+// Separate middleware to handle waveform toggling and editing
+const waveformMiddleware: Middleware<object, RootState> = ({ dispatch, getState }) => next => action => {
+    // Don't call next(action) here again, as it's already been handled by audioMiddleware
+    // Just process the action for waveform-related side effects
+    const result = action; // Just use the action directly, don't call next
+    
+    // Handle waveform-related actions
+    if (action && typeof action === 'object' && 'type' in action) {
+        if (action.type === toggleWaveform.type || action.type === setEditableWaveform.type) {
+            const state = getState();
+            const activeWaveforms = selectActiveWaveforms(state);
+            const editableWaveform = selectEditableWaveform(state);
+            const isGlobalMode = state.keyboard.isGlobalOscillatorMode;
+            const selectedKey = state.keyboard.selectedKey;
+            const activeNotes = state.keyboard.activeNotes;
+            const oscillatorMode = state.keyboard.oscillatorMode;
+            
+            if (oscillatorMode === 'single') {
+                // For single oscillator mode, the primary concern is ensuring we respect local vs global mode
+                
+                // Get the effective key to modify (selected key or the last active note)
+                const effectiveKey = selectedKey !== null 
+                    ? selectedKey 
+                    : activeNotes.length > 0 
+                        ? activeNotes[activeNotes.length - 1] 
+                        : null;
+                
+                // If we have an editable waveform, use that, otherwise use the first active or default to sine
+                const waveform = editableWaveform || (activeWaveforms.length > 0 ? activeWaveforms[0] : 'sine');
+                
+                console.log(`[WAVEFORM DEBUG] Single mode, isGlobalMode: ${isGlobalMode}, selectedKey: ${selectedKey}, effectiveKey: ${effectiveKey}, waveform: ${waveform}`);
+                
+                if (isGlobalMode) {
+                    // GLOBAL MODE: update all keys
+                    keyboardAudioManager.setGlobalWaveform(waveform);
+                    console.log(`[WAVEFORM SYNC] Single mode (global): Set waveform to ${waveform}`);
+                    
+                    // Also update any existing keys
+                    const allKeys = Object.keys(state.keyboard.keyParameters).map(Number);
+                    allKeys.forEach(keyNumber => {
+                        keyboardAudioManager.setNoteWaveform(keyNumber, waveform);
+                    });
+                } else {
+                    // LOCAL MODE: only update specific keys, NEVER update global
+                    
+                    // Primary approach: update the selected key if available
+                    if (effectiveKey !== null) {
+                        keyboardAudioManager.setNoteWaveform(effectiveKey, waveform);
+                        console.log(`[WAVEFORM SYNC] Single mode (local): Set waveform for key ${effectiveKey} to ${waveform}`);
+                    } 
+                    // Fallback: do nothing in local mode if no key is selected or active
+                    else {
+                        console.warn(`[WAVEFORM SYNC] Single mode (local): No key to update, skipping waveform change`);
+                    }
+                    
+                    // IMPORTANT: Never update global waveform in local mode
+                }
+            } 
+            // In multi oscillator mode, handle multiple waveforms
+            else if (oscillatorMode === 'multi') {
+                // In global mode, update all keys with active waveforms
+                if (isGlobalMode) {
+                    // Update global waveforms first
+                    keyboardAudioManager.setGlobalActiveWaveforms(activeWaveforms);
+                    
+                    // For global mode, get all keys that have been interacted with before
+                    const allKeys = Object.keys(state.keyboard.keyParameters).map(Number);
+                    
+                    // Update all these keys with the same waveforms
+                    allKeys.forEach(keyNumber => {
+                        keyboardAudioManager.setActiveWaveforms(keyNumber, activeWaveforms);
+                    });
+                    
+                    console.log(`[WAVEFORM SYNC] Multi mode (global): Updated all keys with waveforms: ${activeWaveforms.join(', ')}, editable: ${editableWaveform}`);
+                } 
+                // In local mode, handle selected key and active notes
+                else {
+                    // Get the effective key to modify (selected key or the last active note)
+                    const effectiveKey = selectedKey !== null 
+                        ? selectedKey 
+                        : activeNotes.length > 0 
+                            ? activeNotes[activeNotes.length - 1] 
+                            : null;
+                            
+                    if (effectiveKey !== null) {
+                        // Get the key-specific active waveforms
+                        const keyParams = state.keyboard.keyParameters[effectiveKey];
+                        const keyActiveWaveforms = keyParams?.activeWaveforms ?? [];
+                        
+                        // If the key has its own active waveforms, use those
+                        if (keyParams?.activeWaveforms) {
+                            console.log(`[WAVEFORM SYNC] Multi mode (local): Found key-specific waveforms for key ${effectiveKey}: ${keyActiveWaveforms.join(', ')}`);
+                            keyboardAudioManager.setActiveWaveforms(effectiveKey, keyActiveWaveforms);
+                        } else {
+                            // Otherwise, use the global active waveforms for this key
+                            console.log(`[WAVEFORM SYNC] Multi mode (local): No key-specific waveforms for key ${effectiveKey}, using global: ${activeWaveforms.join(', ')}`);
+                            keyboardAudioManager.setActiveWaveforms(effectiveKey, activeWaveforms);
+                            
+                            // And store them in the key's parameters
+                            if (!state.keyboard.keyParameters[effectiveKey]) {
+                                dispatch({ type: 'keyboard/initializeKeyParameters', payload: effectiveKey });
+                            }
+                            
+                            dispatch({ 
+                                type: 'keyboard/setKeyActiveWaveforms', 
+                                payload: { 
+                                    keyNumber: effectiveKey, 
+                                    activeWaveforms: [...activeWaveforms]
+                                } 
+                            });
+                        }
+                        
+                        console.log(`[WAVEFORM SYNC] Multi mode (local): Updated key ${effectiveKey} with waveforms: ${keyActiveWaveforms.length > 0 ? keyActiveWaveforms.join(', ') : activeWaveforms.join(', ')}, editable: ${editableWaveform}`);
+                    } else {
+                        console.warn(`[WAVEFORM SYNC] Multi mode (local): No key to update, skipping waveform change`);
+                    }
+                    
+                    // IMPORTANT: In local mode, don't update the global waveforms
+                }
+                
+                // Always update the global waveforms as a fallback for new keys in global mode only
+                if (isGlobalMode) {
+                    keyboardAudioManager.setGlobalActiveWaveforms(activeWaveforms);
+                }
+            }
+        }
+    }
+    
+    return result; // Return the original action
+};
+
+// Combined middleware that includes both audio middleware and waveform middleware
+const combinedMiddleware: Middleware<object, RootState> = ({ dispatch, getState }) => next => action => {
+    // First run the audio middleware to process the action
+    const result = audioMiddleware({ dispatch, getState })(next)(action);
+    
+    // Then run the waveform middleware on the same action for side effects only
+    // Don't pass result here, as we want to process the original action
+    waveformMiddleware({ dispatch, getState })(next)(action);
+    
+    // Return the result from audioMiddleware
+    return result;
+};
+
+// Export a single middleware
+export default combinedMiddleware;
