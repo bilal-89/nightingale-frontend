@@ -81,6 +81,7 @@ const ColorPicker = () => {
 
 // SVG Slider with labels and values removed
 const SVGSlider: React.FC<{
+    parameterId?: string;  // Add parameterId prop to identify which parameter this is
     value: number;
     min: number;
     max: number;
@@ -92,6 +93,7 @@ const SVGSlider: React.FC<{
     trackColor?: string;
     className?: string;
 }> = ({
+          parameterId,
           value,
           min,
           max,
@@ -231,8 +233,11 @@ const SVGSlider: React.FC<{
         };
     }, [handleDragEnd]);
 
+    // Check if this is specifically a tuning parameter - use the parameterId
+    const isTuningSlider = parameterId === 'tuning';
+
     return (
-        <div className={`mb-3 ${className}`}>
+        <div className={`mb-8 ${className}`}>
             {/* Slider container with hidden range input */}
             <div
                 ref={sliderRef}
@@ -253,7 +258,7 @@ const SVGSlider: React.FC<{
                     style={{ cursor: 'pointer' }}
                 />
 
-                {/* SVG Slider with faster transitions - thinner version */}
+                {/* SVG Slider - now with special tuning slider */}
                 <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
@@ -261,22 +266,115 @@ const SVGSlider: React.FC<{
                         transition: isDragging ? 'none' : 'width 150ms ease-out'
                     }}
                 >
-                    <svg
-                        width="100%"
-                        height="100%"
-                        viewBox={`0 0 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 6`}
-                        preserveAspectRatio="none"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        style={{ transition: isDragging ? 'none' : 'all 150ms ease-out' }}
-                    >
-                        <path
-                            d={`M${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3} 0H3C1.34315 0 0 1.34315 0 3C0 4.65685 1.34315 6 3 6H${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3}C${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3 + 1.65685} 6 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 4.65685 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 3C${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 1.34315 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3 + 1.65685} 0 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3} 0Z`}
-                            fill={trackColor}
-                            fillOpacity="0.45"
+                    {isTuningSlider ? (
+                        // Special curved SVG for tuning parameter with proper hit area
+                        <div className="relative" style={{ height: "40px", marginTop: "-6px", marginBottom: "10px" }}>
+                            {/* Remove the full-width clickable div */}
+                            
+                            {/* Background track (invisible) */}
+                            <svg
+                                width="100%"
+                                height="26"
+                                viewBox="0 0 106 26"
+                                preserveAspectRatio="xMinYMin meet"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="absolute top-0 left-0 opacity-0"
+                                style={{ transform: "translateY(8px)" }}
+                            >
+                                <path
+                                    d="M26.75 16H5C2.23858 16 0 18.2386 0 21C0 23.7614 2.23858 26 5 26H26.75L40.125 25L53.5 23.5L66.875 20.5L80.125 17.5L93.5 13.5L102.842 9.21839C104.461 8.47598 105.5 6.8576 105.5 5.07577C105.5 1.89404 102.322 -0.308275 99.3429 0.808907L93.5 3L80.125 7L66.875 10.5L53.5 13.5L40.125 15L26.75 16Z"
+                                />
+                            </svg>
+                            
+                            {/* Hidden input precisely aligned with the visible part */}
+                            <input
+                                ref={rangeInputRef}
+                                type="range"
+                                min={min}
+                                max={max}
+                                step={step}
+                                value={value}
+                                onChange={handleRangeChange}
+                                className="absolute opacity-0 cursor-pointer z-20"
+                                style={{ 
+                                    top: "8px",
+                                    left: "0",
+                                    width: "100%",
+                                    height: "26px",
+                                    cursor: 'pointer'
+                                }}
+                            />
+                            
+                            {/* The visible slider that clips to the proper percentage */}
+                            <div 
+                                className="absolute top-0 left-0 h-full overflow-hidden pointer-events-none" 
+                                style={{ 
+                                    width: `${sliderWidth}%`,
+                                    transition: isDragging ? 'none' : 'width 150ms ease-out',
+                                    transform: "translateY(8px)"
+                                }}
+                            >
+                                <svg
+                                    width="100%"
+                                    height="26"
+                                    viewBox="0 0 106 26"
+                                    preserveAspectRatio="xMinYMin meet"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    style={{ minWidth: "106px" }}
+                                    className="pointer-events-none"
+                                >
+                                    <path
+                                        d="M26.75 16H5C2.23858 16 0 18.2386 0 21C0 23.7614 2.23858 26 5 26H26.75L40.125 25L53.5 23.5L66.875 20.5L80.125 17.5L93.5 13.5L102.842 9.21839C104.461 8.47598 105.5 6.8576 105.5 5.07577C105.5 1.89404 102.322 -0.308275 99.3429 0.808907L93.5 3L80.125 7L66.875 10.5L53.5 13.5L40.125 15L26.75 16Z"
+                                        fill={trackColor}
+                                        fillOpacity="0.45"
+                                        className="pointer-events-none"
+                                    />
+                                </svg>
+                            </div>
+                            
+                            {/* Clickable SVG path that exactly matches the curved slider */}
+                            <svg
+                                width="100%"
+                                height="26"
+                                viewBox="0 0 106 26"
+                                preserveAspectRatio="xMinYMin meet"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                style={{ transform: "translateY(8px)" }}
+                                className="absolute top-0 left-0"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <path
+                                    d="M26.75 16H5C2.23858 16 0 18.2386 0 21C0 23.7614 2.23858 26 5 26H26.75L40.125 25L53.5 23.5L66.875 20.5L80.125 17.5L93.5 13.5L102.842 9.21839C104.461 8.47598 105.5 6.8576 105.5 5.07577C105.5 1.89404 102.322 -0.308275 99.3429 0.808907L93.5 3L80.125 7L66.875 10.5L53.5 13.5L40.125 15L26.75 16Z"
+                                    fill="transparent"
+                                    stroke="transparent"
+                                    strokeWidth="0"
+                                    className="cursor-pointer"
+                                    onMouseDown={handleSliderMouseDown}
+                                />
+                            </svg>
+                        </div>
+                    ) : (
+                        // Standard slider for other parameters
+                        <svg
+                            width="100%"
+                            height="100%"
+                            viewBox={`0 0 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 6`}
+                            preserveAspectRatio="none"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
                             style={{ transition: isDragging ? 'none' : 'all 150ms ease-out' }}
-                        />
-                    </svg>
+                        >
+                            <path
+                                d={`M${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3} 0H3C1.34315 0 0 1.34315 0 3C0 4.65685 1.34315 6 3 6H${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3}C${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3 + 1.65685} 6 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 4.65685 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 3C${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07)} 1.34315 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3 + 1.65685} 0 ${Math.max(6, (isDragging ? percentage : animatedPercentage) * 1.07) - 3} 0Z`}
+                                fill={trackColor}
+                                fillOpacity="0.45"
+                                style={{ transition: isDragging ? 'none' : 'all 150ms ease-out' }}
+                            />
+                        </svg>
+                    )}
                 </div>
             </div>
         </div>
@@ -304,6 +402,7 @@ const SVGUnisonGroup: React.FC<{
             {unisonParams.map(param => (
                 <SVGSlider
                     key={param.id}
+                    parameterId={param.id}
                     value={values[param.id]?.value ?? param.defaultValue}
                     min={param.min}
                     max={param.max}
@@ -537,6 +636,7 @@ const ParameterPanel: React.FC = () => {
                                                 {allParameters.map(param => (
                                                     <SVGSlider
                                                         key={param.id}
+                                                        parameterId={param.id}
                                                         value={parameterValues[param.id]?.value ?? param.defaultValue}
                                                         min={param.min}
                                                         max={param.max}

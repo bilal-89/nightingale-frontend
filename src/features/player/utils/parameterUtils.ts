@@ -23,4 +23,9 @@ export const mapUnisonParamToProperty = (parameterId: string): string | null => 
   };
   
   return mapping[parameterId] || null;
+};
+
+// New function to check if parameter is specifically tuning
+export const isTuningParam = (parameterId: string): boolean => {
+  return parameterId === 'tuning';
 }; 

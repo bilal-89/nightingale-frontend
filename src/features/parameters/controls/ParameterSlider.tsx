@@ -1,5 +1,7 @@
 import React from 'react';
 import { useParameters } from '../../player/hooks/useParameters';
+import { isTuningParam } from '../../player/utils/parameterUtils';
+import { getMutedColor } from '../../../shared/constants/colors';
 
 interface ParameterSliderProps {
   parameterId: string;
@@ -11,6 +13,7 @@ interface ParameterSliderProps {
   step: number;
   defaultValue: number;
   value: number;
+  trackColor?: string;
 }
 
 const ParameterSlider: React.FC<ParameterSliderProps> = ({
@@ -22,9 +25,52 @@ const ParameterSlider: React.FC<ParameterSliderProps> = ({
   max,
   step,
   defaultValue,
-  value
+  value,
+  trackColor
 }) => {
   const { handleParameterChange } = useParameters();
+  const sliderColor = trackColor ? getMutedColor(trackColor) : 'rgba(181,209,107,0.45)';
+  
+  // Custom renderer for the slider track
+  const renderSliderTrack = () => {
+    if (isTuningParam(parameterId)) {
+      return (
+        <div className="relative w-full h-8 my-2">
+          <svg width="100%" height="26" viewBox="0 0 106 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path 
+              d="M26.75 16H5C2.23858 16 0 18.2386 0 21C0 23.7614 2.23858 26 5 26H26.75L40.125 25L53.5 23.5L66.875 20.5L80.125 17.5L93.5 13.5L102.842 9.21839C104.461 8.47598 105.5 6.8576 105.5 5.07577C105.5 1.89404 102.322 -0.308275 99.3429 0.808907L93.5 3L80.125 7L66.875 10.5L53.5 13.5L40.125 15L26.75 16Z" 
+              fill={sliderColor}
+            />
+          </svg>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value || defaultValue}
+            onChange={(e) => handleParameterChange(trackId, noteId, parameterId, parseFloat(e.target.value))}
+            className="absolute inset-0 w-full opacity-0 cursor-pointer"
+          />
+        </div>
+      );
+    } else {
+      // Regular slider for other parameters
+      return (
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value || defaultValue}
+          onChange={(e) => handleParameterChange(trackId, noteId, parameterId, parseFloat(e.target.value))}
+          className="w-full"
+          style={{
+            accentColor: sliderColor
+          }}
+        />
+      );
+    }
+  };
   
   return (
     <div className="parameter-control mb-4">
@@ -32,15 +78,7 @@ const ParameterSlider: React.FC<ParameterSliderProps> = ({
         <span className="text-xs font-medium text-gray-500">{label}</span>
         <span className="text-sm font-medium text-gray-700">{value}</span>
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value || defaultValue}
-        onChange={(e) => handleParameterChange(trackId, noteId, parameterId, parseFloat(e.target.value))}
-        className="w-full"
-      />
+      {renderSliderTrack()}
     </div>
   );
 };
