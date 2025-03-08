@@ -185,6 +185,15 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 break;
             }
 
+            case 'keyboard/toggleOscillatorMode': {
+                const isGlobalMode = getState().keyboard.isGlobalOscillatorMode;
+                debug.log(`Oscillator mode toggled to ${isGlobalMode ? 'global' : 'local'}`);
+                
+                // Update the audio engine
+                keyboardAudioManager.setOscillatorMode(isGlobalMode);
+                break;
+            }
+
             case 'keyboard/cleanup': {
                 debug.log('Cleaning up audio system');
                 try {
@@ -307,16 +316,9 @@ const waveformMiddleware: Middleware<object, RootState> = ({ dispatch, getState 
             else if (oscillatorMode === 'multi') {
                 // In global mode, update all keys with active waveforms
                 if (isGlobalMode) {
-                    // Update global waveforms first
+                    // Pass all active waveforms to the audio engine
+                    // This is critical for making multiple oscillators work in global mode
                     keyboardAudioManager.setGlobalActiveWaveforms(activeWaveforms);
-                    
-                    // For global mode, get all keys that have been interacted with before
-                    const allKeys = Object.keys(state.keyboard.keyParameters).map(Number);
-                    
-                    // Update all these keys with the same waveforms
-                    allKeys.forEach(keyNumber => {
-                        keyboardAudioManager.setActiveWaveforms(keyNumber, activeWaveforms);
-                    });
                     
                     console.log(`[WAVEFORM SYNC] Multi mode (global): Updated all keys with waveforms: ${activeWaveforms.join(', ')}, editable: ${editableWaveform}`);
                 } 

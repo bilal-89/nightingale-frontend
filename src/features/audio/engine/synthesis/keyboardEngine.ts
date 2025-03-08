@@ -821,10 +821,14 @@ class KeyboardAudioManager {
     }
 
     setMode(mode: 'tunable' | 'drums'): void {
+        console.log(`[AUDIO ENGINE] Setting mode to ${mode}`);
+        
+        // Stop all active notes when changing modes
         if (this.currentMode !== mode) {
             Array.from(this.activeVoices.keys()).forEach(note => this.stopNote(note));
-            this.currentMode = mode;
         }
+        
+        this.currentMode = mode;
     }
 
     // Clean up resources
@@ -1104,24 +1108,36 @@ class KeyboardAudioManager {
     setGlobalActiveWaveforms(waveforms: Waveform[]): void {
         console.log(`[AUDIO ENGINE] Setting global active waveforms: ${waveforms.join(', ')}`);
         
+        // Store the global waveforms for future reference - this is critical
+        this.globalActiveWaveforms = [...waveforms];
+        
         // Update the global waveform to be the first active waveform
         if (waveforms.length > 0) {
             this.globalWaveform = waveforms[0];
         }
         
-        // Update all notes that don't have custom waveforms
+        // First, store all waveforms in a global reference so new notes will use them
+        // We use a new array to ensure we're not modifying the input array
+        const globalWaveformsCopy = [...waveforms];
+        
+        // Debug info: log all active notes
+        const activeNotes = Array.from(this.activeVoices.keys());
+        console.log(`[AUDIO ENGINE] Active notes that will receive global waveforms: [${activeNotes.join(', ')}]`);
+        
+        // Update ALL active voices with the new waveforms, regardless of whether they have custom waveforms
+        // In global mode, we want all notes to use the same set of waveforms
         this.activeVoices.forEach((voice, note) => {
-            // In multi-oscillator mode, we want to update all notes with the global waveforms
-            // unless they have their own specific active waveforms
-            if (!this.activeWaveforms.has(note)) {
-                // Store these waveforms for this note
-                this.activeWaveforms.set(note, [...waveforms]);
-                console.log(`[AUDIO ENGINE] Setting active waveforms for note ${note} to global waveforms: ${waveforms.join(', ')}`);
-                
-                // Update the oscillators for this note
-                this.updateActiveVoiceWaveforms(note);
-            }
+            // Always update in global mode - override any existing custom waveforms
+            this.activeWaveforms.set(note, [...globalWaveformsCopy]);
+            console.log(`[AUDIO ENGINE] Applying global waveforms to note ${note}: ${waveforms.join(', ')}`);
+            
+            // Update the oscillators for this note
+            this.updateActiveVoiceWaveforms(note);
         });
+        
+        // Also make sure any new notes will use these waveforms by clearing note-specific waveforms
+        // This ensures that newly played notes after changing global waveforms will use the right settings
+        this.activeWaveforms.clear();
     }
     
     // Helper method to update the waveforms of an active voice
