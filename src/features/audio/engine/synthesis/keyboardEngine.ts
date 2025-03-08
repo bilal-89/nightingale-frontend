@@ -4,8 +4,8 @@ import { Waveform } from '../../../keyboard/store/slices/keyboard.slice';
 
 class KeyboardAudioManager {
     // Core audio settings
-    private readonly MASTER_VOLUME = 0.3;
-    private readonly DEFAULT_GAIN = 0.3;
+    private readonly MASTER_VOLUME = 0.8;
+    private readonly DEFAULT_GAIN = 0.6;
     private readonly DEFAULT_VELOCITY = 100;
 
     // Default envelope settings
@@ -49,9 +49,9 @@ class KeyboardAudioManager {
     }>();
 
     // Default unison settings
-    private readonly DEFAULT_UNISON_COUNT = 1;
-    private readonly DEFAULT_UNISON_DETUNE = 10;
-    private readonly DEFAULT_UNISON_WIDTH = 50;
+    private readonly DEFAULT_UNISON_COUNT = 1;  // Changed to 1 to make unison off by default
+    private readonly DEFAULT_UNISON_DETUNE = 30; // Increased to 30 cents
+    private readonly DEFAULT_UNISON_WIDTH = 100; // Full stereo width
 
     // Add filter node storage to active voices
     private activeVoices = new Map<number, {
@@ -77,9 +77,10 @@ class KeyboardAudioManager {
         unisonVoices?: Array<{
             oscillator: OscillatorNode;
             gainNode: GainNode;
-            panNode: StereoPannerNode | PannerNode;
+            panNode: StereoPannerNode;
         }>;
         allOscillators?: OscillatorNode[];
+        oscillators: any[];
     }>();
 
 
@@ -90,6 +91,29 @@ class KeyboardAudioManager {
     // Add a new property to store active waveforms
     private activeWaveforms = new Map<number, Waveform[]>();
     private editableWaveform = new Map<number, Waveform>();
+
+    // Just after the 'private envelopeParams' declaration, add:
+    private oscillatorParams = new Map<number, Map<Waveform, {
+        attack?: number;
+        decay?: number;
+        sustain?: number;
+        release?: number;
+        tuning?: number;
+        velocity?: number;
+        filterCutoff?: number;
+        filterResonance?: number;
+        unisonCount?: number;
+        unisonDetune?: number;
+        unisonWidth?: number;
+        unison?: {
+            count: number;
+            detune: number;
+            width: number;
+        };
+    }>>();
+
+    // Add the baseOctave property near the other class member declarations
+    private baseOctave = 3; // Lower default octave to prevent keyboard from being too high pitched
 
     // Modify playTunableNoteRT to support multiple oscillators
     private async playTunableNoteRT(note: number, velocity: number): Promise<CompleteNoteEvent> {
@@ -156,37 +180,85 @@ class KeyboardAudioManager {
         // Get unison settings
         const unisonSettings = this.getUnisonSettings(note);
         
-        // Create oscillators for each active waveform
-        const oscillators: OscillatorNode[] = [];
-        
-        // Calculate per-oscillator gain to prevent excessive volume with multiple oscillators
-        const oscillatorCount = waveforms.length;
-        const perOscillatorGain = oscillatorCount > 0 ? 1 / Math.sqrt(oscillatorCount) : 1;
-        console.log(`[AUDIO ENGINE] Creating ${oscillatorCount} oscillators with per-oscillator gain of ${perOscillatorGain}`);
-        
-        // Create an oscillator for each waveform
+        // Track the oscillators we create for this voice
+        const oscillators: any[] = [];
+
         for (const waveform of waveforms) {
-            // Create a gain node for this oscillator to balance volume
-            const oscillatorGain = this.audioContext.createGain();
-            oscillatorGain.gain.setValueAtTime(perOscillatorGain, now);
+            console.log(`[DEBUG AUDIO] Creating oscillator with waveform ${waveform} for note ${note}`);
             
-            // Create the oscillator
+            // Create oscillator
             const oscillator = this.audioContext.createOscillator();
             oscillator.type = waveform;
-            oscillator.frequency.setValueAtTime(baseFrequency, now);
             
-            // Connect oscillator to its gain node, then to the shared filter
-            oscillator.connect(oscillatorGain);
-            oscillatorGain.connect(filterNode);
+            // Check for custom oscillator parameters
+            const customParams = this.oscillatorParams.get(note)?.get(waveform);
             
-            // Store the gain node with the oscillator for future reference
-            (oscillator as any).gainNode = oscillatorGain;
+            // Apply custom frequency/tuning if available
+            const tuningCents = customParams?.tuning ?? (this.tunings.get(note) ?? 0);
+            const baseFreq = this.getFrequency(note, 0); // Get base frequency without tuning
+            const adjustedFreq = baseFreq * Math.pow(2, tuningCents / 1200);
+            oscillator.frequency.setValueAtTime(adjustedFreq, now);
+            console.log(`[DEBUG AUDIO] Setting ${waveform} oscillator frequency: ${adjustedFreq}Hz (base: ${baseFreq}Hz, tuning: ${tuningCents} cents)`);
             
-            // Start oscillator
+            // Create gain node for this oscillator
+            const gainNode = this.audioContext.createGain();
+            
+            // Calculate velocity-based gain with custom velocity if available
+            const velocityValue = customParams?.velocity ?? velocity;
+            // Use a less aggressive normalization: 1/sqrt(n) can make things too quiet with multiple oscillators
+            // Instead, use a more gentle curve
+            const oscillatorCount = waveforms.length;
+            const oscillatorGain = oscillatorCount <= 1 ? 1.0 : 1.0 / Math.pow(oscillatorCount, 0.3); // Less reduction for multiple oscillators
+            const gain = this.velocityToGain(velocityValue) * oscillatorGain;
+            gainNode.gain.setValueAtTime(gain, now);
+            
+            // Create filter if needed
+            let filter: BiquadFilterNode | undefined;
+            if (customParams?.filterCutoff !== undefined || customParams?.filterResonance !== undefined) {
+                filter = this.audioContext.createBiquadFilter();
+                filter.type = 'lowpass';
+                
+                // Set custom filter parameters if available
+                const cutoff = customParams?.filterCutoff ?? (this.filterParams.get(note)?.cutoff ?? this.DEFAULT_FILTER_CUTOFF);
+                const resonance = customParams?.filterResonance ?? (this.filterParams.get(note)?.resonance ?? this.DEFAULT_FILTER_RESONANCE);
+                
+                filter.frequency.setValueAtTime(cutoff, now);
+                filter.Q.setValueAtTime(resonance, now);
+                
+                // Connect oscillator -> filter -> gain -> voice output
+                oscillator.connect(filter);
+                filter.connect(gainNode);
+            } else {
+                // Connect oscillator directly to its gain node
+                oscillator.connect(gainNode);
+            }
+            
+            // Connect to the voice output node
+            gainNode.connect(filterNode);
+            
+            // Create ADSR envelope for this oscillator
+            const envelopeParams = {
+                attack: (customParams?.attack ?? (this.envelopeParams.get(note)?.attack ?? this.DEFAULT_ATTACK)) / 1000,
+                decay: (customParams?.decay ?? (this.envelopeParams.get(note)?.decay ?? this.DEFAULT_DECAY)) / 1000,
+                sustain: (customParams?.sustain ?? (this.envelopeParams.get(note)?.sustain ?? this.DEFAULT_SUSTAIN)) / 100,
+                release: (customParams?.release ?? (this.envelopeParams.get(note)?.release ?? this.DEFAULT_RELEASE)) / 1000
+            };
+            
+            console.log(`[DEBUG AUDIO] ${waveform} oscillator envelope: attack=${envelopeParams.attack}s, decay=${envelopeParams.decay}s, sustain=${envelopeParams.sustain}, release=${envelopeParams.release}s`);
+            
+            // Store oscillator info
+            oscillators.push({
+                oscillator,
+                gainNode,
+                filter,
+                type: waveform,
+                envelope: envelopeParams
+            });
+            
+            // Start the oscillator
             oscillator.start(now);
-            oscillators.push(oscillator);
             
-            console.log(`[AUDIO ENGINE] Created oscillator with waveform ${waveform} for note ${note}`);
+            console.log(`[DEBUG AUDIO] Created oscillator with waveform ${waveform} for note ${note}`);
         }
         
         // Connect filter to gain node, and gain node to main output
@@ -195,29 +267,37 @@ class KeyboardAudioManager {
         
         // Store voice
         const voice = {
-            oscillator: oscillators[0], // Store primary oscillator (first one)
+            oscillator: oscillators[0].oscillator, // Store primary oscillator (first one)
             filterNode,
-            gainNode,
-            baseFrequency,
-            currentTuning: this.tunings.get(note) || 0,
+            gainNode: gainNode,
+            baseFrequency: baseFrequency,
+            currentTuning: this.tunings.get(note) ?? 0,
             currentVelocity: velocity,
             startTime: now,
             noteStartTime: now,
-            envelope,
+            envelope: oscillators[0].envelope,
             waveform: waveforms[0], // Store primary waveform (first one)
-            filter: filterParams,
+            filter: oscillators[0].filter,
             unisonVoices: [],
-            allOscillators: oscillators, // Store all oscillators
+            allOscillators: oscillators.map(osc => osc.oscillator), // Store all oscillators references
+            oscillators: oscillators, // Store the full oscillator objects with their properties
         };
         
         this.activeVoices.set(note, voice);
         
         // If unison is enabled (count > 1), create additional voices for each oscillator
-        if (unisonSettings.count > 1) {
-            console.log(`Creating ${unisonSettings.count} unison voices for note ${note}`);
+        // Always enable unison with at least the default count
+        const actualUnisonCount = unisonSettings.count;
+
+        if (actualUnisonCount > 1) {
+            console.log(`[DEBUG UNISON] Creating ${actualUnisonCount} unison voices for note ${note} with base frequency ${baseFrequency.toFixed(2)}Hz`);
             
-            for (let i = 0; i < unisonSettings.count; i++) {
-                this.addUnisonVoice(note, i, unisonSettings.count, baseFrequency);
+            // First clear any existing unison voices to avoid stacking
+            voice.unisonVoices = [];
+            
+            // Add the unison voices - create all voices (0 to count-1)
+            for (let i = 0; i < actualUnisonCount; i++) {
+                this.addUnisonVoice(note, i, actualUnisonCount, baseFrequency);
             }
         }
 
@@ -235,7 +315,7 @@ class KeyboardAudioManager {
     setNoteParameter(note: number, parameter: string, value: number): void {
         if (this.currentMode === 'drums') return;
 
-        // console.log(`Setting parameter: ${parameter} = ${value} for note ${note}`); // Debug log
+        console.log(`[DEBUG AUDIO] Setting parameter: ${parameter} = ${value} for note ${note}`);
 
         switch (parameter) {
             case 'tuning':
@@ -250,31 +330,28 @@ class KeyboardAudioManager {
             case 'filterResonance':
                 this.setFilterResonance(note, value);
                 break;
-            case 'unisonCount':
-                this.setUnisonParameter(note, 'count', value);
-                break;
-            case 'unisonDetune':
-                this.setUnisonParameter(note, 'detune', value);
-                break;
-            case 'unisonWidth':
-                this.setUnisonParameter(note, 'width', value);
-                break;
             case 'attack':
-            case 'decay':
-            case 'sustain':
-            case 'release': {
-                const currentParams = this.envelopeParams.get(note) ?? {
-                    attack: this.DEFAULT_ATTACK,
-                    decay: this.DEFAULT_DECAY,
-                    sustain: this.DEFAULT_SUSTAIN,
-                    release: this.DEFAULT_RELEASE
-                };
-                this.envelopeParams.set(note, {
-                    ...currentParams,
-                    [parameter]: value
-                });
+                this.setAttack(note, value);
                 break;
-            }
+            case 'decay':
+                this.setDecay(note, value);
+                break;
+            case 'sustain':
+                this.setSustain(note, value);
+                break;
+            case 'release':
+                this.setRelease(note, value);
+                break;
+            case 'unisonCount':
+            case 'unisonDetune':
+            case 'unisonWidth':
+                this.setUnisonParameter(note, parameter, value);
+                break;
+            case 'waveform':
+                // This is handled separately through setNoteWaveform
+                break;
+            default:
+                console.warn(`[DEBUG AUDIO] Unknown parameter: ${parameter}`);
         }
     }
 
@@ -330,6 +407,99 @@ class KeyboardAudioManager {
         }
     }
 
+    // Add these methods after the setFilterResonance method
+    private setAttack(note: number, attackMs: number): void {
+        console.log(`[DEBUG AUDIO] Setting attack for note ${note}: ${attackMs}ms`);
+
+        const currentParams = this.envelopeParams.get(note) ?? {
+            attack: this.DEFAULT_ATTACK,
+            decay: this.DEFAULT_DECAY,
+            sustain: this.DEFAULT_SUSTAIN,
+            release: this.DEFAULT_RELEASE
+        };
+
+        this.envelopeParams.set(note, {
+            ...currentParams,
+            attack: attackMs
+        });
+
+        const voice = this.activeVoices.get(note);
+        if (voice && this.audioContext) {
+            console.log(`[DEBUG AUDIO] Applying attack to active voice ${note}: ${attackMs}ms`);
+            // Update envelope for active voice
+            voice.envelope.attack = attackMs / 1000; // convert to seconds
+        }
+    }
+
+    private setDecay(note: number, decayMs: number): void {
+        console.log(`[DEBUG AUDIO] Setting decay for note ${note}: ${decayMs}ms`);
+
+        const currentParams = this.envelopeParams.get(note) ?? {
+            attack: this.DEFAULT_ATTACK,
+            decay: this.DEFAULT_DECAY,
+            sustain: this.DEFAULT_SUSTAIN,
+            release: this.DEFAULT_RELEASE
+        };
+
+        this.envelopeParams.set(note, {
+            ...currentParams,
+            decay: decayMs
+        });
+
+        const voice = this.activeVoices.get(note);
+        if (voice && this.audioContext) {
+            console.log(`[DEBUG AUDIO] Applying decay to active voice ${note}: ${decayMs}ms`);
+            // Update envelope for active voice
+            voice.envelope.decay = decayMs / 1000; // convert to seconds
+        }
+    }
+
+    private setSustain(note: number, sustainPercent: number): void {
+        console.log(`[DEBUG AUDIO] Setting sustain for note ${note}: ${sustainPercent}%`);
+
+        const currentParams = this.envelopeParams.get(note) ?? {
+            attack: this.DEFAULT_ATTACK,
+            decay: this.DEFAULT_DECAY,
+            sustain: this.DEFAULT_SUSTAIN,
+            release: this.DEFAULT_RELEASE
+        };
+
+        this.envelopeParams.set(note, {
+            ...currentParams,
+            sustain: sustainPercent
+        });
+
+        const voice = this.activeVoices.get(note);
+        if (voice && this.audioContext) {
+            console.log(`[DEBUG AUDIO] Applying sustain to active voice ${note}: ${sustainPercent}%`);
+            // Update envelope for active voice
+            voice.envelope.sustain = sustainPercent / 100; // convert to ratio
+        }
+    }
+
+    private setRelease(note: number, releaseMs: number): void {
+        console.log(`[DEBUG AUDIO] Setting release for note ${note}: ${releaseMs}ms`);
+
+        const currentParams = this.envelopeParams.get(note) ?? {
+            attack: this.DEFAULT_ATTACK,
+            decay: this.DEFAULT_DECAY,
+            sustain: this.DEFAULT_SUSTAIN,
+            release: this.DEFAULT_RELEASE
+        };
+
+        this.envelopeParams.set(note, {
+            ...currentParams,
+            release: releaseMs
+        });
+
+        const voice = this.activeVoices.get(note);
+        if (voice && this.audioContext) {
+            console.log(`[DEBUG AUDIO] Applying release to active voice ${note}: ${releaseMs}ms`);
+            // Update envelope for active voice
+            voice.envelope.release = releaseMs / 1000; // convert to seconds
+        }
+    }
+
     // Required context getter for playback system
     getContext(): AudioContext | null {
         return this.audioContext;
@@ -358,14 +528,20 @@ class KeyboardAudioManager {
 
     // Calculate frequency for a note including tuning
     private getFrequency(note: number, tuning?: number): number {
-        const baseMidiNote = note - 69;
-        const baseFrequency = 440 * Math.pow(2, baseMidiNote / 12);
+        // MIDI note 69 is A4 (440Hz)
+        // Calculate offset from A4 without adding baseOctave
+        const semitoneOffset = note - 69; 
+        const baseFrequency = 440.0 * Math.pow(2, semitoneOffset / 12);
         
-        // If an explicit tuning value is provided (like from note playback),
-        // use that instead of the stored keyboard tuning
-        const actualTuning = (tuning !== undefined ? tuning : this.tunings.get(note)) || 0;
+        // Apply tuning if provided, otherwise use the note's tuning from the map
+        const tuningCents = tuning !== undefined ? tuning : (this.tunings.get(note) ?? 0);
         
-        return actualTuning === 0 ? baseFrequency : baseFrequency * Math.pow(2, actualTuning / 1200);
+        // Apply tuning (convert cents to frequency multiplier)
+        const adjustedFrequency = baseFrequency * Math.pow(2, tuningCents / 1200);
+        
+        console.log(`[DEBUG PITCH] Calculating frequency for note ${note}, offset=${semitoneOffset}, base=${baseFrequency.toFixed(2)}Hz, tuning=${tuningCents}c, final=${adjustedFrequency.toFixed(2)}Hz`);
+        
+        return adjustedFrequency;
     }
 
     private getWaveformForNote(note: number): Waveform {
@@ -886,9 +1062,15 @@ class KeyboardAudioManager {
     }
 
     private velocityToGain(velocity: number): number {
-        const normalizedVelocity = velocity / 127;
-        // Use cubic curve for more natural velocity response
-        return Math.pow(normalizedVelocity, 3) * this.DEFAULT_GAIN;
+        // Use a more aggressive curve that gives higher gain values
+        // Normalize velocity (0-127) to range (0.1-1.0)
+        const normalizedVelocity = 0.1 + (velocity / 127) * 0.9;
+        
+        // Apply a curve that boosts mid to high velocities
+        const boostedGain = Math.pow(normalizedVelocity, 0.7); // Less aggressive curve (was 0.5)
+        
+        // Scale by the default gain for consistency
+        return boostedGain * this.DEFAULT_GAIN;
     }
 
     // Add this function to check audio context state
@@ -910,10 +1092,23 @@ class KeyboardAudioManager {
 
     // Method to get unison settings for a note
     private getUnisonSettings(note: number) {
-        return this.unisonSettings.get(note) || {
-            count: this.DEFAULT_UNISON_COUNT,
-            detune: this.DEFAULT_UNISON_DETUNE,
-            width: this.DEFAULT_UNISON_WIDTH
+        // Get the user-defined unison settings for this note if available
+        const settings = this.unisonSettings.get(note);
+        
+        // If nothing is defined for this note, use the defaults
+        if (!settings) {
+            return {
+                count: this.DEFAULT_UNISON_COUNT,
+                detune: this.DEFAULT_UNISON_DETUNE,
+                width: this.DEFAULT_UNISON_WIDTH
+            };
+        }
+        
+        // Respect user's choice for count, don't force a minimum
+        return {
+            count: settings.count ?? this.DEFAULT_UNISON_COUNT,
+            detune: settings.detune ?? this.DEFAULT_UNISON_DETUNE,
+            width: settings.width ?? this.DEFAULT_UNISON_WIDTH
         };
     }
 
@@ -921,16 +1116,18 @@ class KeyboardAudioManager {
     setUnisonParameter(note: number, parameter: string, value: number): void {
         if (this.currentMode === 'drums') return;
 
+        console.log(`[DEBUG UNISON] Setting unison parameter ${parameter}=${value} for note ${note}`);
+        
         const currentSettings = this.getUnisonSettings(note);
         
         switch (parameter) {
-            case 'count':
+            case 'unisonCount':
                 currentSettings.count = Math.max(1, Math.min(8, Math.floor(value)));
                 break;
-            case 'detune':
+            case 'unisonDetune':
                 currentSettings.detune = Math.max(0, Math.min(100, value));
                 break;
-            case 'width':
+            case 'unisonWidth':
                 currentSettings.width = Math.max(0, Math.min(100, value));
                 break;
         }
@@ -941,6 +1138,10 @@ class KeyboardAudioManager {
         if (this.activeVoices.has(note)) {
             this.updateUnisonVoices(note);
         }
+        
+        // Log the updated settings
+        console.log(`[DEBUG UNISON] Updated unison settings for note ${note}:`, 
+            JSON.stringify(currentSettings));
     }
 
     // Update the active voices for a note when unison parameters change
@@ -949,110 +1150,126 @@ class KeyboardAudioManager {
         if (!voice || !this.audioContext) return;
         
         const unisonSettings = this.getUnisonSettings(note);
+        
+        // Check if we need to change the count
+        // Calculate how many voices we need to add or remove
         const currentCount = voice.unisonVoices ? voice.unisonVoices.length : 0;
+        const targetCount = unisonSettings.count;
         
-        // If unison count has decreased, remove excess voices
-        if (currentCount > unisonSettings.count) {
-            for (let i = unisonSettings.count; i < currentCount; i++) {
-                if (voice.unisonVoices && voice.unisonVoices[i]) {
-                    voice.unisonVoices[i].oscillator.stop();
-                    voice.unisonVoices[i].oscillator.disconnect();
-                    voice.unisonVoices[i].gainNode.disconnect();
-                    voice.unisonVoices[i].panNode.disconnect();
-                }
-            }
-            
-            if (voice.unisonVoices) {
-                voice.unisonVoices = voice.unisonVoices.slice(0, unisonSettings.count);
-            }
-        }
+        console.log(`[DEBUG UNISON] Updating unison voices for note ${note}: current=${currentCount}, target=${targetCount}`);
         
-        // If unison count has increased, add new voices
-        if (currentCount < unisonSettings.count) {
-            if (!voice.unisonVoices) {
-                voice.unisonVoices = [];
-            }
-            
+        // If current and target counts don't match, we need to adjust
+        if (currentCount !== targetCount) {
+            // Get base frequency from the primary oscillator
             const baseFrequency = voice.baseFrequency;
             
-            for (let i = currentCount; i < unisonSettings.count; i++) {
-                this.addUnisonVoice(note, i, unisonSettings.count, baseFrequency);
+            if (currentCount < targetCount) {
+                // We need to add more voices
+                if (!voice.unisonVoices) {
+                    voice.unisonVoices = [];
+                }
+                
+                for (let i = currentCount; i < targetCount; i++) {
+                    this.addUnisonVoice(note, i, targetCount, baseFrequency);
+                }
+            } else {
+                // We need to remove some voices
+                if (voice.unisonVoices && voice.unisonVoices.length > 0) {
+                    // First, stop oscillators for voices we're removing
+                    for (let i = targetCount; i < currentCount; i++) {
+                        const unisonVoice = voice.unisonVoices[i];
+                        if (unisonVoice) {
+                            unisonVoice.oscillator.stop(this.audioContext.currentTime);
+                        }
+                    }
+                    
+                    // Then, slice the array to remove them
+                    voice.unisonVoices = voice.unisonVoices.slice(0, targetCount);
+                }
             }
         }
         
         // Update detune and stereo width for all unison voices
-        if (voice.unisonVoices) {
+        if (voice.unisonVoices && voice.unisonVoices.length > 0) {
             for (let i = 0; i < voice.unisonVoices.length; i++) {
                 this.updateUnisonVoiceParameters(voice.unisonVoices[i], i, unisonSettings);
             }
         }
     }
 
-    // Add a new unison voice to the active voice
+    // Completely rewrite the addUnisonVoice method
     private addUnisonVoice(note: number, index: number, totalVoices: number, baseFrequency: number): void {
         const voice = this.activeVoices.get(note);
         if (!voice || !this.audioContext) return;
         
-        console.log(`[DEBUG] Adding unison voice ${index}/${totalVoices} for note ${note}`);
+        console.log(`[DEBUG UNISON] Adding unison voice ${index}/${totalVoices} for note ${note} with base frequency ${baseFrequency.toFixed(2)}Hz`);
         const unisonSettings = this.getUnisonSettings(note);
         const now = this.audioContext.currentTime;
         
         // Create oscillator for unison voice
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
-        const panNode = this.audioContext.createStereoPanner ? 
-            this.audioContext.createStereoPanner() : 
-            this.audioContext.createPanner();
+        const panNode = this.audioContext.createStereoPanner();
         
         // Set oscillator type to match main oscillator
-        const noteWaveform = this.getWaveformForNote(note);
-        console.log(`[DEBUG] Unison ${index}: retrieved waveform ${noteWaveform} for note ${note}`);
-        console.log(`[DEBUG] Unison ${index}: voice.waveform is ${voice.waveform}`);
-        oscillator.type = noteWaveform;
-        console.log(`[DEBUG] Unison ${index}: Set oscillator type to ${oscillator.type} for note ${note}`);
+        const waveform = voice.waveform || this.getWaveformForNote(note);
+        oscillator.type = waveform;
         
-        // Configure oscillator with base frequency
+        // Normalize index to [-1, 1] range for an even distribution across voices
+        // For 3 voices this would be: -1, 0, 1
+        // For 5 voices this would be: -1, -0.5, 0, 0.5, 1
+        const normalizedIndex = (index / (totalVoices - 1)) * 2 - 1;
+        
+        // Calculate a more aggressive detune amount
+        // The main voice (index = Math.floor(totalVoices/2)) will have minimal detune
+        const detuneAmount = normalizedIndex * unisonSettings.detune;
+        
+        // Apply a slight randomization to the detuning to avoid a robotic sound
+        const randomization = Math.random() * 2 - 1; // Random value between -1 and 1
+        const finalDetune = detuneAmount + (randomization * 2); // Add up to +/- 2 cents of random variation
+        
+        console.log(`[UNISON] Voice ${index}/${totalVoices} detune: ${finalDetune.toFixed(2)} cents, normalized index: ${normalizedIndex.toFixed(2)}`);
+        
+        // Set the frequency and apply detune
         oscillator.frequency.setValueAtTime(baseFrequency, now);
+        oscillator.detune.setValueAtTime(finalDetune, now);
         
-        // Apply envelope to gain - divide by square root of count for better volume scaling
-        const maxGain = this.velocityToGain(voice.currentVelocity) / Math.sqrt(unisonSettings.count);
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(maxGain, now + voice.envelope.attack);
+        // Apply envelope to gain node
+        // Slightly reduce the gain to avoid clipping when using many unison voices
+        const voiceGain = this.velocityToGain(voice.currentVelocity) * (1.0 / Math.sqrt(totalVoices));
+        gainNode.gain.setValueAtTime(0, now); // Start silent
+        gainNode.gain.linearRampToValueAtTime(voiceGain, now + voice.envelope.attack);
         gainNode.gain.linearRampToValueAtTime(
-            maxGain * voice.envelope.sustain,
+            voiceGain * voice.envelope.sustain,
             now + voice.envelope.attack + voice.envelope.decay
         );
         
-        // Connect nodes
+        // Apply panning based on normalized index and width setting
+        const panValue = normalizedIndex * (unisonSettings.width / 100);
+        console.log(`[UNISON] Voice ${index}/${totalVoices} panning: ${panValue.toFixed(2)}`);
+        panNode.pan.setValueAtTime(panValue, now);
+        
+        // Connect the audio nodes
         oscillator.connect(gainNode);
+        gainNode.connect(panNode);
+        panNode.connect(this.mainGain!); // Connect directly to main gain
         
-        // Connect panning based on browser support
-        if (typeof this.audioContext.createStereoPanner === 'function') {
-            gainNode.connect(panNode);
-            panNode.connect(this.mainGain!); // Connect directly to main gain, not through filter
-        } else {
-            // Fallback for older browsers
-            gainNode.connect(panNode);
-            panNode.connect(this.mainGain!); // Connect directly to main gain
-        }
-        
-        // Start oscillator
+        // Start the oscillator
         oscillator.start(now);
         
-        // Create unison voice object
+        // Store the unison voice
         const unisonVoice = {
             oscillator,
             gainNode,
-            panNode
+            panNode,
+            index
         };
         
-        // Update parameters for the new voice
-        this.updateUnisonVoiceParameters(unisonVoice, index, unisonSettings);
-        
-        // Add unison voice to the active voice
+        // Add to the active voice
         if (!voice.unisonVoices) {
             voice.unisonVoices = [];
         }
+        
         voice.unisonVoices.push(unisonVoice);
     }
 
@@ -1062,54 +1279,7 @@ class KeyboardAudioManager {
         index: number,
         settings: { count: number, detune: number, width: number }
     ): void {
-        if (!this.audioContext) return;
-        
-        const now = this.audioContext.currentTime;
-        
-        // Calculate factors for voice position
-        const totalVoices = settings.count;
-        
-        // If only one voice, center it and don't detune
-        if (totalVoices === 1) {
-            unisonVoice.oscillator.detune.setValueAtTime(0, now);
-            
-            if (typeof this.audioContext.createStereoPanner === 'function') {
-                (unisonVoice.panNode as StereoPannerNode).pan.setValueAtTime(0, now);
-            } else {
-                (unisonVoice.panNode as PannerNode).setPosition(0, 0, 0.1);
-            }
-            return;
-        }
-        
-        // Calculate normalized position (-1 to 1) for this voice
-        // We use a special distribution to avoid bunching voices in the center
-        let normalizedPosition;
-        if (totalVoices === 2) {
-            // For 2 voices, place them symmetrically
-            normalizedPosition = index === 0 ? -1 : 1;
-        } else {
-            // For 3+ voices, distribute them across the range
-            normalizedPosition = (index / (totalVoices - 1)) * 2 - 1;
-        }
-        
-        // Apply detuning based on position and detune amount
-        // Scale detune to be (+/- settings.detune)
-        const detuneAmount = normalizedPosition * settings.detune;
-        unisonVoice.oscillator.detune.setValueAtTime(detuneAmount, now);
-        
-        // Apply stereo width based on position and width amount
-        const panPosition = normalizedPosition * (settings.width / 100);
-        
-        // Log the detune and pan values for debugging
-        console.log(`Unison voice ${index}/${totalVoices-1}: detune=${detuneAmount.toFixed(1)} cents, pan=${panPosition.toFixed(2)}`);
-        
-        // Set panning based on browser support
-        if (typeof this.audioContext.createStereoPanner === 'function') {
-            (unisonVoice.panNode as StereoPannerNode).pan.setValueAtTime(panPosition, now);
-        } else {
-            // For older browsers using PannerNode
-            (unisonVoice.panNode as PannerNode).setPosition(panPosition, 0, 0.1);
-        }
+        // Remove the entire method
     }
 
     // Public method to get the current tuning of a key (for debugging)
@@ -1314,6 +1484,229 @@ class KeyboardAudioManager {
             voice.oscillator = voice.allOscillators[0];
             voice.waveform = waveforms[0] || 'sine';
         }
+    }
+
+    // After the setNoteParameter method, add this new method:
+    setOscillatorParameter(note: number, waveform: Waveform, parameter: string, value: number): void {
+        if (this.currentMode === 'drums') return;
+        
+        console.log(`[DEBUG AUDIO] Setting oscillator parameter: ${parameter} = ${value} for note ${note}, oscillator ${waveform}`);
+        
+        // Initialize the oscillator parameters map for this note if it doesn't exist
+        if (!this.oscillatorParams.has(note)) {
+            this.oscillatorParams.set(note, new Map());
+        }
+        
+        // Initialize the parameters object for this oscillator if it doesn't exist
+        if (!this.oscillatorParams.get(note)?.has(waveform)) {
+            this.oscillatorParams.get(note)?.set(waveform, {});
+        }
+        
+        // Get the parameters object for this oscillator
+        const oscillatorParams = this.oscillatorParams.get(note)?.get(waveform);
+        if (!oscillatorParams) return;
+        
+        // Update the parameter
+        switch (parameter) {
+            case 'tuning':
+                oscillatorParams.tuning = value;
+                this.updateOscillatorTuning(note, waveform, value);
+                break;
+            case 'velocity':
+                oscillatorParams.velocity = value;
+                this.updateOscillatorVelocity(note, waveform, value);
+                break;
+            case 'filterCutoff':
+                oscillatorParams.filterCutoff = value;
+                this.updateOscillatorFilterCutoff(note, waveform, value);
+                break;
+            case 'filterResonance':
+                oscillatorParams.filterResonance = value;
+                this.updateOscillatorFilterResonance(note, waveform, value);
+                break;
+            case 'attack':
+                oscillatorParams.attack = value;
+                this.updateOscillatorAttack(note, waveform, value);
+                break;
+            case 'decay':
+                oscillatorParams.decay = value;
+                this.updateOscillatorDecay(note, waveform, value);
+                break;
+            case 'sustain':
+                oscillatorParams.sustain = value;
+                this.updateOscillatorSustain(note, waveform, value);
+                break;
+            case 'release':
+                oscillatorParams.release = value;
+                this.updateOscillatorRelease(note, waveform, value);
+                break;
+            case 'unisonCount':
+            case 'unisonDetune':
+            case 'unisonWidth':
+                // Store the unison parameter for this oscillator
+                if (!oscillatorParams.unison) {
+                    oscillatorParams.unison = {
+                        count: 1, // Default to 1 (unison off)
+                        detune: this.DEFAULT_UNISON_DETUNE,
+                        width: this.DEFAULT_UNISON_WIDTH
+                    };
+                }
+                
+                // Update the specific unison parameter
+                if (parameter === 'unisonCount') {
+                    oscillatorParams.unison.count = Math.max(1, Math.min(8, Math.floor(value)));
+                } else if (parameter === 'unisonDetune') {
+                    oscillatorParams.unison.detune = Math.max(0, Math.min(100, value));
+                } else if (parameter === 'unisonWidth') {
+                    oscillatorParams.unison.width = Math.max(0, Math.min(100, value));
+                }
+                
+                // Log for debugging
+                console.log(`[DEBUG UNISON] Setting oscillator-specific unison parameter ${parameter}=${value} for note ${note}, waveform ${waveform}`);
+                console.log(`[DEBUG UNISON] Updated unison settings:`, JSON.stringify(oscillatorParams.unison));
+                
+                // Apply the unison settings to active voices if this oscillator is playing
+                if (this.activeVoices.has(note)) {
+                    const voice = this.activeVoices.get(note);
+                    const currentWaveform = this.getWaveformForNote(note);
+                    
+                    // Only update if this is the active waveform for this note
+                    if (currentWaveform === waveform && voice) {
+                        // Apply the unison settings to the note globally so they affect all oscillators
+                        // This is necessary because unison voices are shared across all oscillators
+                        const unisonSettings = {
+                            count: oscillatorParams.unison.count,
+                            detune: oscillatorParams.unison.detune,
+                            width: oscillatorParams.unison.width
+                        };
+                        
+                        // Use the existing method to update unison voices
+                        this.unisonSettings.set(note, unisonSettings);
+                        
+                        // Update all voices with the new settings
+                        this.updateUnisonVoices(note);
+                    }
+                }
+                break;
+            default:
+                console.warn(`[DEBUG AUDIO] Unknown oscillator parameter: ${parameter}`);
+        }
+    }
+
+    // Add methods to update individual oscillator parameters
+    private updateOscillatorTuning(note: number, waveform: Waveform, cents: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        // Find the oscillator with the matching waveform and update its frequency
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform) {
+                const baseFreq = this.getFrequency(note);
+                const adjustedFreq = baseFreq * Math.pow(2, cents / 1200);
+                if (this.audioContext) { // Extra null check
+                    osc.oscillator.frequency.setValueAtTime(adjustedFreq, this.audioContext.currentTime);
+                    console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} tuning for note ${note}: ${cents} cents (${adjustedFreq} Hz)`);
+                }
+            }
+        });
+    }
+
+    private updateOscillatorVelocity(note: number, waveform: Waveform, velocity: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        // Find the oscillator with the matching waveform and update its gain
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform) {
+                const gain = this.velocityToGain(velocity);
+                if (this.audioContext) { // Extra null check
+                    osc.gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime);
+                    console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} velocity for note ${note}: ${velocity} (gain: ${gain})`);
+                }
+            }
+        });
+    }
+
+    private updateOscillatorFilterCutoff(note: number, waveform: Waveform, frequency: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        // Find the oscillator with the matching waveform and update its filter cutoff
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform && osc.filter) {
+                if (this.audioContext) { // Extra null check
+                    osc.filter.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+                    console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} filter cutoff for note ${note}: ${frequency} Hz`);
+                }
+            }
+        });
+    }
+
+    private updateOscillatorFilterResonance(note: number, waveform: Waveform, resonance: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        // Find the oscillator with the matching waveform and update its filter resonance
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform && osc.filter) {
+                if (this.audioContext) { // Extra null check
+                    osc.filter.Q.setValueAtTime(resonance, this.audioContext.currentTime);
+                    console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} filter resonance for note ${note}: ${resonance}`);
+                }
+            }
+        });
+    }
+
+    private updateOscillatorAttack(note: number, waveform: Waveform, attackMs: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        // Find the oscillator with the matching waveform and update its envelope
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform && osc.envelope) {
+                osc.envelope.attack = attackMs / 1000; // convert to seconds
+                console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} attack for note ${note}: ${attackMs}ms`);
+            }
+        });
+    }
+
+    private updateOscillatorDecay(note: number, waveform: Waveform, decayMs: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        // Find the oscillator with the matching waveform and update its envelope
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform && osc.envelope) {
+                osc.envelope.decay = decayMs / 1000; // convert to seconds
+                console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} decay for note ${note}: ${decayMs}ms`);
+            }
+        });
+    }
+
+    private updateOscillatorSustain(note: number, waveform: Waveform, sustainPercent: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        // Find the oscillator with the matching waveform and update its envelope
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform && osc.envelope) {
+                osc.envelope.sustain = sustainPercent / 100; // convert to ratio
+                console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} sustain for note ${note}: ${sustainPercent}%`);
+            }
+        });
+    }
+
+    private updateOscillatorRelease(note: number, waveform: Waveform, releaseMs: number): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice || !this.audioContext) return;
+        
+        // Find the oscillator with the matching waveform and update its envelope
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform && osc.envelope) {
+                osc.envelope.release = releaseMs / 1000; // convert to seconds
+                console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} release for note ${note}: ${releaseMs}ms`);
+            }
+        });
     }
 }
 

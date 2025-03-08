@@ -3,7 +3,13 @@
 import { useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { selectSelectedNote, selectMultiSelectedNotes } from '../../player/store/player';
-import { setKeyParameter, selectGlobalWaveform } from '../../keyboard/store/slices/keyboard.slice';
+import { 
+    setKeyParameter, 
+    selectGlobalWaveform, 
+    selectIsIndependentParameterMode,
+    selectEditableWaveform,
+    setOscillatorParameter
+} from '../../keyboard/store/slices/keyboard.slice';
 import { useParameters } from '../../player/hooks/useParameters';
 import { parameters } from '../constants/parameters';
 import {
@@ -34,6 +40,8 @@ export const useParameterValues = (activeContext: ParameterContext) => {
     const multiSelectedNotes = useAppSelector(selectMultiSelectedNotes) as SelectedNoteState[];
     const keyParameters = useAppSelector(state => state.keyboard.keyParameters) as Record<number, KeyParameterState>;
     const globalWaveform = useAppSelector(selectGlobalWaveform);
+    const isIndependentMode = useAppSelector(selectIsIndependentParameterMode);
+    const editableWaveform = useAppSelector(selectEditableWaveform);
     const { handleParameterChange } = useParameters();
 
     const getNoteParameterValue = useCallback((note: NoteEvent, param: typeof parameters[0]): number | undefined => {
@@ -142,18 +150,33 @@ export const useParameterValues = (activeContext: ParameterContext) => {
             // Handle keyboard context
             const values = parameters.reduce((values, param) => {
                 if (isValidParameterId(param.id)) {
-                    const paramValue = keyParameters[selectedKey]?.[param.id];
-                    values[param.id] = {
-                        value: paramValue?.value ?? param.defaultValue,
-                        isMixed: false
-                    };
+                    // Check if we're in independent mode and have oscillator-specific parameters
+                    if (isIndependentMode && 
+                        editableWaveform && 
+                        keyParameters[selectedKey]?.oscillatorParameters?.[editableWaveform as any] &&
+                        (keyParameters[selectedKey].oscillatorParameters![editableWaveform as any] as any)[param.id]) {
+                        
+                        // Use the oscillator-specific parameter value
+                        const paramValue = (keyParameters[selectedKey].oscillatorParameters![editableWaveform as any] as any)[param.id];
+                        values[param.id] = {
+                            value: paramValue?.value ?? param.defaultValue,
+                            isMixed: false
+                        };
+                    } else {
+                        // Use the shared parameter value
+                        const paramValue = keyParameters[selectedKey]?.[param.id as keyof KeyParameterState];
+                        values[param.id] = {
+                            value: paramValue?.value ?? param.defaultValue,
+                            isMixed: false
+                        };
+                    }
                 }
                 return values;
             }, {} as Record<string, ParameterState>);
             
             // Add waveform for the selected key
             values['waveform'] = {
-                value: keyParameters[selectedKey]?.waveform || globalWaveform,
+                value: String(keyParameters[selectedKey]?.waveform || globalWaveform) as any,
                 isMixed: false
             };
             
@@ -161,16 +184,44 @@ export const useParameterValues = (activeContext: ParameterContext) => {
         }
 
         return {};
-    }, [activeContext, selectedKey, selectedNote, multiSelectedNotes, keyParameters, getNoteParameterValue, globalWaveform]);
+    }, [
+        activeContext, 
+        selectedKey, 
+        selectedNote, 
+        multiSelectedNotes, 
+        keyParameters, 
+        getNoteParameterValue, 
+        globalWaveform,
+        isIndependentMode,
+        editableWaveform
+    ]);
 
     const handleParameterUpdate = useCallback((parameterId: string, value: number) => {
         if (activeContext === 'keyboard' && selectedKey !== null) {
             if (isValidParameterId(parameterId)) {
-                dispatch(setKeyParameter({
-                    keyNumber: selectedKey,
-                    parameter: parameterId,
-                    value
-                }));
+                // If we're in independent mode and have an editable waveform, update oscillator-specific parameters
+                if (isIndependentMode && editableWaveform) {
+                    // Check if this is a unison parameter
+                    const isUnisonParameter = ['unisonCount', 'unisonDetune', 'unisonWidth'].includes(parameterId);
+                    
+                    // Log the parameter change for debugging
+                    console.log(`[DEBUG PARAM] Updating ${isIndependentMode ? 'independent' : 'shared'} parameter: ${parameterId} = ${value} for oscillator ${editableWaveform}`);
+                    
+                    // Use the setOscillatorParameter action to update oscillator-specific parameters
+                    dispatch(setOscillatorParameter({
+                        keyNumber: selectedKey,
+                        waveform: editableWaveform,
+                        parameter: parameterId,
+                        value
+                    }));
+                } else {
+                    // Standard parameter update (shared parameters)
+                    dispatch(setKeyParameter({
+                        keyNumber: selectedKey,
+                        parameter: parameterId as any,
+                        value
+                    }));
+                }
             }
         } else if (activeContext === 'note') {
             if (multiSelectedNotes.length > 0) {
@@ -199,7 +250,9 @@ export const useParameterValues = (activeContext: ParameterContext) => {
         selectedNote,
         multiSelectedNotes,
         activeContext,
-        handleParameterChange
+        handleParameterChange,
+        isIndependentMode,
+        editableWaveform
     ]);
 
     return {

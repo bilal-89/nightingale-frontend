@@ -52,6 +52,7 @@ import {
 } from '../data/keyboardData';
 import OscillatorModeToggle from './OscillatorModeToggle';
 import OscillatorTypeToggle from './OscillatorTypeToggle';
+import ParameterIndependenceToggle from './ParameterIndependenceToggle';
 
 // Main component
 const TunableKeyboard: React.FC = () => {
@@ -337,6 +338,18 @@ const TunableKeyboard: React.FC = () => {
                             }}>
                                 <OscillatorTypeToggle />
                             </div>
+                            
+                            {/* Parameter Independence Toggle - Only show when in multi oscillator mode */}
+                            {oscillatorMode === 'multi' && (
+                                <div className="absolute" style={{
+                                    top: '370px',
+                                    right: '-56px',
+                                    transform: 'scale(1.4)',
+                                    zIndex: 10
+                                }}>
+                                    <ParameterIndependenceToggle />
+                                </div>
+                            )}
                         </>
                     )}
                 </div>

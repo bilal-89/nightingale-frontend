@@ -103,6 +103,18 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 break;
             }
 
+            case 'keyboard/setOscillatorParameter': {
+                const { keyNumber, waveform, parameter, value } = action.payload;
+                const mode = getState().keyboard.mode;
+                debug.log(`Setting oscillator parameter: ${parameter} = ${value} for note ${keyNumber}, waveform ${waveform}`);
+
+                if (mode !== 'drums') {
+                    // Call the oscillator-specific parameter setter in the keyboard engine
+                    keyboardAudioManager.setOscillatorParameter(keyNumber, waveform, parameter, value);
+                }
+                break;
+            }
+
             case 'keyboard/setGlobalWaveform': {
                 const waveform = action.payload;
                 const isGlobalOscillatorMode = getState().keyboard.isGlobalOscillatorMode;

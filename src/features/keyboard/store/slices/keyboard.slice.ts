@@ -16,30 +16,55 @@ export interface Parameter {
     defaultValue: number;
 }
 
+// Define structure for oscillator-specific parameters
+export interface OscillatorParameters {
+    // ADSR envelope parameters
+    attack?: Parameter;
+    decay?: Parameter;
+    sustain?: Parameter;
+    release?: Parameter;
+    filterCutoff?: Parameter;
+    filterResonance?: Parameter;
+    
+    // Additional parameters that could be per-oscillator
+    unisonCount?: Parameter;
+    unisonDetune?: Parameter;
+    unisonWidth?: Parameter;
+}
+
 // Define the structure for all parameters of a key
 export interface KeyParameters {
-    // Core parameters
-    tuning: Parameter;
-    velocity: Parameter;
-    warbleRate: Parameter;
-    warbleDepth: Parameter;
+    // Core parameters that always apply to the whole key
+    tuning?: Parameter;
+    velocity?: Parameter;
+    warbleRate?: Parameter;
+    warbleDepth?: Parameter;
     waveform?: Waveform;  // Parameter for per-key waveform
 
-    // ADSR envelope parameters
-    attack: Parameter;
-    decay: Parameter;
-    sustain: Parameter;
-    release: Parameter;
-    filterCutoff: Parameter;
-    filterResonance: Parameter;
+    // ADSR envelope parameters (shared by default)
+    attack?: Parameter;
+    decay?: Parameter;
+    sustain?: Parameter;
+    release?: Parameter;
+    filterCutoff?: Parameter;
+    filterResonance?: Parameter;
     
-    // New unison parameters
-    unisonCount: Parameter;
-    unisonDetune: Parameter;
-    unisonWidth: Parameter;
+    // Unison parameters (shared by default)
+    unisonCount?: Parameter;
+    unisonDetune?: Parameter;
+    unisonWidth?: Parameter;
     
     // New field for multi-oscillator support
     activeWaveforms?: Waveform[]; // Store active waveforms per key
+    
+    // New field for per-oscillator parameters when in independent mode
+    // This is a map of waveform type to its parameters
+    oscillatorParameters?: {
+        sine?: Partial<OscillatorParameters>;
+        square?: Partial<OscillatorParameters>;
+        sawtooth?: Partial<OscillatorParameters>;
+        triangle?: Partial<OscillatorParameters>;
+    };
 }
 
 export type SynthMode = 'tunable' | 'drums';
@@ -67,6 +92,9 @@ export interface KeyboardState {
     
     // New field to toggle between single and multi oscillator modes
     oscillatorMode: OscillatorMode;
+    
+    // New field to toggle between shared and independent parameters for oscillators
+    isIndependentParameterMode: boolean;
 }
 
 const defaultParameters: KeyParameters = {
@@ -108,7 +136,10 @@ const initialState: KeyboardState = {
     editableWaveform: 'sine',
     
     // Default to single oscillator mode for backward compatibility
-    oscillatorMode: 'single'
+    oscillatorMode: 'single',
+    
+    // Default to shared parameters mode for backward compatibility
+    isIndependentParameterMode: false
 };
 
 const keyboardSlice = createSlice({
@@ -171,6 +202,43 @@ const keyboardSlice = createSlice({
             }
 
             state.keyParameters[keyNumber][parameter]!.value = value;
+        },
+
+        setOscillatorParameter: (state, action: PayloadAction<{
+            keyNumber: number;
+            waveform: Waveform;
+            parameter: string;
+            value: number;
+        }>) => {
+            const { keyNumber, waveform, parameter, value } = action.payload;
+
+            // Ensure the key parameters exist
+            if (!state.keyParameters[keyNumber]) {
+                state.keyParameters[keyNumber] = {};
+            }
+
+            // Ensure the oscillatorParameters map exists
+            if (!state.keyParameters[keyNumber].oscillatorParameters) {
+                state.keyParameters[keyNumber].oscillatorParameters = {};
+            }
+
+            // Ensure the waveform entry exists in oscillatorParameters
+            if (!state.keyParameters[keyNumber].oscillatorParameters![waveform]) {
+                state.keyParameters[keyNumber].oscillatorParameters![waveform] = {};
+            }
+
+            // Create the parameter if it doesn't exist
+            const defaultValue = defaultParameters[parameter as keyof typeof defaultParameters]?.defaultValue ?? 0;
+            
+            if (!state.keyParameters[keyNumber].oscillatorParameters![waveform]![parameter as keyof OscillatorParameters]) {
+                (state.keyParameters[keyNumber].oscillatorParameters![waveform] as any)[parameter] = {
+                    value: defaultValue,
+                    defaultValue: defaultValue
+                };
+            }
+
+            // Update the parameter value
+            (state.keyParameters[keyNumber].oscillatorParameters![waveform] as any)[parameter].value = value;
         },
 
         setGlobalWaveform: (state, action: PayloadAction<Waveform>) => {
@@ -277,6 +345,14 @@ const keyboardSlice = createSlice({
             }
         },
 
+        toggleParameterIndependence: (state) => {
+            // Toggle between shared and independent parameter modes
+            state.isIndependentParameterMode = !state.isIndependentParameterMode;
+            
+            // When switching to shared mode, we may want to consolidate parameters
+            // but for now, we'll just toggle the state
+        },
+
         cleanup: (state) => {
             state.activeNotes = [];
             state.isInitialized = false;
@@ -317,7 +393,7 @@ const keyboardSlice = createSlice({
         updateOscillatorBatch: (state, action: PayloadAction<{
             notes: number[];
             oscillatorIndex: number;
-            changes: Partial<Oscillator>;
+            changes: Partial<OscillatorState>;
         }>) => {
             const { notes, oscillatorIndex, changes } = action.payload;
             
@@ -538,26 +614,28 @@ export const {
     noteOn,
     noteOff,
     togglePanel,
+    setParameterContext,
     setKeyParameter,
+    setOscillatorParameter,
     setGlobalWaveform,
     setKeyWaveform,
+    setSelectedKey,
     resetKeyParameters,
     resetAllParameters,
     setMode,
-    setSelectedKey,
-    setParameterContext,
-    incrementOctave,     // Added for octave control
-    decrementOctave,     // Added for octave control
-    setOctave,          // Added for octave control
-    toggleKeyboardLayout, // Add this new action
+    incrementOctave,
+    decrementOctave,
+    setOctave,
+    toggleKeyboardLayout,
     toggleOscillatorMode,
     toggleOscillatorType,
+    toggleParameterIndependence,
     cleanup,
     setBatchParameters,
     updateOscillatorBatch,
+    initializeKeyParameters,
     toggleWaveform,
     setEditableWaveform,
-    initializeKeyParameters,
     setKeyActiveWaveforms
 } = keyboardSlice.actions;
 
@@ -580,9 +658,17 @@ export const selectKeyParameters = (state: { keyboard: KeyboardState }, keyNumbe
 export const selectParameter = (
     state: { keyboard: KeyboardState },
     keyNumber: number,
-    parameter: keyof KeyParameters
-) => state.keyboard.keyParameters[keyNumber]?.[parameter]?.value ??
-    defaultParameters[parameter].defaultValue;
+    parameter: keyof typeof defaultParameters
+) => {
+    // Handle special case for waveform
+    if (parameter === 'waveform') {
+        return state.keyboard.keyParameters[keyNumber]?.waveform ?? state.keyboard.globalWaveform;
+    }
+    
+    // Regular parameter access
+    const paramValue = (state.keyboard.keyParameters[keyNumber] as any)?.[parameter];
+    return paramValue?.value ?? defaultParameters[parameter]?.defaultValue ?? 0;
+};
 
 export const selectGlobalWaveform = (state: { keyboard: KeyboardState }) =>
     state.keyboard.globalWaveform;
@@ -617,5 +703,8 @@ export const selectEditableWaveform = (state: { keyboard: KeyboardState }) =>
 
 export const selectOscillatorMode = (state: { keyboard: KeyboardState }) =>
     state.keyboard.oscillatorMode;
+
+export const selectIsIndependentParameterMode = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.isIndependentParameterMode;
 
 export default keyboardSlice.reducer;
