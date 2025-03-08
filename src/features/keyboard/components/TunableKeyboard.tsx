@@ -323,10 +323,15 @@ const TunableKeyboard: React.FC = () => {
                                 <OscillatorModeToggle />
                             </div>
                             
-                            {/* New Single/Multi Oscillator Type Toggle */}
+                            {/* 
+                              Positioning adjustment:
+                              - 'top' controls vertical position (higher number = lower on screen)
+                              - 'right' controls horizontal position (lower number = farther right)
+                              - 'transform: scale()' controls the size (1.0 = original size)
+                            */}
                             <div className="absolute" style={{
                                 top: '330px',
-                                right: '-60px',
+                                right: '-56px',
                                 transform: 'scale(1.4)',
                                 zIndex: 10
                             }}>

@@ -84,13 +84,6 @@ const MultiWaveformControls: React.FC = () => {
     const [pressedWaveform, setPressedWaveform] = useState<Waveform | null>(null);
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
-    // Display a message about the current mode and a hint if no key is selected in local mode
-    const modeMessage = isGlobalMode
-        ? "Global Mode: Changes apply to all keys"
-        : effectiveSelectedKey !== null
-        ? `Local Mode: Changes apply to selected key (note ${effectiveSelectedKey})`
-        : "Local Mode: Please play a note to select a key";
-
     // Cleanup timer on unmount
     useEffect(() => {
         return () => {
@@ -357,17 +350,7 @@ const MultiWaveformControls: React.FC = () => {
                 </div>
             </div>
             
-            {/* Mode indicator */}
-            <div className="text-xs text-gray-500 mt-2 text-center">
-                <span>{modeMessage}</span>
-            </div>
-            
-            {/* Editable waveform indicator */}
-            <div className="text-xs text-gray-500 mt-1 text-center">
-                {editableWaveform && (
-                    <span>Editing: {WAVEFORM_NAMES[editableWaveform]}</span>
-                )}
-            </div>
+            {/* Mode indicator and editable waveform indicator removed as requested */}
         </div>
     );
 };

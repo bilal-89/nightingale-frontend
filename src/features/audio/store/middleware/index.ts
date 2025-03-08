@@ -316,6 +316,13 @@ const waveformMiddleware: Middleware<object, RootState> = ({ dispatch, getState 
             else if (oscillatorMode === 'multi') {
                 // In global mode, update all keys with active waveforms
                 if (isGlobalMode) {
+                    // Log detailed information about the state
+                    console.log(`[WAVEFORM SYNC] Multi mode (global): State before update:
+                    - Active waveforms: ${activeWaveforms.join(', ')}
+                    - Editable waveform: ${editableWaveform || 'none'}
+                    - Active notes: ${activeNotes.join(', ')}
+                    - Selected key: ${selectedKey}`);
+                    
                     // Pass all active waveforms to the audio engine
                     // This is critical for making multiple oscillators work in global mode
                     keyboardAudioManager.setGlobalActiveWaveforms(activeWaveforms);

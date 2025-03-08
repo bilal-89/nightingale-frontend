@@ -19,11 +19,12 @@ const OscillatorTypeToggle: React.FC<OscillatorTypeToggleProps> = ({ className =
   const neumorphicStyles = {
     active: {
       filter: 'drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.15))',
-      transform: 'scale(1.1)',
+      transform: 'scale(1.02)',
     },
     inactive: {
       filter: 'drop-shadow(0.5px 0.5px 1px rgba(255, 255, 255, 0.4)) drop-shadow(-0.5px -0.5px 1px rgba(0, 0, 0, 0.07))',
-      transform: 'scale(1.1)',
+      transform: 'scale(1)',
+      opacity: 0.8
     },
     hover: {
       filter: 'drop-shadow(1.5px 1.5px 3px rgba(0, 0, 0, 0.2)) drop-shadow(-0.5px -0.5px 1.5px rgba(255, 255, 255, 0.3))',
@@ -31,75 +32,82 @@ const OscillatorTypeToggle: React.FC<OscillatorTypeToggleProps> = ({ className =
   };
 
   return (
-    <div className={`flex items-center space-x-2 pb-3 ${className}`}>
-      {/* Single oscillator mode button */}
-      <div 
-        onClick={() => !isSingleMode && handleToggle()}
-        className="cursor-pointer transition-all duration-200 hover:z-10"
-        title="Single Oscillator Mode (Classic)"
-        style={{
-          ...(isSingleMode ? neumorphicStyles.active : neumorphicStyles.inactive),
-          transition: 'all 0.2s ease',
-        }}
-        onMouseOver={(e) => {
-          if (!isSingleMode) {
-            e.currentTarget.style.filter = neumorphicStyles.hover.filter;
-          }
-        }}
-        onMouseOut={(e) => {
-          if (!isSingleMode) {
-            e.currentTarget.style.filter = neumorphicStyles.inactive.filter;
-          }
-        }}
-      >
-        <svg width="35" height="25" viewBox="0 0 79 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path 
-            opacity={isSingleMode ? "1" : "0.8"} 
-            d="M23.5 26.0001C23.5 32.9037 29.0964 38.5001 36 38.5001C42.9036 38.5001 48.5 32.9037 48.5 26.0001C48.5 19.0966 42.9036 13.5001 36 13.5001C29.0964 13.5001 23.5 19.0966 23.5 26.0001Z" 
-            fill="#EEE3D6"
-          />
+    <div className={`flex justify-center items-center ${className}`}>
+      {/* Combined oscillator mode toggle using the provided SVG */}
+      <div className="cursor-pointer relative">
+        {/* 
+          Size adjustment:
+          - To make the buttons smaller: Reduce the width and height values
+          - To make the buttons larger: Increase the width and height values
+          - Current size is width="90" height="30"
+          - Original buttons were around width="35" height="25"
+        */}
+        <svg width="90" height="30" viewBox="0 0 238 84" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+          {/* Multi oscillator side (left) - will be clickable */}
+          <g 
+            className="cursor-pointer transition-all duration-200"
+            onClick={() => isSingleMode && handleToggle()}
+            style={{
+              transition: 'all 0.2s ease',
+              ...(!isSingleMode ? neumorphicStyles.active : neumorphicStyles.inactive),
+            }}
+            onMouseOver={(e) => {
+              if (isSingleMode) {
+                e.currentTarget.style.filter = neumorphicStyles.hover.filter;
+              }
+            }}
+            onMouseOut={(e) => {
+              if (isSingleMode) {
+                e.currentTarget.style.filter = neumorphicStyles.inactive.filter;
+              }
+            }}
+          >
+            <path d="M34 44C34 24.1177 50.1177 8 70 8V8C89.8823 8 106 24.1177 106 44V44C106 63.8823 89.8823 80 70 80V80C50.1177 80 34 63.8823 34 44V44Z" fill="#EEE3D6"/>
+            <path d="M3.40163 43.1725C1.64114 40.0342 1.91912 36.149 4.10846 33.2933L11.5755 23.5537C11.8581 23.1851 12.1117 22.7952 12.3341 22.3875L18 12L21.7934 6.86775C24.2311 3.56971 29.0738 3.31896 31.8391 6.34759V6.34759C34.5448 9.31097 33.9524 13.9927 30.5938 16.1887L26.9218 18.5896C25.0422 19.8186 23.6899 21.7059 23.1306 23.8809L20.1218 35.5821C19.7149 37.1641 19.7464 38.8271 20.2127 40.3927L25.7578 59.0082C26.2427 60.6361 27.1784 62.0936 28.4567 63.2121L34.9706 68.9118C37.0261 70.7103 37.5363 73.705 36.1924 76.0828V76.0828C34.1854 79.6336 29.2256 80.032 26.6776 76.847L12.4607 59.0758C12.1541 58.6926 11.8793 58.2849 11.6392 57.8568L3.40163 43.1725Z" fill="#EEE3D6"/>
+          </g>
+          
+          {/* Single oscillator side (right) - will be clickable */}
+          <g 
+            className="cursor-pointer transition-all duration-200"
+            onClick={() => !isSingleMode && handleToggle()}
+            style={{
+              transition: 'all 0.2s ease',
+              ...(isSingleMode ? neumorphicStyles.active : neumorphicStyles.inactive),
+            }}
+            onMouseOver={(e) => {
+              if (!isSingleMode) {
+                e.currentTarget.style.filter = neumorphicStyles.hover.filter;
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!isSingleMode) {
+                e.currentTarget.style.filter = neumorphicStyles.inactive.filter;
+              }
+            }}
+          >
+            <path d="M166 44C166 24.1177 182.118 8 202 8V8C221.882 8 238 24.1177 238 44V44C238 63.8823 221.882 80 202 80V80C182.118 80 166 63.8823 166 44V44Z" fill="#EEE3D6"/>
+            <path d="M136.098 41.3275C137.859 44.4658 137.581 48.351 135.392 51.2067L127.925 60.9463C127.642 61.3149 127.388 61.7048 127.166 62.1125L121.5 72.5L117.707 77.6322C115.269 80.9303 110.426 81.181 107.661 78.1524V78.1524C104.955 75.189 105.548 70.5073 108.906 68.3113L112.578 65.9104C114.458 64.6814 115.81 62.7941 116.369 60.6191L119.378 48.9179C119.785 47.3359 119.754 45.6729 119.287 44.1073L113.742 25.4918C113.257 23.8639 112.322 22.4064 111.043 21.2879L104.529 15.5882C102.474 13.7897 101.964 10.795 103.308 8.41724V8.41724C105.315 4.8664 110.274 4.46805 112.822 7.65304L127.039 25.4242C127.346 25.8074 127.621 26.2151 127.861 26.6432L136.098 41.3275Z" fill="#EEE3D6"/>
+          </g>
+          
+          {/* Filter definitions if needed */}
+          <defs>
+            <filter id="filter0_i_146_82" x="166" y="8" width="72" height="73" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+              <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+              <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+              <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+              <feOffset dy="1"/>
+              <feGaussianBlur stdDeviation="2"/>
+              <feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/>
+              <feColorMatrix type="matrix" values="0 0 0 0 0.0470588 0 0 0 0 0.0470588 0 0 0 0 0.0509804 0 0 0 0.05 0"/>
+              <feBlend mode="normal" in2="shape" result="effect1_innerShadow_146_82"/>
+            </filter>
+          </defs>
         </svg>
-        <span className="sr-only">Single Oscillator Mode</span>
-      </div>
-
-      {/* Multi oscillator mode button */}
-      <div
-        onClick={() => isSingleMode && handleToggle()}
-        className="cursor-pointer transition-all duration-200 hover:z-10"
-        title="Multi Oscillator Mode (Advanced)"
-        style={{
-          ...(!isSingleMode ? neumorphicStyles.active : neumorphicStyles.inactive),
-          transition: 'all 0.2s ease',
-        }}
-        onMouseOver={(e) => {
-          if (isSingleMode) {
-            e.currentTarget.style.filter = neumorphicStyles.hover.filter;
-          }
-        }}
-        onMouseOut={(e) => {
-          if (isSingleMode) {
-            e.currentTarget.style.filter = neumorphicStyles.inactive.filter;
-          }
-        }}
-      >
-        <svg width="35" height="25" viewBox="0 0 79 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path 
-            opacity={!isSingleMode ? "1" : "0.8"} 
-            d="M13.5 26.0001C13.5 31.799 18.201 36.5001 24 36.5001C29.799 36.5001 34.5 31.799 34.5 26.0001C34.5 20.2011 29.799 15.5001 24 15.5001C18.201 15.5001 13.5 20.2011 13.5 26.0001Z" 
-            fill="#EEE3D6"
-          />
-          <path 
-            opacity={!isSingleMode ? "1" : "0.8"} 
-            d="M29.5 26.0001C29.5 31.799 34.201 36.5001 40 36.5001C45.799 36.5001 50.5 31.799 50.5 26.0001C50.5 20.2011 45.799 15.5001 40 15.5001C34.201 15.5001 29.5 20.2011 29.5 26.0001Z" 
-            fill="#EEE3D6"
-          />
-          <path 
-            opacity={!isSingleMode ? "1" : "0.8"} 
-            d="M44.5 26.0001C44.5 31.799 49.201 36.5001 55 36.5001C60.799 36.5001 65.5 31.799 65.5 26.0001C65.5 20.2011 60.799 15.5001 55 15.5001C49.201 15.5001 44.5 20.2011 44.5 26.0001Z" 
-            fill="#EEE3D6"
-          />
-        </svg>
-        <span className="sr-only">Multi Oscillator Mode</span>
+        
+        {/* Accessible text for screen readers */}
+        <span className="sr-only">
+          {isSingleMode ? "Single Oscillator Mode" : "Multi Oscillator Mode"}
+        </span>
       </div>
     </div>
   );
