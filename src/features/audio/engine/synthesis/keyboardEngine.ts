@@ -1,6 +1,10 @@
 import { SynthesisParameters, CompleteNoteEvent } from '../../api/types';
 import { drumSoundManager } from './drumEngine';
 import { Waveform } from '../../../keyboard/store/slices/keyboard.slice';
+import { AdditiveOscillator } from './AdditiveOscillator';
+
+// Re-export AdditiveOscillator so it can be imported from the same location
+export { AdditiveOscillator };
 
 class KeyboardAudioManager {
     // Core audio settings
@@ -115,7 +119,10 @@ class KeyboardAudioManager {
     // Add the baseOctave property near the other class member declarations
     private baseOctave = 3; // Lower default octave to prevent keyboard from being too high pitched
 
-    // Modify playTunableNoteRT to support multiple oscillators
+    // Add a new property to store the harmonic settings
+    private harmonicSettings = new Map<number, Map<Waveform, number[]>>();
+
+    // Update the playTunableNoteRT method to use AdditiveOscillator
     private async playTunableNoteRT(note: number, velocity: number): Promise<CompleteNoteEvent> {
         if (!this.audioContext) throw new Error('Audio context not initialized');
 
@@ -183,34 +190,56 @@ class KeyboardAudioManager {
         // Track the oscillators we create for this voice
         const oscillators: any[] = [];
 
-        for (const waveform of waveforms) {
+        // Only create one oscillator per unique waveform
+        // Use a Set to ensure we don't have duplicates
+        const uniqueWaveforms = new Set(waveforms);
+        
+        for (const waveform of uniqueWaveforms) {
             console.log(`[DEBUG AUDIO] Creating oscillator with waveform ${waveform} for note ${note}`);
             
-            // Create oscillator
-            const oscillator = this.audioContext.createOscillator();
-            oscillator.type = waveform;
-            
-            // Check for custom oscillator parameters
-            const customParams = this.oscillatorParams.get(note)?.get(waveform);
+            // Create additive oscillator with the specified waveform type
+            const baseFreq = this.getFrequency(note, 0); // Get base frequency without tuning
+            const additiveOsc = new AdditiveOscillator(this.audioContext, baseFreq, waveform);
             
             // Apply custom frequency/tuning if available
+            const customParams = this.oscillatorParams.get(note)?.get(waveform);
             const tuningCents = customParams?.tuning ?? (this.tunings.get(note) ?? 0);
-            const baseFreq = this.getFrequency(note, 0); // Get base frequency without tuning
             const adjustedFreq = baseFreq * Math.pow(2, tuningCents / 1200);
-            oscillator.frequency.setValueAtTime(adjustedFreq, now);
-            console.log(`[DEBUG AUDIO] Setting ${waveform} oscillator frequency: ${adjustedFreq}Hz (base: ${baseFreq}Hz, tuning: ${tuningCents} cents)`);
+            additiveOsc.setFrequency(adjustedFreq);
             
-            // Create gain node for this oscillator
-            const gainNode = this.audioContext.createGain();
+            // Check for custom harmonic settings and apply if available
+            const customHarmonics = this.harmonicSettings.get(note)?.get(waveform);
+            if (customHarmonics) {
+                additiveOsc.setHarmonics(customHarmonics);
+            } else {
+                // No custom harmonics, use default for this waveform type
+                // Note: We're NOT calling setWaveform() here because that would reset 
+                // the harmonic amplitudes based on the waveform type.
+                // We want to keep whatever harmonic settings the oscillator was created with.
+            }
             
             // Calculate velocity-based gain with custom velocity if available
             const velocityValue = customParams?.velocity ?? velocity;
-            // Use a less aggressive normalization: 1/sqrt(n) can make things too quiet with multiple oscillators
-            // Instead, use a more gentle curve
-            const oscillatorCount = waveforms.length;
-            const oscillatorGain = oscillatorCount <= 1 ? 1.0 : 1.0 / Math.pow(oscillatorCount, 0.3); // Less reduction for multiple oscillators
-            const gain = this.velocityToGain(velocityValue) * oscillatorGain;
-            gainNode.gain.setValueAtTime(gain, now);
+            // Use a less aggressive normalization
+            const oscillatorCount = uniqueWaveforms.size;
+            const gainMultiplier = oscillatorCount <= 1 ? 1.0 : 1.0 / Math.pow(oscillatorCount, 0.3);
+            const gainValue = this.velocityToGain(velocityValue) * gainMultiplier;
+            
+            // Set the gain directly on the additive oscillator
+            additiveOsc.setGain(gainValue);
+            console.log(`[DEBUG AUDIO] Set gain for ${waveform} oscillator: ${gainValue}`);
+            
+            // Create a gain node for envelope modulation
+            const envelopeGain = this.audioContext.createGain();
+            envelopeGain.gain.setValueAtTime(1.0, now); // Set to full, as we're using it just for the envelope
+            
+            // Apply envelope to the envelope gain node
+            envelopeGain.gain.setValueAtTime(0, now);
+            envelopeGain.gain.linearRampToValueAtTime(1.0, now + envelope.attack);
+            envelopeGain.gain.linearRampToValueAtTime(
+                envelope.sustain,
+                now + envelope.attack + envelope.decay
+            );
             
             // Create filter if needed
             let filter: BiquadFilterNode | undefined;
@@ -225,18 +254,21 @@ class KeyboardAudioManager {
                 filter.frequency.setValueAtTime(cutoff, now);
                 filter.Q.setValueAtTime(resonance, now);
                 
-                // Connect oscillator -> filter -> gain -> voice output
-                oscillator.connect(filter);
-                filter.connect(gainNode);
+                // Connect additiveOsc -> filter -> envelope gain -> voice output
+                additiveOsc.connect(filter);
+                filter.connect(envelopeGain);
             } else {
-                // Connect oscillator directly to its gain node
-                oscillator.connect(gainNode);
+                // Connect additiveOsc directly to its gain node
+                additiveOsc.connect(envelopeGain);
             }
             
             // Connect to the voice output node
-            gainNode.connect(filterNode);
+            envelopeGain.connect(filterNode);
             
-            // Create ADSR envelope for this oscillator
+            // Start the oscillator
+            additiveOsc.start();
+            
+            // Create envelope object for reference
             const envelopeParams = {
                 attack: (customParams?.attack ?? (this.envelopeParams.get(note)?.attack ?? this.DEFAULT_ATTACK)) / 1000,
                 decay: (customParams?.decay ?? (this.envelopeParams.get(note)?.decay ?? this.DEFAULT_DECAY)) / 1000,
@@ -248,29 +280,26 @@ class KeyboardAudioManager {
             
             // Store oscillator info
             oscillators.push({
-                oscillator,
-                gainNode,
+                oscillator: additiveOsc, // Store additive oscillator instance
+                gainNode: envelopeGain, // Store the envelope gain node
                 filter,
                 type: waveform,
                 envelope: envelopeParams
             });
             
-            // Start the oscillator
-            oscillator.start(now);
-            
-            console.log(`[DEBUG AUDIO] Created oscillator with waveform ${waveform} for note ${note}`);
+            console.log(`[DEBUG AUDIO] Created additive oscillator with waveform ${waveform} for note ${note}`);
         }
         
         // Connect filter to gain node, and gain node to main output
         filterNode.connect(gainNode);
         gainNode.connect(this.mainGain!);
         
-        // Store voice
+        // Store voice with additive oscillators
         const voice = {
             oscillator: oscillators[0].oscillator, // Store primary oscillator (first one)
             filterNode,
-            gainNode: gainNode,
-            baseFrequency: baseFrequency,
+            gainNode,
+            baseFrequency,
             currentTuning: this.tunings.get(note) ?? 0,
             currentVelocity: velocity,
             startTime: now,
@@ -280,7 +309,7 @@ class KeyboardAudioManager {
             filter: oscillators[0].filter,
             unisonVoices: [],
             allOscillators: oscillators.map(osc => osc.oscillator), // Store all oscillators references
-            oscillators: oscillators, // Store the full oscillator objects with their properties
+            oscillators, // Store the full oscillator objects with their properties
         };
         
         this.activeVoices.set(note, voice);
@@ -651,23 +680,62 @@ class KeyboardAudioManager {
 
     // Initialize audio context
     async initialize() {
-        if (this.isInitialized && this.audioContext) return this.audioContext;
-
         try {
-            this.audioContext = new AudioContext();
-            this.mainGain = this.audioContext.createGain();
-            this.mainGain.gain.setValueAtTime(this.MASTER_VOLUME, this.audioContext.currentTime);
-            this.mainGain.connect(this.audioContext.destination);
-
-            if (this.audioContext.state === 'suspended') {
-                await this.audioContext.resume();
+            console.log('[AUDIO ENGINE] Initializing keyboard audio manager');
+            
+            if (!this.audioContext) {
+                console.log('[AUDIO ENGINE] Creating new audio context');
+                this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                console.log('[AUDIO ENGINE] Audio context created, state:', this.audioContext.state);
+                
+                // Force resuming the audio context if it's in a suspended state
+                if (this.audioContext.state === 'suspended') {
+                    console.log('[AUDIO ENGINE] Audio context is suspended, attempting to resume');
+                    await this.audioContext.resume();
+                    console.log('[AUDIO ENGINE] Audio context resumed, new state:', this.audioContext.state);
+                }
+                
+                // Create main gain node for master volume
+                this.mainGain = this.audioContext.createGain();
+                this.mainGain.gain.value = this.MASTER_VOLUME;
+                this.mainGain.connect(this.audioContext.destination);
+                console.log('[AUDIO ENGINE] Main gain node created and connected');
+            } else {
+                console.log('[AUDIO ENGINE] Audio context already exists, state:', this.audioContext.state);
+                
+                // Make sure it's running
+                if (this.audioContext.state !== 'running') {
+                    console.log('[AUDIO ENGINE] Existing audio context not running, attempting to resume');
+                    await this.audioContext.resume();
+                    console.log('[AUDIO ENGINE] Audio context resumed, new state:', this.audioContext.state);
+                }
             }
-
+            
+            // Add a simple test tone to verify audio output
+            try {
+                // Only run this test if audio context is new
+                if (!this.isInitialized) {
+                    console.log('[AUDIO ENGINE] Playing test tone to verify audio');
+                    const testOsc = this.audioContext.createOscillator();
+                    const testGain = this.audioContext.createGain();
+                    testOsc.frequency.value = 440;
+                    testGain.gain.value = 0.1;
+                    testOsc.connect(testGain);
+                    testGain.connect(this.audioContext.destination);
+                    testOsc.start();
+                    testOsc.stop(this.audioContext.currentTime + 0.2);
+                    console.log('[AUDIO ENGINE] Test tone scheduled');
+                }
+            } catch (e) {
+                console.error('[AUDIO ENGINE] Error playing test tone:', e);
+            }
+            
             this.isInitialized = true;
-            return this.audioContext;
+            console.log('[AUDIO ENGINE] Keyboard audio manager initialized successfully');
+            return true;
         } catch (error) {
-            console.error('Failed to initialize audio system:', error);
-            throw error;
+            console.error('[AUDIO ENGINE] Error initializing audio:', error);
+            return false;
         }
     }
 
@@ -830,8 +898,6 @@ class KeyboardAudioManager {
 
     // Stop a playing note
     stopNote(note: number): void {
-        if (this.currentMode === 'drums') return;
-
         const voice = this.activeVoices.get(note);
         if (!voice || !this.audioContext) return;
 
@@ -839,16 +905,26 @@ class KeyboardAudioManager {
             const now = this.audioContext.currentTime;
             const releaseTime = voice.envelope.release;
 
-            // Apply release envelope to gain node
-            voice.gainNode.gain.cancelScheduledValues(now);
-            voice.gainNode.gain.setValueAtTime(voice.gainNode.gain.value, now);
-            voice.gainNode.gain.exponentialRampToValueAtTime(0.001, now + releaseTime);
-
-            // Stop all oscillators after release time
+            // Apply release envelope to all oscillators
             if (voice.allOscillators) {
-                // Stop all oscillators
                 voice.allOscillators.forEach(osc => {
-                    osc.stop(now + releaseTime + 0.1);
+                    if (osc instanceof AdditiveOscillator) {
+                        // For additive oscillators, use their built-in methods
+                        osc.linearRampToGain(0, now + releaseTime);
+                        
+                        // Schedule stopping a bit later to let release finish
+                        setTimeout(() => {
+                            try {
+                                osc.stop();
+                                osc.dispose();
+                            } catch (e) {
+                                console.warn('Error stopping AdditiveOscillator:', e);
+                            }
+                        }, releaseTime * 1000 + 100);
+                    } else {
+                        // For standard oscillators
+                        osc.stop(now + releaseTime + 0.1);
+                    }
                 });
             } else {
                 // Legacy code for backwards compatibility
@@ -868,8 +944,13 @@ class KeyboardAudioManager {
             setTimeout(() => {
                 try {
                     // Stop and disconnect main oscillator
-                    voice.oscillator.stop(now + releaseTime + 0.1);
-                    voice.oscillator.disconnect();
+                    if (voice.oscillator instanceof AdditiveOscillator) {
+                        voice.oscillator.dispose();
+                    } else {
+                        voice.oscillator.stop(now + releaseTime + 0.1);
+                        voice.oscillator.disconnect();
+                    }
+                    
                     voice.gainNode.disconnect();
                     voice.filterNode.disconnect();
 
@@ -929,15 +1010,29 @@ class KeyboardAudioManager {
 
     // Update tuning for a note
     setNoteTuning(note: number, cents: number): void {
+        if (this.currentMode === 'drums') return;
+        
+        console.log(`[DEBUG AUDIO] Setting tuning of note ${note} to ${cents} cents`);
+        
+        // Store the tuning value
         this.tunings.set(note, cents);
-
+        
+        // Calculate the adjusted frequency based on tuning
+        const frequency = this.getFrequency(note, cents);
+        
+        // If the note is currently playing, update its frequency in real-time
         const voice = this.activeVoices.get(note);
-        if (voice && this.audioContext) {
-            const newFreq = this.getFrequency(note);
-            voice.oscillator.frequency.setValueAtTime(
-                newFreq,
-                this.audioContext.currentTime
-            );
+        if (voice) {
+            // Update all oscillators for this voice
+            voice.oscillators?.forEach(osc => {
+                if (osc.oscillator instanceof OscillatorNode) {
+                    // Apply the frequency change immediately
+                    osc.oscillator.frequency.setValueAtTime(frequency, this.audioContext?.currentTime || 0);
+                } else if (osc.oscillator instanceof AdditiveOscillator) {
+                    // For additive oscillators
+                    osc.oscillator.setFrequency(frequency);
+                }
+            });
         }
     }
 
@@ -1707,6 +1802,68 @@ class KeyboardAudioManager {
                 console.log(`[DEBUG AUDIO] Updated oscillator ${waveform} release for note ${note}: ${releaseMs}ms`);
             }
         });
+    }
+
+    // Add new methods for harmonic control
+    
+    /**
+     * Set harmonic amplitudes for a specific note and waveform
+     */
+    setNoteHarmonics(note: number, waveform: Waveform, harmonics: number[]): void {
+        if (this.currentMode === 'drums') return;
+        
+        console.log(`[DEBUG AUDIO] Setting harmonics for note ${note}, waveform ${waveform}: ${harmonics.join(', ')}`);
+        
+        // Initialize the harmonic settings map for this note if it doesn't exist
+        if (!this.harmonicSettings.has(note)) {
+            this.harmonicSettings.set(note, new Map());
+        }
+        
+        // Store the harmonic settings
+        this.harmonicSettings.get(note)?.set(waveform, [...harmonics]);
+        
+        // Update active voice if this note is currently playing
+        this.updateActiveVoiceHarmonics(note, waveform, harmonics);
+    }
+    
+    /**
+     * Set global harmonic amplitudes for a waveform
+     */
+    setGlobalHarmonics(waveform: Waveform, harmonics: number[]): void {
+        if (this.currentMode === 'drums') return;
+        
+        console.log(`[DEBUG AUDIO] Setting global harmonics for waveform ${waveform}: ${harmonics.join(', ')}`);
+        
+        // Apply to all currently playing voices with this waveform
+        this.activeVoices.forEach((voice, note) => {
+            // Find oscillators with this waveform
+            voice.oscillators?.forEach(osc => {
+                if (osc.type === waveform && osc.oscillator instanceof AdditiveOscillator) {
+                    osc.oscillator.setHarmonics(harmonics);
+                }
+            });
+        });
+    }
+    
+    /**
+     * Update harmonics for a currently playing note
+     */
+    private updateActiveVoiceHarmonics(note: number, waveform: Waveform, harmonics: number[]): void {
+        const voice = this.activeVoices.get(note);
+        if (!voice) return;
+        
+        // Find oscillators with this waveform
+        voice.oscillators?.forEach(osc => {
+            if (osc.type === waveform && osc.oscillator instanceof AdditiveOscillator) {
+                osc.oscillator.setHarmonics(harmonics);
+                console.log(`[DEBUG AUDIO] Updated harmonics for playing note ${note}, waveform ${waveform}`);
+            }
+        });
+    }
+
+    // Add a getter for active voices
+    getActiveVoices() {
+        return this.activeVoices.entries();
     }
 }
 

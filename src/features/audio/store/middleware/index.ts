@@ -2,9 +2,10 @@
 import { Middleware } from '@reduxjs/toolkit';
 import { RootState } from '../../../../store';
 import { setMode as setAudioMode } from '../slice';
-import keyboardAudioManager from '../../engine/synthesis/keyboardEngine';
+import keyboardAudioManager, { AdditiveOscillator } from '../../engine/synthesis/keyboardEngine';
 import { drumSoundManager } from '../../engine/synthesis/drumEngine';
 import {
+    Waveform,
     noteOn,
     noteOff,
     initializeAudio,
@@ -16,7 +17,9 @@ import {
     toggleWaveform,
     setEditableWaveform,
     selectActiveWaveforms,
-    selectEditableWaveform
+    selectEditableWaveform,
+    setHarmonics,
+    setHarmonicAmplitude
 } from '../../../keyboard/store/slices/keyboard.slice';
 
 // Debug utilities
@@ -258,6 +261,71 @@ export const audioMiddleware: Middleware<object, RootState> = ({ dispatch, getSt
                 
                 return;
             }
+
+            case 'keyboard/setHarmonics': {
+                const { waveform, harmonics, keyNumber } = action.payload;
+                const mode = getState().keyboard.mode;
+                debug.log(`Setting harmonics for ${keyNumber ? `note ${keyNumber}` : 'global'}, waveform ${waveform}: ${harmonics.join(', ')}`);
+
+                if (mode !== 'drums') {
+                    if (keyNumber !== undefined) {
+                        // Update note-specific harmonics
+                        keyboardAudioManager.setNoteHarmonics(keyNumber, waveform, harmonics);
+                    } else {
+                        // Update global harmonics
+                        keyboardAudioManager.setGlobalHarmonics(waveform, harmonics);
+                    }
+                }
+                break;
+            }
+            
+            case 'keyboard/setHarmonicAmplitude': {
+                const { waveform, harmonicIndex, value, keyNumber } = action.payload;
+                const mode = getState().keyboard.mode;
+                debug.log(`Setting harmonic ${harmonicIndex} amplitude to ${value} for ${keyNumber ? `note ${keyNumber}` : 'global'}, waveform ${waveform}`);
+
+                if (mode !== 'drums') {
+                    // Get current harmonics for the specified context
+                    let currentHarmonics: number[] = [100, 0, 0, 0, 0, 0, 0, 0]; // Default sine wave
+                    
+                    // Try to get existing harmonics from state
+                    if (keyNumber !== undefined) {
+                        const keyParams = getState().keyboard.keyParameters[keyNumber];
+                        const isIndependentMode = getState().keyboard.isIndependentParameterMode;
+                        
+                        if (isIndependentMode && keyParams?.oscillatorHarmonics?.[waveform]) {
+                            currentHarmonics = [...keyParams.oscillatorHarmonics[waveform].amplitudes];
+                        } else if (keyParams?.harmonics) {
+                            currentHarmonics = [...keyParams.harmonics.amplitudes];
+                        } else {
+                            // Fall back to global harmonics
+                            const globalHarmonics = getState().keyboard.globalHarmonics[waveform];
+                            if (globalHarmonics) {
+                                currentHarmonics = [...globalHarmonics.amplitudes];
+                            }
+                        }
+                    } else {
+                        // Global harmonics
+                        const globalHarmonics = getState().keyboard.globalHarmonics[waveform];
+                        if (globalHarmonics) {
+                            currentHarmonics = [...globalHarmonics.amplitudes];
+                        }
+                    }
+                    
+                    // Update the specific harmonic amplitude
+                    currentHarmonics[harmonicIndex] = value;
+                    
+                    // Apply the updated harmonics immediately to the audio engine
+                    if (keyNumber !== undefined) {
+                        // Update for specific note
+                        keyboardAudioManager.setNoteHarmonics(keyNumber, waveform, currentHarmonics);
+                    } else {
+                        // Update globally
+                        keyboardAudioManager.setGlobalHarmonics(waveform, currentHarmonics);
+                    }
+                }
+                break;
+            }
         }
     } catch (error) {
         debug.error('Error in audio middleware:', error);
@@ -391,6 +459,55 @@ const waveformMiddleware: Middleware<object, RootState> = ({ dispatch, getState 
                     keyboardAudioManager.setGlobalActiveWaveforms(activeWaveforms);
                 }
             }
+            
+            // Handle direct waveform selection
+            if (action.type === toggleWaveform.type) {
+                const waveform = action.payload as Waveform;
+                
+                // When adding a waveform, set it as editable if it's not already in the active waveforms
+                if (!activeWaveforms.includes(waveform)) {
+                    // This is a newly activated waveform, make it editable
+                    console.log(`[WAVEFORM SYNC] Setting ${waveform} as editable waveform`);
+                    dispatch(setEditableWaveform(waveform));
+                }
+                
+                // Now check if any oscillators need their waveform type updated
+                const voices = Array.from(keyboardAudioManager.getActiveVoices?.() || []);
+                voices.forEach(([noteNumber, voice]) => {
+                    // Find oscillators that match this waveform type
+                    voice.oscillators?.forEach(osc => {
+                        // Only update if using AdditiveOscillator
+                        if (osc.type === waveform && osc.oscillator instanceof AdditiveOscillator) {
+                            // Ensure the oscillator has the correct waveform type
+                            const currentType = osc.oscillator.getWaveformType();
+                            if (currentType !== waveform) {
+                                console.log(`[WAVEFORM SYNC] Updating oscillator waveform type for note ${noteNumber} from ${currentType} to ${waveform}`);
+                                osc.oscillator.setWaveformType(waveform);
+                            }
+                        }
+                    });
+                });
+            }
+            
+            // Make sure WaveformControls also updates the editable waveform
+            if (action.type === 'keyboard/setGlobalWaveform' || action.type === 'keyboard/setKeyWaveform') {
+                const waveform = action.type === 'keyboard/setGlobalWaveform' 
+                    ? action.payload 
+                    : action.payload.waveform;
+                    
+                console.log(`[WAVEFORM SYNC] Setting ${waveform} as editable from direct waveform selection`);
+                dispatch(setEditableWaveform(waveform));
+            }
+        }
+        
+        // Add additional case for direct waveform selection (from WaveformControls component)
+        if (action.type === 'keyboard/setGlobalWaveform' || action.type === 'keyboard/setKeyWaveform') {
+            const waveform = action.type === 'keyboard/setGlobalWaveform' 
+                ? action.payload 
+                : action.payload.waveform;
+                
+            console.log(`[WAVEFORM SYNC] Setting ${waveform} as editable from direct waveform selection`);
+            dispatch(setEditableWaveform(waveform));
         }
     }
     

@@ -65,10 +65,21 @@ export interface KeyParameters {
         sawtooth?: Partial<OscillatorParameters>;
         triangle?: Partial<OscillatorParameters>;
     };
+
+    // Shared harmonics for all oscillators on this key
+    harmonics?: HarmonicSettings;
+    
+    // Per-oscillator harmonic settings
+    oscillatorHarmonics?: Record<Waveform, HarmonicSettings>;
 }
 
 export type SynthMode = 'tunable' | 'drums';
 export type OscillatorMode = 'single' | 'multi'; // New type for oscillator mode
+
+export interface HarmonicSettings {
+    // Amplitude values (0-100) for each harmonic partial
+    amplitudes: number[]; // Array of 8 values for harmonics 1-8
+}
 
 export interface KeyboardState {
     activeNotes: number[];
@@ -95,6 +106,12 @@ export interface KeyboardState {
     
     // New field to toggle between shared and independent parameters for oscillators
     isIndependentParameterMode: boolean;
+
+    // Global harmonic settings by waveform type
+    globalHarmonics: Record<Waveform, HarmonicSettings>;
+    
+    // Toggle for harmonic panel visibility
+    isHarmonicPanelVisible: boolean;
 }
 
 const defaultParameters: KeyParameters = {
@@ -139,7 +156,16 @@ const initialState: KeyboardState = {
     oscillatorMode: 'single',
     
     // Default to shared parameters mode for backward compatibility
-    isIndependentParameterMode: false
+    isIndependentParameterMode: false,
+
+    // Initialize default harmonic settings for each waveform
+    globalHarmonics: {
+        sine: { amplitudes: [100, 0, 0, 0, 0, 0, 0, 0] },
+        square: { amplitudes: [100, 0, 33, 0, 20, 0, 14, 0] },
+        triangle: { amplitudes: [100, 0, 11, 0, 4, 0, 2, 0] },
+        sawtooth: { amplitudes: [100, 50, 33, 25, 20, 17, 14, 12] }
+    },
+    isHarmonicPanelVisible: true,
 };
 
 const keyboardSlice = createSlice({
@@ -606,6 +632,110 @@ const keyboardSlice = createSlice({
                 }
             }
         },
+
+        // Set all harmonics for a specific waveform
+        setHarmonics: (state, action: PayloadAction<{
+            waveform: Waveform;
+            harmonics: number[];
+            keyNumber?: number; // Optional - if provided, sets for specific key
+        }>) => {
+            const { waveform, harmonics, keyNumber } = action.payload;
+            
+            if (keyNumber !== undefined) {
+                // Per-key harmonics
+                if (!state.keyParameters[keyNumber]) {
+                    state.keyParameters[keyNumber] = {};
+                }
+                
+                if (state.isIndependentParameterMode) {
+                    // Per-oscillator harmonics
+                    if (!state.keyParameters[keyNumber].oscillatorHarmonics) {
+                        state.keyParameters[keyNumber].oscillatorHarmonics = {} as Record<Waveform, HarmonicSettings>;
+                    }
+                    
+                    state.keyParameters[keyNumber].oscillatorHarmonics![waveform] = {
+                        amplitudes: [...harmonics]
+                    };
+                } else {
+                    // Shared harmonics for this key
+                    state.keyParameters[keyNumber].harmonics = {
+                        amplitudes: [...harmonics]
+                    };
+                }
+            } else {
+                // Global harmonics
+                state.globalHarmonics[waveform] = {
+                    amplitudes: [...harmonics]
+                };
+            }
+        },
+        
+        // Set a single harmonic amplitude
+        setHarmonicAmplitude: (state, action: PayloadAction<{
+            waveform: Waveform;
+            harmonicIndex: number; // 0-7 (for harmonics 1-8)
+            value: number; // 0-100
+            keyNumber?: number; // Optional - if provided, sets for specific key
+        }>) => {
+            const { waveform, harmonicIndex, value, keyNumber } = action.payload;
+            
+            // Helper function to get and update harmonics
+            const updateHarmonics = (currentSettings: HarmonicSettings | undefined, defaultSettings: HarmonicSettings) => {
+                // Use existing settings or clone the default
+                const harmonics = currentSettings?.amplitudes 
+                    ? [...currentSettings.amplitudes] 
+                    : [...defaultSettings.amplitudes];
+                
+                // Update the specific harmonic amplitude
+                if (harmonicIndex >= 0 && harmonicIndex < harmonics.length) {
+                    harmonics[harmonicIndex] = value;
+                }
+                
+                return harmonics;
+            };
+            
+            if (keyNumber !== undefined) {
+                // Per-key harmonics
+                if (!state.keyParameters[keyNumber]) {
+                    state.keyParameters[keyNumber] = {};
+                }
+                
+                if (state.isIndependentParameterMode) {
+                    // Per-oscillator harmonics
+                    if (!state.keyParameters[keyNumber].oscillatorHarmonics) {
+                        state.keyParameters[keyNumber].oscillatorHarmonics = {} as Record<Waveform, HarmonicSettings>;
+                    }
+                    
+                    const currentSettings = state.keyParameters[keyNumber].oscillatorHarmonics![waveform];
+                    const updatedHarmonics = updateHarmonics(currentSettings, state.globalHarmonics[waveform]);
+                    
+                    state.keyParameters[keyNumber].oscillatorHarmonics![waveform] = {
+                        amplitudes: updatedHarmonics
+                    };
+                } else {
+                    // Shared harmonics for this key
+                    const currentSettings = state.keyParameters[keyNumber].harmonics;
+                    const updatedHarmonics = updateHarmonics(currentSettings, state.globalHarmonics[waveform]);
+                    
+                    state.keyParameters[keyNumber].harmonics = {
+                        amplitudes: updatedHarmonics
+                    };
+                }
+            } else {
+                // Global harmonics
+                const currentSettings = state.globalHarmonics[waveform];
+                const updatedHarmonics = updateHarmonics(currentSettings, currentSettings);
+                
+                state.globalHarmonics[waveform] = {
+                    amplitudes: updatedHarmonics
+                };
+            }
+        },
+        
+        // Toggle the harmonic panel visibility
+        toggleHarmonicPanel: (state) => {
+            state.isHarmonicPanelVisible = !state.isHarmonicPanelVisible;
+        },
     }
 });
 
@@ -636,7 +766,10 @@ export const {
     initializeKeyParameters,
     toggleWaveform,
     setEditableWaveform,
-    setKeyActiveWaveforms
+    setKeyActiveWaveforms,
+    setHarmonics,
+    setHarmonicAmplitude,
+    toggleHarmonicPanel,
 } = keyboardSlice.actions;
 
 // Selectors
@@ -706,5 +839,11 @@ export const selectOscillatorMode = (state: { keyboard: KeyboardState }) =>
 
 export const selectIsIndependentParameterMode = (state: { keyboard: KeyboardState }) =>
     state.keyboard.isIndependentParameterMode;
+
+export const selectGlobalHarmonics = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.globalHarmonics;
+
+export const selectIsHarmonicPanelVisible = (state: { keyboard: KeyboardState }) =>
+    state.keyboard.isHarmonicPanelVisible;
 
 export default keyboardSlice.reducer;

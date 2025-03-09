@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
-import { Waveform } from '../store/slices/keyboard.slice';
+import { Waveform, setEditableWaveform } from '../store/slices/keyboard.slice';
 import { getMutedColor } from '../../../shared/constants/colors';
-import { useAppSelector } from "../../player/hooks";
+import { useAppSelector, useAppDispatch } from "../../../store/hooks";
 
 interface WaveformControlsProps {
     currentWaveform: Waveform;
@@ -17,9 +17,11 @@ const WAVEFORM_NAMES = {
 };
 
 const WaveformControls: React.FC<WaveformControlsProps> = ({
-                                                               currentWaveform,
-                                                               onWaveformChange
-                                                           }) => {
+    currentWaveform,
+    onWaveformChange
+}) => {
+    const dispatch = useAppDispatch();
+    
     // Get the current track color from Redux state
     const currentTrack = useAppSelector(state => state.player.currentTrack);
     const tracks = useAppSelector(state => state.player.tracks);
@@ -42,8 +44,14 @@ const WaveformControls: React.FC<WaveformControlsProps> = ({
     };
 
     const handleWaveformClick = useCallback((waveform: Waveform) => {
+        // Call the parent component's change handler
         onWaveformChange(waveform);
-    }, [onWaveformChange]);
+        
+        // Also set this as the editable waveform for harmonics
+        dispatch(setEditableWaveform(waveform));
+        
+        console.log(`[WAVEFORM CONTROLS] Selected waveform: ${waveform}, set as editable`);
+    }, [onWaveformChange, dispatch]);
 
     return (
         <div className="mt-6 flex justify-center">

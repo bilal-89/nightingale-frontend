@@ -1,8 +1,12 @@
+import React, { useEffect } from "react";
 import { Provider } from 'react-redux';
 import { store } from './store';
 import { Player } from "./features/player";
 import KeyboardWorkspace from "./features/keyboard/layouts/KeyboardWorkspace";
 import ParameterPanel from "./features/parameters/components/ParameterPanel";
+import HarmonicsPanel from "./features/parameters/components/HarmonicsPanel";
+import { initializeAudio } from './features/keyboard/store/slices/keyboard.slice';
+import { useAppDispatch } from './store/hooks';
 
 // Add console logs to help debug
 console.log('App rendering');
@@ -67,39 +71,55 @@ const Logo = () => (
     </svg>
 );
 
-
-
 const App = () => {
     return (
         <Provider store={store}>
-            <div className="min-h-screen bg-[#f5f2ed] p-8">
-                <div className="container mx-auto max-w-6xl">
-                    {/* Logo positioned at top left */}
-                    <div className="absolute top-4 left-5">
-                        <Logo />
-                    </div>
+            <AppContent />
+        </Provider>
+    );
+};
 
-                    {/* Main flex container with column and row layout */}
-                    <div className="flex flex-row gap-6">
-                        {/* Left content column containing Player and KeyboardWorkspace */}
-                        <div className="flex-1 flex flex-col space-y-6">
-                            {/* Player component - add max-width constraint */}
-                            <div className="max-w-[890px] mx-auto w-full">
-                                <Player />
-                            </div>
+// Separate component that can use hooks
+const AppContent = () => {
+    const dispatch = useAppDispatch();
+    
+    // Function to force audio initialization - still keep this but auto-initialize on load
+    useEffect(() => {
+        console.log('Auto-initializing audio on app load...');
+        dispatch(initializeAudio());
+    }, [dispatch]);
+    
+    return (
+        <div className="min-h-screen bg-[#f5f2ed] p-8">
+            {/* Removed the initialize audio button */}
+            
+            <div className="container mx-auto max-w-6xl">
+                {/* Logo positioned at top left */}
+                <div className="absolute top-4 left-5">
+                    <Logo />
+                </div>
 
-                            {/* KeyboardWorkspace component - constrained size */}
-                            <div>
-                                <KeyboardWorkspace />
-                            </div>
+                {/* Main flex container with column and row layout */}
+                <div className="flex flex-row gap-6">
+                    {/* Left content column containing Player and KeyboardWorkspace */}
+                    <div className="flex-1 flex flex-col space-y-6">
+                        {/* Player component - add max-width constraint */}
+                        <div className="max-w-[890px] mx-auto w-full">
+                            <Player />
                         </div>
 
-                        {/* Parameter panel */}
-                        <ParameterPanel />
+                        {/* KeyboardWorkspace component - constrained size */}
+                        <div>
+                            <KeyboardWorkspace />
+                        </div>
                     </div>
+
+                    {/* Parameter panel */}
+                    <ParameterPanel />
+                    <HarmonicsPanel />
                 </div>
             </div>
-        </Provider>
+        </div>
     );
 };
 
