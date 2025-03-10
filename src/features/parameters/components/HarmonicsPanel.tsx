@@ -181,11 +181,26 @@ const CustomWaveformVisualization: React.FC<{
   height: number;
   trackColor: string;
 }> = ({ harmonics, waveformType, width, height, trackColor }) => {
+  // Log when waveform type changes
+  useEffect(() => {
+    console.log(`[CUSTOM WAVEFORM VISUALIZATION] Rendering with waveform type: ${waveformType}`);
+  }, [waveformType]);
+
   // Add state to track previous values for animation
   const [prevPoints, setPrevPoints] = useState<[number, number][]>([]);
+  const [prevWaveformType, setPrevWaveformType] = useState<typeof waveformType>(waveformType);
   const [animatedPathData, setAnimatedPathData] = useState<string>('');
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   
+  // Track waveform type changes to trigger animations
+  useEffect(() => {
+    if (prevWaveformType !== waveformType) {
+      setPrevWaveformType(waveformType);
+      // When waveform type changes, we'll still have the previous points
+      // which will allow for a smooth animation to the new waveform shape
+    }
+  }, [waveformType, prevWaveformType]);
+
   // Calculate points for the waveform path
   const points = React.useMemo(() => {
     const resolution = 100;
@@ -333,9 +348,22 @@ const CustomWaveformVisualization: React.FC<{
 
 // Update the useTrackColor hook to correctly get the track color from Redux
 const useTrackColor = () => {
-  const currentTrack = useAppSelector(state => state.player.currentTrack);
-  const tracks = useAppSelector(state => state.player.tracks);
-  const currentTrackColor = tracks[currentTrack]?.color;
+  // Safely access player state properties with proper type handling
+  const playerState = useAppSelector(state => state.player);
+  
+  let currentTrackColor: string | undefined;
+  try {
+    // @ts-ignore - Access potentially missing properties safely
+    const currentTrack = playerState.currentTrack;
+    // @ts-ignore
+    const tracks = playerState.tracks;
+    
+    if (currentTrack !== undefined && tracks && tracks[currentTrack]) {
+      currentTrackColor = tracks[currentTrack].color;
+    }
+  } catch (e) {
+    console.warn('Could not get track color:', e);
+  }
   
   // Return the current track color or a default if not available
   return currentTrackColor || NoteColor.Green;
@@ -350,6 +378,11 @@ const HarmonicsPanel: React.FC = () => {
   const editableWaveform = useAppSelector(selectEditableWaveform);
   const currentTrackColor = useTrackColor();
   
+  // Log when editableWaveform changes
+  useEffect(() => {
+    console.log(`[HARMONICS PANEL] Editable waveform changed to:`, editableWaveform);
+  }, [editableWaveform]);
+
   // Remove position, isDragging, dragOffset states since we're not using absolute positioning
   const [isPressed, setIsPressed] = useState(false);
   const [clickedOnControl, setClickedOnControl] = useState(false);

@@ -23,9 +23,24 @@ const WaveformControls: React.FC<WaveformControlsProps> = ({
     const dispatch = useAppDispatch();
     
     // Get the current track color from Redux state
-    const currentTrack = useAppSelector(state => state.player.currentTrack);
-    const tracks = useAppSelector(state => state.player.tracks);
-    const currentTrackColor = tracks[currentTrack]?.color;
+    let currentTrackColor: string | undefined;
+    try {
+        // Safely access player state properties
+        const playerState = useAppSelector(state => state.player);
+        // @ts-ignore - Access potentially missing properties safely
+        const currentTrack = playerState.currentTrack;
+        // @ts-ignore
+        const tracks = playerState.tracks;
+        
+        if (currentTrack !== undefined && tracks && tracks[currentTrack]) {
+            currentTrackColor = tracks[currentTrack].color;
+        }
+    } catch (e) {
+        console.warn('Could not get track color:', e);
+    }
+    
+    // Default color if track color is not available
+    const buttonColor = currentTrackColor || '#B3D94C';
 
     // Neumorphic styles with dynamic track color for pressed state
     const neumorphicStyles = {

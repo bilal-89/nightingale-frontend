@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '../../player/hooks';
 import { 
   Waveform, 
@@ -24,8 +24,18 @@ const KeyWaveformControl: React.FC = () => {
       : state.keyboard.globalWaveform
   );
 
+  // Log when key selection or waveform changes
+  useEffect(() => {
+    console.log(`[KEY WAVEFORM CONTROL] Current selection state:`);
+    console.log(`  - selectedKey: ${selectedKey}`);
+    console.log(`  - currentWaveform: ${currentWaveform}`);
+  }, [selectedKey, currentWaveform]);
+
   // Handler for waveform changes
   const handleWaveformChange = useCallback((waveform: Waveform) => {
+    console.log(`[KEY WAVEFORM CONTROL] Changing waveform to: ${waveform}`);
+    console.log(`  - For key: ${selectedKey !== null ? selectedKey : 'global'}`);
+    
     if (selectedKey !== null) {
       // Set waveform for the specific key
       dispatch(setKeyWaveform({ keyNumber: selectedKey, waveform }));

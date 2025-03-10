@@ -271,25 +271,45 @@ const keyboardSlice = createSlice({
             state.globalWaveform = action.payload;
         },
 
-        setKeyWaveform: (state, action: PayloadAction<{
-            keyNumber: number;
-            waveform: Waveform;
-        }>) => {
+        setKeyWaveform: (state, action: PayloadAction<{ keyNumber: number; waveform: Waveform }>) => {
             const { keyNumber, waveform } = action.payload;
-
+            
+            // Make sure the key exists in state
             if (!state.keyParameters[keyNumber]) {
                 state.keyParameters[keyNumber] = {};
             }
-
+            
+            // Update the waveform
             state.keyParameters[keyNumber].waveform = waveform;
+            
+            // If this is the currently selected key, also update the editable waveform
+            if (state.selectedKey === keyNumber) {
+                state.editableWaveform = waveform;
+            }
         },
 
         setSelectedKey: (state, action: PayloadAction<number | null>) => {
             state.selectedKey = action.payload;
+            
             // Update context and panel visibility when selecting a key
             if (action.payload !== null) {
                 state.parameterContext = 'keyboard';
                 state.isParameterPanelVisible = true;
+                
+                // If a key is selected, update the editable waveform to match the key's waveform
+                const keyWaveform = state.keyParameters[action.payload]?.waveform;
+                console.log(`[KEYBOARD SLICE] Key ${action.payload} selected, key waveform:`, keyWaveform);
+                console.log(`[KEYBOARD SLICE] Current editable waveform before update:`, state.editableWaveform);
+                
+                if (keyWaveform) {
+                    // Update the editable waveform to match the selected key's waveform
+                    state.editableWaveform = keyWaveform;
+                    console.log(`[KEYBOARD SLICE] Updated editable waveform to:`, keyWaveform);
+                } else {
+                    // If the key doesn't have a custom waveform, use the global waveform
+                    state.editableWaveform = state.globalWaveform;
+                    console.log(`[KEYBOARD SLICE] Key has no custom waveform, updated editable waveform to global:`, state.globalWaveform);
+                }
             } else if (state.parameterContext === 'keyboard') {
                 state.isParameterPanelVisible = false;
             }

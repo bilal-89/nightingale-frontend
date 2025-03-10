@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '../../../store/hooks';
 import { 
   Waveform,
@@ -24,6 +24,15 @@ export const useHarmonicValues = () => {
   const globalHarmonics = useAppSelector(selectGlobalHarmonics);
   const keyParameters = useAppSelector(state => state.keyboard.keyParameters);
   
+  // Log when critical dependencies change
+  useEffect(() => {
+    console.log(`[USE HARMONIC VALUES] Dependencies changed:`);
+    console.log(`  - editableWaveform: ${editableWaveform}`);
+    console.log(`  - isGlobalMode: ${isGlobalMode}`);
+    console.log(`  - isIndependentMode: ${isIndependentMode}`);
+    console.log(`  - selectedKey: ${selectedKey}`);
+  }, [editableWaveform, isGlobalMode, isIndependentMode, selectedKey]);
+  
   /**
    * Get the harmonics that should be displayed/edited based on current context
    */
@@ -33,34 +42,46 @@ export const useHarmonicValues = () => {
     
     // If no editable waveform is selected, return defaults
     if (!editableWaveform) {
+      console.log(`[USE HARMONIC VALUES] No editable waveform, using default values`);
       return defaultValues;
     }
     
     // In global mode, use global harmonics
     if (isGlobalMode) {
-      return globalHarmonics[editableWaveform]?.amplitudes || defaultValues;
+      const harmonics = globalHarmonics[editableWaveform]?.amplitudes || defaultValues;
+      console.log(`[USE HARMONIC VALUES] Global mode, using harmonics for ${editableWaveform}:`, harmonics);
+      return harmonics;
     }
     
     // In local mode with a selected key
     if (selectedKey !== null) {
       const keyParams = keyParameters[selectedKey];
+      console.log(`[USE HARMONIC VALUES] Local mode, key ${selectedKey}, keyParams:`, keyParams);
       
       // Check for per-oscillator harmonics if in independent mode
       if (isIndependentMode && keyParams?.oscillatorHarmonics?.[editableWaveform]) {
-        return keyParams.oscillatorHarmonics[editableWaveform].amplitudes;
+        const harmonics = keyParams.oscillatorHarmonics[editableWaveform].amplitudes;
+        console.log(`[USE HARMONIC VALUES] Using independent harmonics for ${editableWaveform}:`, harmonics);
+        return harmonics;
       }
       
       // Check for shared harmonics for this key
       if (keyParams?.harmonics) {
-        return keyParams.harmonics.amplitudes;
+        const harmonics = keyParams.harmonics.amplitudes;
+        console.log(`[USE HARMONIC VALUES] Using shared key harmonics:`, harmonics);
+        return harmonics;
       }
       
       // Fallback to global harmonics
-      return globalHarmonics[editableWaveform]?.amplitudes || defaultValues;
+      const harmonics = globalHarmonics[editableWaveform]?.amplitudes || defaultValues;
+      console.log(`[USE HARMONIC VALUES] Falling back to global harmonics for ${editableWaveform}:`, harmonics);
+      return harmonics;
     }
     
     // Fallback to global harmonics
-    return globalHarmonics[editableWaveform]?.amplitudes || defaultValues;
+    const harmonics = globalHarmonics[editableWaveform]?.amplitudes || defaultValues;
+    console.log(`[USE HARMONIC VALUES] No key selected, using global harmonics for ${editableWaveform}:`, harmonics);
+    return harmonics;
   }, [
     editableWaveform,
     isGlobalMode,

@@ -95,6 +95,14 @@ const TunableKeyboard: React.FC = () => {
             : globalWaveform
     );
 
+    // Add logging to track selected key and waveform changes
+    useEffect(() => {
+        if (selectedKey !== null) {
+            console.log(`[TUNABLE KEYBOARD] Selected key changed to: ${selectedKey}`);
+            console.log(`[TUNABLE KEYBOARD] Current waveform for selected key: ${currentWaveform}`);
+        }
+    }, [selectedKey, currentWaveform]);
+
     // Derive keyboard layout data based on Redux state
     const containerLayout = usingFigmaLayout ? FIGMA_CONTAINER_LAYOUT : ORIGINAL_CONTAINER_LAYOUT;
     const keyData = usingFigmaLayout ? FIGMA_KEY_DATA : ORIGINAL_KEY_DATA;
