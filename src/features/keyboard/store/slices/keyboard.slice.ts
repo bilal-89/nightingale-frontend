@@ -161,9 +161,9 @@ const initialState: KeyboardState = {
     // Initialize default harmonic settings for each waveform
     globalHarmonics: {
         sine: { amplitudes: [100, 0, 0, 0, 0, 0, 0, 0] },
-        square: { amplitudes: [100, 0, 33, 0, 20, 0, 14, 0] },
-        triangle: { amplitudes: [100, 0, 11, 0, 4, 0, 2, 0] },
-        sawtooth: { amplitudes: [100, 50, 33, 25, 20, 17, 14, 12] }
+        square: { amplitudes: [100, 0, 0, 0, 0, 0, 0, 0] },
+        triangle: { amplitudes: [100, 0, 0, 0, 0, 0, 0, 0] },
+        sawtooth: { amplitudes: [100, 0, 0, 0, 0, 0, 0, 0] }
     },
     isHarmonicPanelVisible: true,
 };
