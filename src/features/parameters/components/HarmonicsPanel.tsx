@@ -181,6 +181,11 @@ const CustomWaveformVisualization: React.FC<{
   height: number;
   trackColor: string;
 }> = ({ harmonics, waveformType, width, height, trackColor }) => {
+  // Add state to track previous values for animation
+  const [prevPoints, setPrevPoints] = useState<[number, number][]>([]);
+  const [animatedPathData, setAnimatedPathData] = useState<string>('');
+  const [isAnimating, setIsAnimating] = useState<boolean>(false);
+  
   // Calculate points for the waveform path
   const points = React.useMemo(() => {
     const resolution = 100;
@@ -231,6 +236,81 @@ const CustomWaveformVisualization: React.FC<{
     return path;
   }, [points]);
   
+  // Animate transition when the path changes
+  useEffect(() => {
+    if (prevPoints.length === 0) {
+      // First render, no animation needed
+      setPrevPoints(points);
+      setAnimatedPathData(pathData);
+      return;
+    }
+    
+    // Start animation
+    setIsAnimating(true);
+    
+    // Create a simple animation using requestAnimationFrame
+    const startTime = performance.now();
+    const duration = 150; // 150ms animation
+    
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Use interpolation for smooth transition if points arrays have same length
+      if (prevPoints.length === points.length) {
+        const interpolatedPoints: [number, number][] = [];
+        
+        for (let i = 0; i < points.length; i++) {
+          const prevX = prevPoints[i][0];
+          const prevY = prevPoints[i][1];
+          const nextX = points[i][0];
+          const nextY = points[i][1];
+          
+          // Linear interpolation between previous and current points
+          const interpolatedX = prevX + (nextX - prevX) * progress;
+          const interpolatedY = prevY + (nextY - prevY) * progress;
+          
+          interpolatedPoints.push([interpolatedX, interpolatedY]);
+        }
+        
+        // Convert interpolated points to path
+        let animPath = `M ${interpolatedPoints[0][0]} ${interpolatedPoints[0][1]}`;
+        for (let i = 1; i < interpolatedPoints.length; i++) {
+          animPath += ` L ${interpolatedPoints[i][0]} ${interpolatedPoints[i][1]}`;
+        }
+        
+        setAnimatedPathData(animPath);
+      } else {
+        // For cases where arrays have different lengths, crossfade
+        // Just use progress to fade from one to the other
+        setAnimatedPathData(progress >= 0.5 ? pathData : 
+          prevPoints.length > 0 ? 
+            `M ${prevPoints[0][0]} ${prevPoints[0][1]}` + 
+            prevPoints.slice(1).map(p => ` L ${p[0]} ${p[1]}`).join('') : 
+            pathData);
+      }
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        // Animation complete
+        setAnimatedPathData(pathData);
+        setPrevPoints(points);
+        setIsAnimating(false);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+    
+    // Store current points as previous for next animation
+    setPrevPoints(points);
+    
+    // Cleanup function
+    return () => {
+      setIsAnimating(false);
+    };
+  }, [pathData, points]);
+  
   return (
     <svg 
       width={width} 
@@ -239,7 +319,7 @@ const CustomWaveformVisualization: React.FC<{
     >
       {/* Waveform path */}
       <path 
-        d={pathData} 
+        d={animatedPathData} 
         fill="none" 
         stroke={trackColor} 
         strokeWidth="2"
