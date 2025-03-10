@@ -114,9 +114,13 @@ const AppContent = () => {
                         </div>
                     </div>
 
-                    {/* Parameter panel */}
-                    <ParameterPanel />
-                    <HarmonicsPanel />
+                    {/* Right column for panels */}
+                    <div className="flex flex-col gap-4">
+                        {/* Parameter panel */}
+                        <ParameterPanel />
+                        {/* Harmonics panel */}
+                        <HarmonicsPanel />
+                    </div>
                 </div>
             </div>
         </div>

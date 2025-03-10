@@ -251,21 +251,14 @@ const CustomWaveformVisualization: React.FC<{
   );
 };
 
-// Custom hook to get track color without linter errors
+// Update the useTrackColor hook to correctly get the track color from Redux
 const useTrackColor = () => {
-  const selectedKey = useAppSelector(state => state.keyboard.selectedKey);
+  const currentTrack = useAppSelector(state => state.player.currentTrack);
+  const tracks = useAppSelector(state => state.player.tracks);
+  const currentTrackColor = tracks[currentTrack]?.color;
   
-  // Default to Green if no track color is available
-  return useAppSelector(state => {
-    // Attempt to get color from keyboard state first
-    if (selectedKey !== null && state.keyboard.keyParameters[selectedKey]) {
-      // This is a simplification - in a real app you'd extract the actual color
-      return NoteColor.Green;
-    }
-    
-    // Default fallback
-    return NoteColor.Green;
-  });
+  // Return the current track color or a default if not available
+  return currentTrackColor || NoteColor.Green;
 };
 
 /**
@@ -277,10 +270,7 @@ const HarmonicsPanel: React.FC = () => {
   const editableWaveform = useAppSelector(selectEditableWaveform);
   const currentTrackColor = useTrackColor();
   
-  // State for position, pressed state, and dragging
-  const [position, setPosition] = useState({ right: 220, top: 510 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  // Remove position, isDragging, dragOffset states since we're not using absolute positioning
   const [isPressed, setIsPressed] = useState(false);
   const [clickedOnControl, setClickedOnControl] = useState(false);
   
@@ -296,19 +286,14 @@ const HarmonicsPanel: React.FC = () => {
     dispatch(toggleHarmonicPanel());
   };
   
-  // Combined background handler for mouseDown
+  // Simplified mouseDown handler - no more dragging
   const handleBackgroundMouseDown = useCallback((e: React.MouseEvent) => {
-    // Don't initiate drag if clicking on a control
+    // Don't handle if clicking on a control
     if ((e.target as HTMLElement).classList.contains('control-element')) {
       return;
     }
     
     setIsPressed(true);
-    setIsDragging(true);
-    setDragOffset({
-      x: e.clientX - position.right,
-      y: e.clientY - position.top
-    });
     
     // If panel is not visible, toggle it
     if (!isPanelVisible) {
@@ -316,12 +301,11 @@ const HarmonicsPanel: React.FC = () => {
     }
     
     e.preventDefault();
-  }, [dispatch, isPanelVisible, position]);
+  }, [dispatch, isPanelVisible]);
   
-  // Combined background handler for mouseUp
+  // Simplified mouseUp handler
   const handleBackgroundMouseUp = useCallback(() => {
     setIsPressed(false);
-    setIsDragging(false);
     setClickedOnControl(false);
   }, []);
   
@@ -334,43 +318,16 @@ const HarmonicsPanel: React.FC = () => {
   // Mouse leave handler
   const handleMouseLeave = useCallback(() => {
     setIsPressed(false);
-    setIsDragging(false);
     setClickedOnControl(false);
   }, []);
   
-  // Handle drag movement
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging && !clickedOnControl) {
-        // Update position based on mouse movement
-        setPosition({
-          right: e.clientX - dragOffset.x,
-          top: e.clientY - dragOffset.y
-        });
-      }
-    };
-    
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      setIsPressed(false);
-    };
-    
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, dragOffset, position, clickedOnControl]);
+  // Remove the dragging effect handlers that used absolute positioning
   
-  // If panel is not visible, return a minimized version
+  // If panel is not visible, return null or a minimized button
   if (!isPanelVisible) {
     return (
       <div 
-        className="absolute right-0 top-[460px] bg-[#F5F2ED] rounded-l-lg p-2 cursor-pointer"
+        className="bg-[#F5F2ED] rounded-lg p-2 cursor-pointer"
         onClick={handleTogglePanel}
         title="Show Harmonics Panel"
       >
@@ -380,9 +337,9 @@ const HarmonicsPanel: React.FC = () => {
   }
   
   return (
-    <div className="absolute" style={{ right: position.right, top: position.top, zIndex: 10 }}>
+    <div className="w-full max-w-md"> {/* Remove absolute positioning */}
       {/* SVG container with mask and visual styling */}
-      <svg viewBox="0 0 235 450" width="235" height="450">
+      <svg viewBox="0 0 235 450" className="w-full h-auto">
         <defs>
           {/* Create a mask from the container path */}
           <mask id="harmonics-panel-mask">
@@ -447,7 +404,7 @@ const HarmonicsPanel: React.FC = () => {
             style={{
               transform: isPressed ? 'translateY(2px)' : 'translateY(0)',
               transition: 'transform 100ms ease-in-out',
-              cursor: isDragging ? 'grabbing' : 'grab',
+              cursor: 'grab',
               userSelect: 'none',
             }}
             onMouseDown={handleBackgroundMouseDown}
