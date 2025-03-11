@@ -3,8 +3,8 @@ import { Provider } from 'react-redux';
 import { store } from './store';
 import { Player } from "./features/player";
 import KeyboardWorkspace from "./features/keyboard/layouts/KeyboardWorkspace";
-import ParameterPanel from "./features/parameters/components/ParameterPanel";
-import HarmonicsPanel from "./features/parameters/components/HarmonicsPanel";
+import ParameterPanel from "./pages/studio/features/parameters/components/ParameterPanel"
+import HarmonicsPanel from "./pages/studio/features/parameters/components/HarmonicsPanel"
 import { initializeAudio } from './features/keyboard/store/slices/keyboard.slice';
 import { useAppDispatch } from './store/hooks';
 
