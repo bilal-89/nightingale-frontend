@@ -3,22 +3,19 @@ import React, { useState, useCallback } from 'react';
 import {
     selectIsPanelVisible,
     togglePanel,
-    setParameterContext,
     selectParameterContext,
     setGlobalWaveform,
     selectGlobalWaveform,
     selectSelectedKey,
     setKeyWaveform,
-    selectKeyWaveform
 } from '../../../../../features/keyboard/store/slices/keyboard.slice';
-import { useParameterValues } from '../../../../../features/parameters/hooks/useParameterValues';
-import { parameters } from '../../../../../features/parameters/constants/parameters';
-import { ParameterContext } from '../../../../../features/parameters/types/types';
+import { useParameterValues } from '../hooks/useParameterValues.ts';
+import { parameters } from '../constants/parameters.ts';
+import { ParameterContext } from '../types/types';
 import { NoteColor } from '../../../../../shared/constants/colors.ts';
 import { ColorStrip } from '../../../../../shared/components/ui/ColorStrip';
 import { setTrackSettings } from '../../../../../features/player/store/player';
 import { getMutedColor } from '../../../../../shared/constants/colors';
-// import WaveformControls from '../../../../../features/keyboard/components/WaveformControls';
 import { useAppDispatch, useAppSelector } from "../../../../../features/player/hooks";
 import { selectSelectedNote } from '../../../../../features/player/store/player';
 import { useParameters } from '../../../../../features/player/hooks/useParameters';

@@ -1,15 +1,14 @@
 import { useCallback, useMemo, useEffect } from 'react';
-import { useAppSelector, useAppDispatch } from '../../../store/hooks';
+import { useAppSelector, useAppDispatch } from '../../../../.././store/hooks';
 import { 
-  Waveform,
-  selectEditableWaveform, 
+  selectEditableWaveform,
   selectIsGlobalOscillatorMode, 
   selectIsIndependentParameterMode,
   selectSelectedKey,
   selectGlobalHarmonics,
   setHarmonicAmplitude,
   setHarmonics
-} from '../../keyboard/store/slices/keyboard.slice';
+} from '../../../../../features/keyboard/store/slices/keyboard.slice';
 
 /**
  * Hook for accessing and updating harmonic values based on the current context.

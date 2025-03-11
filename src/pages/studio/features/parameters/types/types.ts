@@ -1,5 +1,5 @@
 // src/features/parameters/types/types.ts
-import { KeyParameters } from '../../keyboard/store/slices/keyboard.slice';
+import { KeyParameters } from '../../../../../features/keyboard/store/slices/keyboard.slice';
 
 export type ParameterContext = 'keyboard' | 'note';
 // Update to include 'unison' in the ParameterGroup type

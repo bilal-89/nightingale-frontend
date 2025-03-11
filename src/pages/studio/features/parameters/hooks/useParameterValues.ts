@@ -1,16 +1,16 @@
 // src/features/parameters/hooks/useParameterValues.ts
 
 import { useMemo, useCallback } from 'react';
-import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { selectSelectedNote, selectMultiSelectedNotes } from '../../player/store/player';
+import { useAppDispatch, useAppSelector } from '../../../../../store/hooks';
+import { selectSelectedNote, selectMultiSelectedNotes } from '../../../../../features/player/store/player';
 import { 
     setKeyParameter, 
     selectGlobalWaveform, 
     selectIsIndependentParameterMode,
     selectEditableWaveform,
     setOscillatorParameter
-} from '../../keyboard/store/slices/keyboard.slice';
-import { useParameters } from '../../player/hooks/useParameters';
+} from '../../../../../features/keyboard/store/slices/keyboard.slice';
+import { useParameters } from '../../../../../features/player/hooks/useParameters';
 import { parameters } from '../constants/parameters';
 import {
     ParameterContext,

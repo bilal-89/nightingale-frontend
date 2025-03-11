@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { ParameterService } from '../../parameters/services/parameter.service';
+import { ParameterService } from '../../../pages/studio/features/parameters/services/parameter.service';
 import { updateNoteParameters, selectSelectedNote } from '../store/player';
 import { NoteEvent } from '../types/noteEvent';
 import { isNoteProperty, isEnvelopeParam, isUnisonParam, mapUnisonParamToProperty } from '../utils/parameterUtils';

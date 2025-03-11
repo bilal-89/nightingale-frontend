@@ -6,7 +6,7 @@ import {
   selectIsHarmonicPanelVisible,
   toggleHarmonicPanel
 } from '../../../../../features/keyboard/store/slices/keyboard.slice.ts';
-import { useHarmonicValues } from '../../../../../features/parameters/hooks/useHarmonicValues.ts';
+import { useHarmonicValues } from '../hooks/useHarmonicValues.ts'
 import { NoteColor } from '../../../../../shared/constants/colors.ts';
 
 // Define the SVG path for the container shape (matching ParameterPanel)
