@@ -353,9 +353,7 @@ const useTrackColor = () => {
   
   let currentTrackColor: string | undefined;
   try {
-    // @ts-ignore - Access potentially missing properties safely
     const currentTrack = playerState.currentTrack;
-    // @ts-ignore
     const tracks = playerState.tracks;
     
     if (currentTrack !== undefined && tracks && tracks[currentTrack]) {
@@ -390,8 +388,7 @@ const HarmonicsPanel: React.FC = () => {
   // Get harmonic values and update functions from the hook
   const { 
     harmonicValues, 
-    updateHarmonicAmplitude, 
-    resetToDefault 
+    updateHarmonicAmplitude
   } = useHarmonicValues();
   
   // Toggle panel visibility
