@@ -1,10 +1,9 @@
 // KeyboardLayout.tsx - Updated for switchable layouts with fixed click effect
-import React, { useState, useCallback, useEffect } from 'react';
-import TunableKey from './TunableKey';
+import React, { useState, useCallback } from 'react';
+import TunableKey from './TunableKey.tsx';
 import { useSelector } from 'react-redux';
-import { selectActiveNotes, selectParameter, selectCurrentOctave } from '../store/slices/keyboard.slice';
-import { RootState } from '../../../store/store';
-import { KeyProps } from './Key';
+import { selectActiveNotes, selectParameter, selectCurrentOctave } from '../../../../../features/keyboard/store/slices/keyboard.slice.ts';
+import { RootState } from '../../../../../store/store';
 
 interface KeyboardLayoutProps {
     notes: Array<{
@@ -41,9 +40,6 @@ interface KeyboardLayoutProps {
 
 // Helper function to map MIDI note numbers to keyboard positions
 const mapNoteToKeyPosition = (note: number, octave: number): number => {
-    // Calculate the base note (C in the current octave)
-    const baseNote = (octave + 1) * 12;
-    
     // Map the note to the correct key position
     const noteInOctave = note % 12;
     const octaveOffset = Math.floor(note / 12) - (octave + 1);

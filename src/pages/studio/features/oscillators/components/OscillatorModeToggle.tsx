@@ -1,6 +1,6 @@
 import React from 'react';
-import { useAppSelector, useAppDispatch } from '../../player/hooks';
-import { selectIsGlobalOscillatorMode, toggleOscillatorMode } from '../store/slices/keyboard.slice';
+import { useAppSelector, useAppDispatch } from '../../../../../features/player/hooks';
+import { selectIsGlobalOscillatorMode, toggleOscillatorMode } from '../../../../../features/keyboard/store/slices/keyboard.slice';
 
 interface OscillatorModeToggleProps {
   className?: string;

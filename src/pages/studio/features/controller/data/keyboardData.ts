@@ -1,5 +1,5 @@
 // keyboardData.ts - Updated with switchable layouts
-import { Waveform, SynthMode } from '../store/slices/keyboard.slice';
+import { Waveform, SynthMode } from '../../../../../features/keyboard/store/slices/keyboard.slice.ts';
 
 // Original Key Shapes
 export const ORIGINAL_KEY_DATA: Record<number, {

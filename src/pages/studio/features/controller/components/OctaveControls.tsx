@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useAppDispatch } from '../../../store/hooks';
+import { useAppDispatch } from '../../../../../store/hooks.ts';
 import {
     incrementOctave,
     decrementOctave,
     SynthMode,
     selectMode
-} from '../store/slices/keyboard.slice';
+} from '../../../../../features/keyboard/store/slices/keyboard.slice.ts';
 
 interface OctaveControlsProps {
     className?: string;

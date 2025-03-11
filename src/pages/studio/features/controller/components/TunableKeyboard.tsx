@@ -1,12 +1,12 @@
 // TunableKeyboard.tsx - Updated with Redux layout state and SVG waveform controls
 import React, { useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
-import { useAppDispatch } from '../../../store/hooks';
-import { Card } from '../../../shared/components/ui/card';
-import { KeyboardLayout } from './KeyboardLayout';
-import { OctaveControls } from './OctaveControls';
-import WaveformControls from './WaveformControls'; // Import the single waveform component
-import MultiWaveformControls from './MultiWaveformControls'; // Import the new multi-waveform component
+import { useAppDispatch } from '../../../../../store/hooks.ts';
+import { Card } from '../../../../../shared/components/ui/card.tsx';
+import { KeyboardLayout } from './keyboardLayout.tsx';
+import { OctaveControls } from './OctaveControls.tsx';
+import WaveformControls from '../../oscillators/components/WaveformControls.tsx'; // Import the single waveform component
+import MultiWaveformControls from '../../oscillators/components/MultiWaveformControls.tsx'; // Import the new multi-waveform component
 import {
     noteOn,
     noteOff,
@@ -24,24 +24,20 @@ import {
     selectUsingFigmaLayout,
     selectParameterContext,
     selectSelectedKey,
-    SynthMode,
     Waveform,
     setParameterContext,
     setKeyWaveform,
     selectKeyWaveform,
     selectIsGlobalOscillatorMode,
-    // Add the new selectors
-    selectActiveWaveforms,
-    selectEditableWaveform,
     setSelectedKey,
     toggleWaveform,
     setEditableWaveform,
     selectOscillatorMode,
-} from '../store/slices/keyboard.slice';
-import { initializeAudioContext } from '../../audio/store/actions.ts';
-import { RootState } from '../../../store';
-import { useTiming } from '../../player/hooks/useTiming.ts';
-import keyboardAudioManager from '../../audio/engine/synthesis/keyboardEngine';
+} from '../../../../../features/keyboard/store/slices/keyboard.slice.ts';
+import { initializeAudioContext } from '../../../../../features/audio/store/actions.ts';
+import { RootState } from '../../../../../../store';
+import { useTiming } from '../../../../../features/player/hooks/useTiming.ts';
+import keyboardAudioManager from '../../../../../features/audio/engine/synthesis/keyboardEngine.ts';
 import {
     KEY_TO_NOTE,
     MODE_STYLES,
@@ -49,10 +45,10 @@ import {
     ORIGINAL_CONTAINER_LAYOUT,
     FIGMA_KEY_DATA,
     ORIGINAL_KEY_DATA
-} from '../data/keyboardData';
-import OscillatorModeToggle from './OscillatorModeToggle';
-import OscillatorTypeToggle from './OscillatorTypeToggle';
-import ParameterIndependenceToggle from './ParameterIndependenceToggle';
+} from '../data/keyboardData.ts';
+import OscillatorModeToggle from '../../oscillators/components/OscillatorModeToggle.tsx';
+import OscillatorTypeToggle from '../../oscillators/components/OscillatorTypeToggle.tsx';
+import ParameterIndependenceToggle from '../../oscillators/components/ParameterIndependenceToggle.tsx';
 
 // Main component
 const TunableKeyboard: React.FC = () => {

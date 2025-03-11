@@ -1,4 +1,4 @@
-import { NoteColor } from '../../../shared/constants/colors';
+import { NoteColor } from '../../../../../shared/constants/colors.ts';
 
 export interface KeyProps {
     note: number;

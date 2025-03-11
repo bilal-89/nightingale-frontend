@@ -1,6 +1,6 @@
 import React from 'react';
-import { useAppSelector, useAppDispatch } from '../../../store/hooks';
-import { selectIsIndependentParameterMode, toggleParameterIndependence } from '../store/slices/keyboard.slice';
+import { useAppSelector, useAppDispatch } from '../../../../../store/hooks';
+import { selectIsIndependentParameterMode, toggleParameterIndependence } from '../../../../../features/keyboard/store/slices/keyboard.slice';
 
 interface ParameterIndependenceToggleProps {
   className?: string;

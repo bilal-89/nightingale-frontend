@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
     Waveform, 
     toggleWaveform, 
@@ -8,9 +8,9 @@ import {
     selectIsGlobalOscillatorMode,
     selectSelectedKey,
     selectActiveNotes
-} from '../store/slices/keyboard.slice';
-import { getMutedColor } from '../../../shared/constants/colors';
-import { useAppSelector, useAppDispatch } from "../../../store/hooks";
+} from '../../../../../features/keyboard/store/slices/keyboard.slice';
+import { getMutedColor } from '../../../../../shared/constants/colors';
+import { useAppSelector, useAppDispatch } from "../../../../../store/hooks";
 
 // Long press duration for selecting editable waveform (in ms)
 const LONG_PRESS_DURATION = 500;

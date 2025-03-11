@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Provider } from 'react-redux';
 import { store } from './store';
 import { Player } from "./features/player";
-import KeyboardWorkspace from "./features/keyboard/layouts/KeyboardWorkspace";
+import KeyboardWorkspace from "./pages/studio/features/controller/layouts/KeyboardWorkspace";
 import ParameterPanel from "./pages/studio/features/parameters/components/ParameterPanel"
 import HarmonicsPanel from "./pages/studio/features/parameters/components/HarmonicsPanel"
 import { initializeAudio } from './features/keyboard/store/slices/keyboard.slice';

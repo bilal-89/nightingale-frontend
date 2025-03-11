@@ -1,8 +1,8 @@
 // TunableKey.tsx - Extracted key component
 import React, { useRef } from 'react';
-import { KeyProps } from './keyboard.types';
-import { drumSounds } from '../../audio/constants/drumSounds.ts';
-import { getColorWithOpacity, getMutedColor } from '../../../shared/constants/colors';
+import { KeyProps } from './keyboard.types.ts';
+import { drumSounds } from '../../../../../features/audio/constants/drumSounds.ts';
+import { getColorWithOpacity, getMutedColor } from '../../../../../shared/constants/colors.ts';
 
 // Add new props for SVG-specific attributes
 interface ExtendedKeyProps extends Omit<KeyProps, 'isBirdsong'> {

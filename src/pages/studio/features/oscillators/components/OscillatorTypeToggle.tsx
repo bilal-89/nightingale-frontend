@@ -1,6 +1,6 @@
 import React from 'react';
-import { useAppSelector, useAppDispatch } from '../../../store/hooks';
-import { selectOscillatorMode, toggleOscillatorType } from '../store/slices/keyboard.slice';
+import { useAppSelector, useAppDispatch } from '../../../../../store/hooks';
+import { selectOscillatorMode, toggleOscillatorType } from '../../../../../features/keyboard/store/slices/keyboard.slice';
 
 interface OscillatorTypeToggleProps {
   className?: string;

@@ -1,5 +1,5 @@
 import React from 'react';
-import TunableKeyboard from '../components/TunableKeyboard';
+import TunableKeyboard from '../components/TunableKeyboard.tsx';
 
 const KeyboardWorkspace: React.FC = () => {
     return (
