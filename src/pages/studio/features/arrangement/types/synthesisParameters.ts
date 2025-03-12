@@ -25,7 +25,7 @@ export interface UnisonParameters {
 }
 
 export interface NoteSynthesis {
-    mode?: 'tunable' | 'sampler'; 
+    mode?: 'tunable' | 'drums' | 'sampler'; 
     envelope?: EnvelopeParameters;
     effects?: EffectsParameters;
     unison?: UnisonParameters;

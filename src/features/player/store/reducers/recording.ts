@@ -1,7 +1,7 @@
 // src/features/player/store/reducers/recording.ts
 import { PayloadAction } from '@reduxjs/toolkit';
 import { PlayerState } from '../types';
-import { NoteEvent } from '../../types';
+import { NoteEvent } from '../../../../pages/studio/features/arrangement/types/types.ts';
 import { NoteColor } from '../types';
 
 export const recordingReducers = {

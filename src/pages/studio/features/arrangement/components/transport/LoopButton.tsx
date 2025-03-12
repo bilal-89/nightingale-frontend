@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatTime } from '../../../../../../features/player/utils/time.utils';
+import { formatTime } from '../../utils/time.utils';
 
 interface LoopButtonProps {
     loopEnabled: boolean;

@@ -1,7 +1,7 @@
 // src/features/player/components/notes/Note/NoteVisuals.tsx
 
 import React from 'react';
-import { LAYOUT } from '../../../../../../../features/player/constants';
+import { LAYOUT } from '../../../constants/constants.ts';
 import { getAttackGradient } from './NoteGradients';
 import { NoteStyleProps } from './types';
 

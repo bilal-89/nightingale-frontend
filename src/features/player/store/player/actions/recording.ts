@@ -1,6 +1,6 @@
 //src/features/player/store/player/actions/recording.ts
 import { createAction } from '@reduxjs/toolkit';
-import { NoteEvent } from '../../../types';
+import { NoteEvent } from '../../../../../pages/studio/features/arrangement/types/types.ts';
 
 export const startRecording = createAction('player/startRecording');
 export const stopRecording = createAction('player/stopRecording');

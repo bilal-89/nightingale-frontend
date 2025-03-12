@@ -13,7 +13,7 @@ import {
 import { selectTracks } from '../../../../../features/player/store/player';
 
 import keyboardAudioManager from '../../oscillators/engine/synthesis/keyboardEngine.ts';
-import { NoteEvent } from '../../../../../features/player/types';
+import { NoteEvent } from '../types/types.ts';
 
 export const useTiming = () => {
     const dispatch = useAppDispatch();

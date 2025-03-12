@@ -1,9 +1,9 @@
 // src/features/player/components/notes/Note/useNoteInteraction.ts
 
 import { useCallback, useState, useRef } from 'react';
-import { useAppDispatch, useAppSelector } from '../../../../../../../features/player/hooks';
+import { useAppDispatch, useAppSelector } from '../../../hooks';
 import { selectNote, moveNote } from '../../../../../../../features/player/store/player';
-import { NoteEvent } from '../../../../../../../features/player/types';
+import { NoteEvent } from '../../../types/types.ts';
 import { 
     setParameterContext, 
     togglePanel,

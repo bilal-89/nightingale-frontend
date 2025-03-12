@@ -1,6 +1,6 @@
 import { PayloadAction } from '@reduxjs/toolkit';
 import { PlayerState } from '../types';
-import { Clip, NoteColor } from '../../types';
+import { Clip, NoteColor } from '../../../../pages/studio/features/arrangement/types/types.ts';
 
 export const clipReducers = {
     setCurrentTrack: (state: PlayerState, action: PayloadAction<number>) => {

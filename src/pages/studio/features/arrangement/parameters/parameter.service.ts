@@ -2,7 +2,7 @@
 
 import { ParameterDefinition, ParameterValue } from './types';
 import { PARAMETER_DEFINITIONS } from './definitions';
-import { NoteEvent } from '../../../../../features/player/types';
+import { NoteEvent } from '../types/noteEvent';
 
 /**
  * The ParameterService manages all parameter interactions for notes in the system.
@@ -43,7 +43,7 @@ export class ParameterService {
         switch (definition.group) {
             case 'envelope':
                 // Get envelope parameter value, fallback to default if not set
-                internalValue = note.synthesis.envelope[parameterId as keyof typeof note.synthesis.envelope] ??
+                internalValue = note.synthesis?.envelope?.[parameterId as keyof (typeof note.synthesis.envelope)] ??
                     definition.range.defaultValue;
                 break;
 

@@ -4,7 +4,7 @@ import { Card } from '../../../../../shared/components/ui/card';
 import TimelineGrid from '../../arrangement/components/timeline/TimelineGrid/index';
 import TransportControls from './transport/TransportControls';
 import { startRecording, stopRecording } from '../../../../../features/player/store/player';
-import { useLoopWatcher } from '../../../../../features/player/hooks/useLoopWatcher';
+import { useLoopWatcher } from '../hooks/useLoopWatcher';
 
 export const Player = () => {
     const dispatch = useAppDispatch();

@@ -1,6 +1,6 @@
 // src/features/player/components/notes/Note/types.ts
 
-import { NoteEvent } from '../../../../../../../features/player/types';
+import { NoteEvent } from '../../../types/types.ts';
 
 export interface NoteProps {
     note: NoteEvent;

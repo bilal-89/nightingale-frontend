@@ -16,11 +16,12 @@ import { NoteColor } from '../../../../../shared/constants/colors.ts';
 import { ColorStrip } from '../../../../../shared/components/ui/ColorStrip';
 import { setTrackSettings } from '../../../../../features/player/store/player';
 import { getMutedColor } from '../../../../../shared/constants/colors';
-import { useAppDispatch, useAppSelector } from "../../../../../features/player/hooks";
+import { useAppDispatch, useAppSelector } from "../../../../../store/hooks";
 import { selectSelectedNote } from '../../../../../features/player/store/player';
-import { useParameters } from '../../../../../features/player/hooks/useParameters';
+import { useParameters } from '../../arrangement/hooks/useParameters';
 import { toggleKeyboardLayout } from '../../../../../features/keyboard/store/slices/keyboard.slice';
 import { Keyboard } from "lucide-react";
+import { Waveform } from '../../oscillators/types/index';
 
 // Simple Keyboard Layout Toggle Component
 const KeyboardLayoutToggle = () => {
@@ -440,7 +441,7 @@ const ParameterPanel: React.FC = () => {
     const keyboardState = useAppSelector(state => state.keyboard);
 
     // Handle waveform changes based on context
-    const handleWaveformChange = useCallback((waveform) => {
+    const handleWaveformChange = useCallback((waveform: Waveform) => {
         if (context === 'keyboard') {
             if (selectedKey !== null) {
                 // Set waveform for specific key when a key is selected

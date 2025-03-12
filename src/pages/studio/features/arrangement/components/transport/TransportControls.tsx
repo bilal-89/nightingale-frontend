@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { usePlayback } from '../../../../../../features/player/hooks';
-import { formatTime } from '../../../../../../features/player/utils/time.utils';
+import { usePlayback } from '../../hooks';
+import { formatTime } from '../../utils/time.utils';
 import { QuantizeButton } from './QuantizeButton';
 import { AutoTuneButton } from './AutoTuneButton';
 import { PlayPauseButton } from './PlayPauseButton';

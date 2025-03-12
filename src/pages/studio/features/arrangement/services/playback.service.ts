@@ -2,7 +2,7 @@
 
 import { TIMING } from '../utils/time.utils';
 import keyboardAudioManager from '../../oscillators/engine/synthesis/keyboardEngine.ts';
-import type { NoteEvent } from '../../../../../features/player/types';
+import type { NoteEvent } from '../types/noteEvent';
 import {Track} from "../../../../../../src/features/player/store/player/types/track";
 
 export interface PlaybackEvents {
@@ -338,12 +338,12 @@ export class PlaybackService {
             });
 
             // Configure synthesis for this note
-            if (note.synthesis.mode === 'tunable') {
+            if (note.synthesis?.mode === 'tunable') {
                 keyboardAudioManager.setMode('tunable');
 
                 // We don't set keyboard tuning when playing back notes anymore
                 
-                if (note.synthesis.waveform) {
+                if (note.synthesis?.waveform) {
                     keyboardAudioManager.setNoteWaveform(note.note, note.synthesis.waveform);
                 }
             } else {
@@ -367,9 +367,9 @@ export class PlaybackService {
                 timestamp: absoluteStartTime,
                 duration: adjustedDuration,
                 synthesis: {
-                    ...note.synthesis,
+                    ...(note.synthesis || {}),
                     envelope: {
-                        ...note.synthesis.envelope,
+                        ...(note.synthesis?.envelope || {}),
                         attack: 0.005,
                         decay: 0,
                         sustain: 1,

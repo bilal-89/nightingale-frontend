@@ -1,6 +1,6 @@
 import { PayloadAction } from '@reduxjs/toolkit';
 import { PlayerState } from '../types';
-import { NoteEvent, SelectedNote } from '../../types';
+import { NoteEvent, SelectedNote } from '../../../../pages/studio/features/arrangement/types/types.ts';
 
 export const noteReducers = {
     selectNote: (state: PlayerState, action: PayloadAction<SelectedNote | null>) => {

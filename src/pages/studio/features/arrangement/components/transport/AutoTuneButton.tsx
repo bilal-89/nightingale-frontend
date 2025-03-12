@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAppDispatch, useAppSelector } from '../../../../../../features/player/hooks';
+import { useAppDispatch, useAppSelector } from '../../hooks';
 import { selectMultiSelectedNotes, selectSelectedNote } from '../../../../../../features/player/store/player';
 import { autoTuneSelectedNotes } from '../../../../../../features/player/store/player/slice';
 

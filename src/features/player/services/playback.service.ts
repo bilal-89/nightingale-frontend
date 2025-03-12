@@ -2,8 +2,8 @@
 
 import { TIMING } from '../utils/time.utils';
 import keyboardAudioManager from '../../../pages/studio/features/oscillators/engine/synthesis/keyboardEngine.ts';
-import type { NoteEvent } from '../types';
-import {Track} from "../store/player/types/track";
+import type { NoteEvent } from '../../../pages/studio/features/arrangement/types/types.ts';
+import {Track} from "../store/player/types";
 
 export interface PlaybackEvents {
     onPositionChange?: (positionInMs: number) => void;

@@ -2,7 +2,7 @@
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
 import { TimingService } from '../../services/timing.service';
 import keyboardAudioManager from '../../../../pages/studio/features/oscillators/engine/synthesis/keyboardEngine.ts';
-import { NoteEvent } from '../../types';
+import { NoteEvent } from '../../../../pages/studio/features/arrangement/types/types.ts';
 import { commitRecordingBuffer } from '../player';
 import {
     selectClips,

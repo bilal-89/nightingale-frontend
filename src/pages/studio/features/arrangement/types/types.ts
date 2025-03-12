@@ -1,5 +1,5 @@
-import { SynthesisParameters } from '../../pages/studio/features/oscillators/api/types';
-import { NoteColor } from '../../shared/constants/colors';
+import { SynthesisParameters } from '../../oscillators/api/types.ts';
+import { NoteColor } from '../../../../../shared/constants/colors.ts';
 
 export interface NoteEvent {
     tuning: number;

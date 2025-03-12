@@ -4,8 +4,8 @@ import Note from '../../../notes/Note';
 import { Track } from "../../../../../../../../features/player/store/types";
 import { TrackRange } from "../types";
 import { selectIsRecording, selectRecordingBuffer } from '../../../../../../../../features/player/store/player';
-import { LAYOUT } from '../../../../../../../../features/player/constants';
-import { NoteEvent } from '../../../../../../../../features/player/types';
+import { LAYOUT } from '../../../../constants/constants.ts';
+import { NoteEvent } from '../../../../types/types.ts';
 
 interface TrackLaneProps {
     track: Track;

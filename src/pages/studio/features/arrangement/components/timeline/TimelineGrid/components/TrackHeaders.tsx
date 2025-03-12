@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAppDispatch } from '../../../../../../../../features/player/hooks';
+import { useAppDispatch } from '../../../../hooks';
 import { addTrack } from '../../../../../../../../features/player/store/player';
 import { cn } from '../../../../../../../../core/utils/styles.utils';
 import { Track } from "../../../../../../../../features/player/store/player";

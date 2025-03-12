@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
-import { usePlayback } from '../../../../../../../../features/player/hooks';
+import { usePlayback } from '../../../../hooks';
 
 interface LoopMarkersProps {
     timelineZoom: number;  // Pixels per millisecond

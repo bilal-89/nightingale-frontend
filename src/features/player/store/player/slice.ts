@@ -1,7 +1,7 @@
 //src/features/player/store/player/slice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { PlayerState, Track } from './types';
-import { NoteEvent } from '../../types';
+import { NoteEvent } from '../../../../pages/studio/features/arrangement/types/types.ts';
 import { NoteColor } from '../../../../shared/constants/colors';
 
 // Extend PlayerState to include playback properties

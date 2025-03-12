@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSelector } from 'react-redux';
-import { LAYOUT } from '../../../../../../../features/player/constants.ts'
+import { LAYOUT } from '../../../constants/constants.ts'
 import { useNoteInteraction } from './useNoteInteraction';
 import { NoteVisuals } from './NoteVisuals';
 import { NoteProps } from './types';

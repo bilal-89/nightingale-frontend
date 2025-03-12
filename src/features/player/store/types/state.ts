@@ -1,5 +1,5 @@
 // src/features/player/store/types/state.ts
-import { NoteEvent } from '../../types';
+import { NoteEvent } from '../../../../pages/studio/features/arrangement/types/types.ts';
 import { SchedulingConfig } from './scheduling';
 import { Track } from './track';
 

@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
-import { useAppSelector, useAppDispatch } from '../../../../../../../features/player/hooks';
-import { useTiming } from '../../../../../../../features/player/hooks/useTiming';
+import { useAppSelector, useAppDispatch } from '../../../hooks';
+import { useTiming } from '../../../hooks/useTiming.ts';
 import {
     selectCurrentTrack,
     selectTracks,
@@ -13,10 +13,10 @@ import { TrackHeaders } from './components/TrackHeaders';
 import { GridArea } from './components/GridArea';
 import { useTrackInteraction } from './hooks/useTrackInteraction';
 import { useGridPlayback } from './hooks/useGridPlayback';
-import { useSelectionBox } from '../../../../../../../features/player/hooks/useSelectionBox';
+import { useSelectionBox } from '../../../hooks/useSelectionBox';
 import SelectionBox from './components/SelectionBox';
 import { LoopMarkers } from './components/LoopMarkers';
-import { usePlayback } from '../../../../../../../features/player/hooks';
+import { usePlayback } from '../../../hooks';
 
 export const TimelineGrid: React.FC = () => {
     // Hooks

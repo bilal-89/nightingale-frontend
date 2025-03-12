@@ -3,8 +3,8 @@
 import { useCallback, useState } from 'react';
 import { useAppDispatch, useAppSelector } from './useStore';
 import { moveNote, selectTimelineSettings } from '../../../../../features/player/store/player';
-import { LAYOUT } from '../../../../../features/player/constants.ts';
-import { NoteEvent } from "../../../../../features/player/types";
+import { LAYOUT } from '../constants/constants.ts';
+import { NoteEvent } from "../types/types.ts";
 
 interface DragState {
     initialX: number;
