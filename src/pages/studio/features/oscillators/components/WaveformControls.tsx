@@ -1,7 +1,9 @@
 import React, { useCallback } from 'react';
-import { Waveform, setEditableWaveform } from '../../../../../features/keyboard/store/slices/keyboard.slice';
+import { useAppDispatch, useAppSelector } from '../../../../../store/hooks';
+import { Waveform } from '../types';
+import { setGlobalWaveform, setKeyWaveform } from '../store/oscillators.slice';
+import { setEditableWaveform } from '../../../../../features/keyboard/store/slices/keyboard.slice';
 import { getMutedColor } from '../../../../../shared/constants/colors';
-import { useAppSelector, useAppDispatch } from "../../../../../store/hooks";
 
 interface WaveformControlsProps {
     currentWaveform: Waveform;
