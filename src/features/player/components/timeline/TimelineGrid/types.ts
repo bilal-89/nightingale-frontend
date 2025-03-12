@@ -1,5 +1,4 @@
 // src/features/player/components/timeline/TimelineGrid/types.ts
-
 import {Track} from "../../../store/player";
 
 export interface GridDimensions {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAppSelector, useAppDispatch } from '../../../../../features/player/hooks';
+import { useAppSelector, useAppDispatch } from '../../arrangement/hooks';
 import { selectIsGlobalOscillatorMode, toggleOscillatorMode } from '../../../../../features/keyboard/store/slices/keyboard.slice';
 
 interface OscillatorModeToggleProps {

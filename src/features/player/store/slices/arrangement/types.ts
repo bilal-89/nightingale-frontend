@@ -1,7 +1,7 @@
 // src/features/player/store/types.ts
 
 import { NoteColor } from '../../../../../shared/constants/colors.ts';
-import { SynthesisParameters } from '../../../../audio/api/types.ts';
+import { SynthesisParameters } from '../../../../../pages/studio/features/oscillators/api/types.ts';
 
 export interface NoteEvent {
     id: string;

@@ -36,8 +36,8 @@ import {
 } from '../../../../../features/keyboard/store/slices/keyboard.slice.ts';
 import { initializeAudioContext } from '../../../../../features/audio/store/actions.ts';
 import { RootState } from '../../../../../../store';
-import { useTiming } from '../../../../../features/player/hooks/useTiming.ts';
-import keyboardAudioManager from '../../../../../features/audio/engine/synthesis/keyboardEngine.ts';
+import { useTiming } from '../../arrangement/hooks/useTiming.ts';
+import keyboardAudioManager from '../../oscillators/engine/synthesis/keyboardEngine.ts';
 import {
     KEY_TO_NOTE,
     MODE_STYLES,

@@ -1,7 +1,7 @@
 // src/features/player/store/middleware/index.ts
 import { Middleware, AnyAction } from '@reduxjs/toolkit';
 import { TimingService } from '../../services/timing.service';
-import keyboardAudioManager from '../../../audio/engine/synthesis/keyboardEngine';
+import keyboardAudioManager from '../../../../pages/studio/features/oscillators/engine/synthesis/keyboardEngine.ts';
 import { NoteEvent } from '../../types';
 import { commitRecordingBuffer } from '../player';
 import {

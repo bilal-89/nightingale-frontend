@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useAppDispatch, useAppSelector } from '../../hooks/useStore';
-import { selectMultiSelectedNotes, selectSelectedNote } from '../../store/player/selectors';
+import { useAppDispatch, useAppSelector } from '../../hooks';
+import { selectMultiSelectedNotes, selectSelectedNote } from '../../store/player';
 import { autoTuneSelectedNotes } from '../../store/player/slice';
 
 const TUNING_SYSTEMS = [

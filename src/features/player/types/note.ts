@@ -1,4 +1,4 @@
-import { SynthesisParameters } from '../../audio/api/types';
+import { SynthesisParameters } from '../../../pages/studio/features/oscillators/api/types';
 import { NoteColor } from '../../../shared/constants/colors';
 
 // src/features/player/types/note.ts

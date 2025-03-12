@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { PlaybackService } from '../services/playback.service';
-import keyboardAudioManager from '../../../features/audio/engine/synthesis/keyboardEngine';
+import keyboardAudioManager from '../../../pages/studio/features/oscillators/engine/synthesis/keyboardEngine.ts';
 import {
     startPlayback,
     stopPlayback,

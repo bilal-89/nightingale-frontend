@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { Provider } from 'react-redux';
 import { store } from './store';
-import { Player } from "./features/player";
+// import { Player } from "./features/player";
+import {Player} from './pages/studio/features/arrangement'
 import KeyboardWorkspace from "./pages/studio/features/controller/layouts/KeyboardWorkspace";
 import ParameterPanel from "./pages/studio/features/parameters/components/ParameterPanel"
 import HarmonicsPanel from "./pages/studio/features/parameters/components/HarmonicsPanel"

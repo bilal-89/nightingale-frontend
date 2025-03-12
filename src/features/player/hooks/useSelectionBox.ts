@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from './useStore';
 import { selectNote } from '../store/player';
-import { selectTracks } from '../store/player/selectors/tracks';
+import { selectTracks } from '../store/player';
 
 interface Point {
     x: number;

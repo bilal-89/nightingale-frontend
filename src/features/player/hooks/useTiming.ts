@@ -12,7 +12,7 @@ import {
 } from '../store/playback';
 import { selectTracks } from '../store/player';
 
-import keyboardAudioManager from '../../../../src/features/audio/engine/synthesis/keyboardEngine';
+import keyboardAudioManager from '../../../pages/studio/features/oscillators/engine/synthesis/keyboardEngine.ts';
 import { NoteEvent } from '../types';
 
 export const useTiming = () => {

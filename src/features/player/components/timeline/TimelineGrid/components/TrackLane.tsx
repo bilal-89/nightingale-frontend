@@ -1,9 +1,9 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
-import Note from '../../../notes/Note';
+import Note from '../../../../../../pages/studio/features/arrangement/components/notes/Note';
 import { Track } from "../../../../store/types";
 import { TrackRange } from "../types";
-import { selectIsRecording, selectRecordingBuffer } from '../../../../store/player/selectors/recording';
+import { selectIsRecording, selectRecordingBuffer } from '../../../../store/player';
 import { LAYOUT } from '../../../../constants';
 import { NoteEvent } from '../../../../types';
 

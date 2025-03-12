@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAppSelector } from '../hooks';
 import { selectIsPlaying, selectCurrentTime, selectLoopEnabled, selectLoopStart, selectLoopEnd } from '../store/playback';
-import keyboardAudioManager from '../../audio/engine/synthesis/keyboardEngine';
+import keyboardAudioManager from '../../../pages/studio/features/oscillators/engine/synthesis/keyboardEngine.ts';
 import { selectTracks } from '../store/player';
 
 export const useLoopWatcher = () => {

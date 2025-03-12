@@ -10,7 +10,7 @@ import {
     selectEditableWaveform,
     setOscillatorParameter
 } from '../../../../../features/keyboard/store/slices/keyboard.slice';
-import { useParameters } from '../../../../../features/player/hooks/useParameters';
+import { useParameters } from '../../arrangement/hooks/useParameters.ts';
 import { parameters } from '../constants/parameters';
 import {
     ParameterContext,

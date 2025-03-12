@@ -9,9 +9,9 @@ import {
     setMode,
     setKeyParameter
 } from './slice';
-import keyboardAudioManager from '../engine/synthesis/keyboardEngine';
-import { drumSoundManager } from '../engine/synthesis/drumEngine';
-import { ParameterType } from '../types';
+import keyboardAudioManager from '../../../pages/studio/features/oscillators/engine/synthesis/keyboardEngine.ts';
+import { drumSoundManager } from '../../../pages/studio/features/oscillators/engine/synthesis/drumEngine.ts';
+import { ParameterType } from '../../../pages/studio/features/oscillators/types';
 
 // Add this action creator
 export const initializeAudioContext = () => ({

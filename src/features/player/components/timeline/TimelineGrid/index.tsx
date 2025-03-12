@@ -8,7 +8,7 @@ import {
     selectIsPlaying,
     deleteNotes
 } from '../../../store/player';
-import { selectSelectedNote, selectMultiSelectedNotes } from '../../../store/player/selectors/selection';
+import { selectSelectedNote, selectMultiSelectedNotes } from '../../../store/player';
 import { TrackHeaders } from './components/TrackHeaders';
 import { GridArea } from './components/GridArea';
 import { useTrackInteraction } from './hooks/useTrackInteraction';
@@ -16,7 +16,7 @@ import { useGridPlayback } from './hooks/useGridPlayback';
 import { useSelectionBox } from '../../../hooks/useSelectionBox';
 import SelectionBox from './components/SelectionBox';
 import { LoopMarkers } from './components/LoopMarkers';
-import { usePlayback } from '../../../hooks/usePlayback';
+import { usePlayback } from '../../../hooks';
 
 export const TimelineGrid: React.FC = () => {
     // Hooks

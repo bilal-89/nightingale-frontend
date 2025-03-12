@@ -2,8 +2,8 @@
 import { Middleware } from '@reduxjs/toolkit';
 import { RootState } from '../../../../store';
 import { setMode as setAudioMode } from '../slice';
-import keyboardAudioManager, { AdditiveOscillator } from '../../engine/synthesis/keyboardEngine';
-import { drumSoundManager } from '../../engine/synthesis/drumEngine';
+import keyboardAudioManager, { AdditiveOscillator } from '../../../../pages/studio/features/oscillators/engine/synthesis/keyboardEngine.ts';
+import { drumSoundManager } from '../../../../pages/studio/features/oscillators/engine/synthesis/drumEngine.ts';
 import {
     Waveform,
     noteOn,
